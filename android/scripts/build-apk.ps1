@@ -28,9 +28,12 @@ if ($LASTEXITCODE -ne 0) { throw 'APK-Build fehlgeschlagen.' }
 $apk = Resolve-Path (Join-Path $PSScriptRoot '..\app\build\outputs\apk\release\app-release.apk')
 Write-Host "Fertig: $apk"
 
-$releaseName = 'KR-Compiler-Android-v2.6.5.apk'
+$releaseName = 'KR-Compiler-Android-IDE-v3.0.apk'
 $rootApk = Join-Path $RepositoryRoot $releaseName
+$localApk = Join-Path $androidRoot $releaseName
 Copy-Item -LiteralPath $apk -Destination $rootApk -Force
-$hash = (Get-FileHash $rootApk -Algorithm SHA256).Hash.ToLowerInvariant()
+Copy-Item -LiteralPath $apk -Destination $localApk -Force
+$hash = (Get-FileHash $localApk -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText($rootApk + '.sha256', "$hash  $releaseName`n")
-Write-Host "Aktualisiert: $rootApk (SHA256: $hash)"
+[IO.File]::WriteAllText($localApk + '.sha256', "$hash  $releaseName`n")
+Write-Host "Aktualisiert: $localApk (SHA256: $hash)"

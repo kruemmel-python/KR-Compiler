@@ -14,8 +14,8 @@ android {
         minSdk 26
         // API 28 intentionally permits executing the compiler unpacked in private app storage.
         targetSdk 28
-        versionCode 265
-        versionName '2.6.5'
+        versionCode 300
+        versionName '3.0.0'
     }
     signingConfigs {
         release {
@@ -45,6 +45,7 @@ android {
 
 dependencies {
     implementation 'com.android.tools.build:apksig:8.7.3'
+    testImplementation 'junit:junit:4.13.2'
 }
 
 def runnerApk = project(':runner').layout.buildDirectory.file('outputs/apk/debug/runner-debug.apk')

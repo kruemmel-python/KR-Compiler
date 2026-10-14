@@ -15,6 +15,7 @@ final class CompilerEngine {
 
     private final Context context;
     private final Uri projectUri;
+    private final File localProjectDir;
     private final Target target;
     private final boolean onlineDependencies;
     private final Logger log;
@@ -22,10 +23,32 @@ final class CompilerEngine {
     private File project;
     private File output;
     private File buildLog;
+    private volatile Process activeProcess;
+    private volatile boolean cancelled = false;
 
     CompilerEngine(Context context, Uri projectUri, Target target, boolean onlineDependencies, Logger log) {
-        this.context = context.getApplicationContext(); this.projectUri = projectUri; this.target = target;
-        this.onlineDependencies = onlineDependencies; this.log = log;
+        this(context, projectUri, null, target, onlineDependencies, log);
+    }
+
+    CompilerEngine(Context context, Uri projectUri, File localProjectDir, Target target, boolean onlineDependencies, Logger log) {
+        this.context = context.getApplicationContext();
+        this.projectUri = projectUri;
+        this.localProjectDir = localProjectDir;
+        this.target = target;
+        this.onlineDependencies = onlineDependencies;
+        this.log = log;
+    }
+
+    void cancel() {
+        cancelled = true;
+        Process p = activeProcess;
+        if (p != null) {
+            try { p.destroyForcibly(); } catch (Exception ignored) {}
+        }
+    }
+
+    static File getActiveWorkspaceOutput(Context context) {
+        return new File(new File(context.getCacheDir(), "active-project"), "KR_BUILD");
     }
 
     String build() throws Exception {
@@ -39,8 +62,15 @@ final class CompilerEngine {
         if (!project.mkdirs() || !output.mkdirs()) throw new IOException("Temporärer Projektordner kann nicht angelegt werden.");
         buildLog = new File(output, "build.log");
         writeText(buildLog, "");
-        log.line("Projekt wird aus dem ausgewählten Android-Ordner gelesen …");
-        DocumentTree.importProject(context, projectUri, project);
+        if (localProjectDir != null && localProjectDir.isDirectory()) {
+            log.line("Lokales Projekt wird vorbereitet: " + localProjectDir.getName() + " …");
+            copyDirectoryContent(localProjectDir, project);
+        } else if (projectUri != null) {
+            log.line("Projekt wird aus dem ausgewählten Android-Ordner gelesen …");
+            DocumentTree.importProject(context, projectUri, project);
+        } else {
+            throw new IOException("Kein Projekt ausgewählt.");
+        }
 
         try {
             File cmakeProject = new File(project, "CMakeLists.txt");
@@ -55,14 +85,35 @@ final class CompilerEngine {
                 artifact = target == Target.ANDROID ? buildAndroid(sources) : buildDesktop(sources);
             }
             writeText(new File(output, "build-result.json"), "{\n  \"success\": true,\n  \"target\": \"" + target + "\",\n  \"artifact\": \"" + artifact.getName() + "\"\n}\n");
-            log.line("Ergebnis wird nach KR_BUILD im Projektordner kopiert …");
-            DocumentTree.exportBuild(context, projectUri, output);
+            log.line("Ergebnis wird nach KR_BUILD kopiert …");
+            if (localProjectDir != null) {
+                File localBuildDir = new File(localProjectDir, "KR_BUILD");
+                if (!localBuildDir.exists()) localBuildDir.mkdirs();
+                copyDirectoryContent(output, localBuildDir);
+            }
+            if (projectUri != null) {
+                DocumentTree.exportBuild(context, projectUri, output);
+            }
             return "Fertig: KR_BUILD/" + artifact.getName();
         } catch (Exception error) {
+            if (cancelled) {
+                appendText(new File(output, "build.log"), "\nBUILD ABGEBROCHEN DURCH BENUTZER\n");
+                writeText(new File(output, "build-result.json"), "{\n  \"success\": false,\n  \"target\": \"" + target + "\",\n  \"message\": \"Build abgebrochen\"\n}\n");
+                return "Build abgebrochen.";
+            }
             appendText(new File(output, "build.log"), "\nFEHLER: " + error + "\n");
             writeText(new File(output, "build-result.json"), "{\n  \"success\": false,\n  \"target\": \"" + target + "\",\n  \"message\": " + json(error.getMessage()) + "\n}\n");
-            try { DocumentTree.exportBuild(context, projectUri, output); }
-            catch (Exception exportError) { error.addSuppressed(exportError); }
+            if (localProjectDir != null) {
+                try {
+                    File localBuildDir = new File(localProjectDir, "KR_BUILD");
+                    if (!localBuildDir.exists()) localBuildDir.mkdirs();
+                    copyDirectoryContent(output, localBuildDir);
+                } catch (Exception ignored) {}
+            }
+            if (projectUri != null) {
+                try { DocumentTree.exportBuild(context, projectUri, output); }
+                catch (Exception exportError) { error.addSuppressed(exportError); }
+            }
             throw error;
         }
     }
@@ -402,14 +453,37 @@ final class CompilerEngine {
         env.put("SSL_CERT_FILE", certificates.getPath());
         env.put("CURL_CA_BUNDLE", certificates.getPath());
         env.put("GIT_SSL_CAINFO", certificates.getPath());
+        if (cancelled) throw new IOException("Build abgebrochen.");
         Process process = pb.start();
-        StringBuilder full = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line; while ((line = reader.readLine()) != null) { full.append(line).append('\n'); log.line(line); }
+        activeProcess = process;
+        try {
+            StringBuilder full = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line; while ((line = reader.readLine()) != null) { full.append(line).append('\n'); log.line(line); }
+            }
+            int result = process.waitFor();
+            appendText(buildLog, full.toString());
+            if (cancelled) throw new IOException("Build abgebrochen.");
+            if (result != 0) throw new IOException(phase + " fehlgeschlagen (Code " + result + "). Siehe KR_BUILD/build.log.");
+        } finally {
+            activeProcess = null;
         }
-        int result = process.waitFor();
-        appendText(buildLog, full.toString());
-        if (result != 0) throw new IOException(phase + " fehlgeschlagen (Code " + result + "). Siehe KR_BUILD/build.log.");
+    }
+
+    static void copyDirectoryContent(File srcDir, File destDir) throws IOException {
+        if (!destDir.exists()) destDir.mkdirs();
+        File[] files = srcDir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            String name = f.getName();
+            if (name.equals("KR_BUILD") || name.equals(".git") || name.equals(".gradle") || name.equals(".idea")) continue;
+            File target = new File(destDir, name);
+            if (f.isDirectory()) {
+                copyDirectoryContent(f, target);
+            } else {
+                copy(f, target);
+            }
+        }
     }
 
     private static List<File> sources(File root) {
