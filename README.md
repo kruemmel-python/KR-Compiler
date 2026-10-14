@@ -2,15 +2,35 @@
 
 KR Compiler Android IDE ist eine mobile C- und C++-Entwicklungsumgebung für ARM64-Android-Geräte. Projekte können direkt auf dem Smartphone geöffnet, bearbeitet und mit der integrierten Clang/LLVM-, CMake- und Ninja-Werkzeugkette gebaut werden. Als Ziele stehen Android ARM64, Windows x64 und Linux x64 zur Verfügung.
 
-## Version 3.0 herunterladen
+## Version 3.1 herunterladen
 
-Die installierbare APK und beide deutschsprachigen Dokumentationen befinden sich im [GitHub-Release v3.0.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v3.0.0).
+Die installierbare APK, das reproduzierbare Werkzeugpaket und drei deutschsprachige Dokumentationen befinden sich im [GitHub-Release v3.1.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v3.1.0).
 
 Voraussetzungen:
 
 - Android 8.0 oder neuer
 - ARM64-Gerät (`arm64-v8a`)
 - rund 2 GiB freier Speicher für APK, entpackte Compilerlaufzeit und Builds
+
+## Neu: Desktop-GUI und vcpkg
+
+Version 3.1 kann neben Konsolenprogrammen auch grafische C++-Anwendungen für Windows x64 und Linux x64 bauen:
+
+- geführte Projektvorlage mit SDL3 und Dear ImGui
+- vcpkg-Abhängigkeiten direkt in der Android-Oberfläche auswählen
+- automatische Verwaltung von `vcpkg.json` und CMake-Toolchain
+- Linux-GUI-Profil mit X11/Xext sowie Windows-GUI-Profil mit MinGW
+- getestetes Beispielprojekt unter `android/tests/gui-vcpkg`
+
+| GUI-Projekt anlegen | vcpkg-Bibliotheken wählen |
+|---|---|
+| ![Neues GUI-Projekt](docs/images/v3.1/03-neues-gui-projekt-dialog.png) | ![vcpkg-Bibliotheken](docs/images/v3.1/05-vcpkg-bibliotheken.png) |
+
+| Linux x64 erfolgreich | Windows x64 erfolgreich |
+|---|---|
+| ![Linux GUI erfolgreich gebaut](docs/images/v3.1/08-linux-build-erfolgreich.png) | ![Windows GUI erfolgreich gebaut](docs/images/v3.1/12-windows-build-erfolgreich.png) |
+
+Die vollständige Schrittfolge steht im [bebilderten Benutzerhandbuch](docs/BENUTZERHANDBUCH_v3.1.md).
 
 ## Mobile Entwicklungsumgebung
 
@@ -22,7 +42,7 @@ Voraussetzungen:
 |---|---|
 | ![Linux-Build auf dem Smartphone](docs/images/v3.0/03-build-linux.jpeg) | ![Erzeugte Windows-Artefakte](docs/images/v3.0/04-artifacts-windows.jpeg) |
 
-Version 3.0 bietet:
+Die IDE bietet:
 
 - Quelltexteditor mit Dateireitern, C/C++-Syntaxdarstellung und mobiler Symbolleiste
 - Dateiansicht sowie Befehle zum Anlegen von Dateien und Ordnern
@@ -31,6 +51,7 @@ Version 3.0 bietet:
 - getrennte Ansichten für Buildprotokoll und erzeugte Dateien
 - Teilen von `build.log`, `build-result.json` und fertigen Programmen
 - automatische Hoch- und Querformatdarstellung für Smartphones und Tablets
+- GUI-Projektvorlage und vcpkg-Bibliotheksverwaltung
 
 ## Compiler und Zielsysteme
 
@@ -47,6 +68,10 @@ Ein CMake-Projekt muss für Android ein ausführbares Ziel mit `add_executable` 
 
 ## Dokumentation
 
+- [Benutzerhandbuch v3.1 mit allen GUI-Schritten](docs/BENUTZERHANDBUCH_v3.1.md)
+- [Benutzerhandbuch v3.1 als Word-Datei](docs/KR_Compiler_Android_Benutzerhandbuch_v3.1_15-10-2026.docx)
+- [Technische Dokumentation v3.1](docs/KR_Compiler_Android_Dokumentation_v3.1_15-10-2026.docx)
+- [Projektgeschichte Kreta und KR IDE v3.1](docs/KR_Compiler_Android_Kreta_Geschichte_v3.1_15-10-2026.docx)
 - [Technische Dokumentation v3.0](docs/KR_Compiler_Android_Dokumentation_v3.0_14-10-2026.docx)
 - [Projektgeschichte Kreta und KR IDE v3.0](docs/KR_Compiler_Android_Kreta_Geschichte_v3.0_14-10-2026.docx)
 - [Technische Hinweise zum Android-Projekt](android/README.md)
@@ -61,7 +86,7 @@ cd KR-Compiler
 powershell -ExecutionPolicy Bypass -File .\android\scripts\build-apk.ps1
 ```
 
-Beim ersten Build lädt das Skript die geprüfte Compilerlaufzeit aus Release v2.6.5. Anschließend erzeugt es ausschließlich lokal einen Entwicklungsschlüssel. Weder der Werkzeugkasten noch private Schlüssel werden im Git-Repository gespeichert. Die fertige APK liegt unter `android/app/build/outputs/apk/release/app-release.apk` und zusätzlich als `KR-Compiler-Android-IDE-v3.0.apk` im Repository-Arbeitsordner.
+Beim ersten Build lädt das Skript die geprüfte Compilerlaufzeit aus Release v3.1.0. Anschließend erzeugt es ausschließlich lokal einen Entwicklungsschlüssel. Weder der Werkzeugkasten noch private Schlüssel werden im Git-Repository gespeichert. Die fertige APK liegt unter `android/app/build/outputs/apk/release/app-release.apk` und zusätzlich als `KR-Compiler-Android-IDE-v3.1.apk` im Repository-Arbeitsordner.
 
 Für eine eigene dauerhafte Release-Signatur können diese Umgebungsvariablen gesetzt werden:
 

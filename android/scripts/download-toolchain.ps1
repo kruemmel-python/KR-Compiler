@@ -1,7 +1,7 @@
 param(
     [string]$Output = (Join-Path $PSScriptRoot '..\app\src\main\assets\toolchain.zip'),
-    [string]$Url = 'https://github.com/kruemmel-python/KR-Compiler/releases/download/v2.6.5/KR-Compiler-Android-toolchain-v2.6.5.zip',
-    [string]$Sha256 = '36a62d8f8a20de53b217543cf5438f23000478ac97d6ed161a450f677d2cba5c'
+    [string]$Url = 'https://github.com/kruemmel-python/KR-Compiler/releases/download/v3.1.0/KR-Compiler-Android-toolchain-v3.1.0.zip',
+    [string]$Sha256 = 'bb1b24d80d7ffbbcbe24e96ada527370f97bd9d169a97ffcd9d78b9670810b08'
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -19,7 +19,7 @@ $directory = Split-Path -Parent $Output
 New-Item -ItemType Directory -Force $directory | Out-Null
 $temporary = $Output + '.download'
 try {
-    Write-Host 'Lade die Compiler-Laufzeit (ca. 369 MiB) aus dem GitHub-Release …'
+    Write-Host 'Lade die Compiler-Laufzeit (ca. 385 MiB) aus dem GitHub-Release …'
     Invoke-WebRequest -Uri $Url -OutFile $temporary -UseBasicParsing
     $downloadedHash = (Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($downloadedHash -ne $Sha256.ToLowerInvariant()) {

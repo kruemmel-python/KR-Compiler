@@ -10,7 +10,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 final class ToolchainInstaller {
-    private static final String STAMP = "kr-toolchain-21.1.8-cmake-v7";
+    private static final String STAMP = "kr-toolchain-21.1.8-cmake-v9";
     private ToolchainInstaller() {}
 
     static File ensure(Context context, CompilerEngine.Logger log) throws IOException {
@@ -69,6 +69,9 @@ final class ToolchainInstaller {
                 "targets/windows/x86_64-w64-mingw32/lib/crt2.o",
                 "usr/lib/clang/21/lib/x86_64-w64-windows-gnu/libclang_rt.builtins.a",
                 "targets/linux/sysroot/usr/include/stdio.h",
+                "targets/linux/sysroot/usr/include/X11/Xlib.h",
+                "targets/linux/sysroot/usr/include/X11/extensions/Xext.h",
+                "targets/linux/sysroot/usr/lib/x86_64-linux-gnu/libX11.so",
                 "targets/linux/sysroot/lib64/ld-linux-x86-64.so.2"
         };
         for (String path : required) if (!new File(root, path).isFile())

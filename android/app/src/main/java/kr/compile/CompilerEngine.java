@@ -136,6 +136,21 @@ final class CompilerEngine {
         File targetList = new File(binary, "kr-executable-targets.txt");
         writeText(toolchainFile, cmakeToolchain());
         Set<String> packages = findCMakePackages(project);
+        Set<String> manifestPackages = VcpkgManager.readDependencies(project);
+        for (String port : manifestPackages) {
+            if (!VcpkgManager.isSupported(port)) {
+                throw new IOException("VCPKG-Port '" + port + "' ist im mobilen KR-Katalog noch nicht verfügbar.");
+            }
+            boolean present = false;
+            for (String existing : packages) {
+                if (existing.replace('_', '-').equalsIgnoreCase(port)) { present = true; break; }
+            }
+            if (!present) packages.add(port);
+        }
+        if (!manifestPackages.isEmpty()) {
+            log.line("vcpkg.json erkannt: " + String.join(", ", manifestPackages));
+            log.line("Mobiler VCPKG-Manifestmodus: geprüfte Quellen und CMake-Targets werden vorbereitet.");
+        }
         writeText(projectInclude, cmakeProjectInclude(artifacts, targetList, packages));
 
         File dependencyCache = new File(context.getFilesDir(), "components/cmake/" + target.name().toLowerCase(Locale.ROOT));
@@ -280,7 +295,24 @@ final class CompilerEngine {
             String url = null;
             String hash = null;
             String options = "";
-            if (key.equals("fmt")) {
+            if (key.equals("sdl3")) {
+                name = "SDL3"; url = "https://github.com/libsdl-org/SDL/archive/refs/tags/release-3.4.18.tar.gz";
+                hash = "12fcb5592016b27922b08d1580d75f5f15c72e67cf04415e2bd824dc7563ac940c25bbe368b03d0a755f5832803049467e3d0ee6784ed3684792bc4d7741af50";
+                options = "set(SDL_SHARED OFF CACHE BOOL \"\" FORCE)\nset(SDL_STATIC ON CACHE BOOL \"\" FORCE)\n"
+                        + "set(SDL_TEST_LIBRARY OFF CACHE BOOL \"\" FORCE)\nset(SDL_TESTS OFF CACHE BOOL \"\" FORCE)\n"
+                        + "set(SDL_EXAMPLES OFF CACHE BOOL \"\" FORCE)\nset(SDL_INSTALL OFF CACHE BOOL \"\" FORCE)\n"
+                        + (target == Target.LINUX
+                        ? "set(HAVE_WL_VERSION_SCRIPT TRUE CACHE INTERNAL \"\" FORCE)\nset(SDL_X11 ON CACHE BOOL \"\" FORCE)\nset(SDL_X11_SHARED ON CACHE BOOL \"\" FORCE)\nset(X11_INCLUDEDIR \"${CMAKE_SYSROOT}/usr/include\" CACHE PATH \"\" FORCE)\nset(X11_LIB \"${CMAKE_SYSROOT}/usr/lib/x86_64-linux-gnu/libX11.so\" CACHE FILEPATH \"\" FORCE)\nset(XEXT_LIB \"${CMAKE_SYSROOT}/usr/lib/x86_64-linux-gnu/libXext.so\" CACHE FILEPATH \"\" FORCE)\nset(HAVE_XEXT_H \"${CMAKE_SYSROOT}/usr/include/X11/extensions/Xext.h\" CACHE FILEPATH \"\" FORCE)\nset(SDL_X11_XCURSOR OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XDBE OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XINPUT OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XFIXES OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XRANDR OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XSCRNSAVER OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XSHAPE OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XSYNC OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XTEST OFF CACHE BOOL \"\" FORCE)\nset(SDL_WAYLAND OFF CACHE BOOL \"\" FORCE)\nset(SDL_KMSDRM OFF CACHE BOOL \"\" FORCE)\nset(SDL_OPENGL OFF CACHE BOOL \"\" FORCE)\nset(SDL_OPENGLES OFF CACHE BOOL \"\" FORCE)\n"
+                        : "");
+            } else if (key.equals("imgui")) {
+                log.line("VCPKG-Port imgui erkannt; SDL3-Renderer-Backend wird eingebunden.");
+                s.append("cmake_policy(PUSH)\ncmake_policy(SET CMP0169 OLD)\n");
+                s.append("FetchContent_Declare(imgui URL \"https://github.com/ocornut/imgui/archive/refs/tags/v1.93.0.tar.gz\" URL_HASH SHA512=de41ef101f37d09685bf9e69bacefe06a0c010ecd0e6e7ed1e4efbff82fde27a9c3ae36ed436db5bcde4c61de10da984dfb74d6098586a3f78d8a716864460c2 DOWNLOAD_EXTRACT_TIMESTAMP TRUE)\n");
+                s.append("FetchContent_GetProperties(imgui)\nif(NOT imgui_POPULATED)\n  FetchContent_Populate(imgui)\nendif()\n");
+                s.append("if(NOT TARGET imgui)\n  add_library(imgui STATIC ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp)\n");
+                s.append("  target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)\n  target_link_libraries(imgui PUBLIC SDL3::SDL3)\n  add_library(imgui::imgui ALIAS imgui)\nendif()\ncmake_policy(POP)\n");
+                continue;
+            } else if (key.equals("fmt")) {
                 name = "fmt"; url = "https://github.com/fmtlib/fmt/archive/refs/tags/12.2.0.tar.gz";
                 hash = "5ac2ba0f54a484999ed5407d82b77aad170cea49a267decd2c0eedadf3b14413e2a83fcc8e9ca9c16640595e019b8636e160f72314d8be50653324e82ac745eb";
                 options = "set(FMT_TEST OFF CACHE BOOL \"\" FORCE)\nset(FMT_DOC OFF CACHE BOOL \"\" FORCE)\n";

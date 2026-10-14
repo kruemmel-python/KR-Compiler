@@ -17,7 +17,12 @@ if (-not (Test-Path -LiteralPath $AndroidSdk)) { throw "Android SDK wurde nicht 
 $env:ANDROID_HOME = $AndroidSdk
 $env:JAVA_HOME = $JavaHome
 
-if (-not $SkipToolchainDownload) { & (Join-Path $PSScriptRoot 'download-toolchain.ps1') }
+$toolchainAsset = Join-Path $PSScriptRoot '..\app\src\main\assets\toolchain.zip'
+if (-not $SkipToolchainDownload -and -not (Test-Path -LiteralPath $toolchainAsset)) {
+    & (Join-Path $PSScriptRoot 'download-toolchain.ps1')
+} elseif (-not $SkipToolchainDownload) {
+    Write-Host 'Vorhandene Compiler-Laufzeit wird verwendet. Für eine Aktualisierung zuerst package-toolchain.ps1 ausführen.'
+}
 & (Join-Path $PSScriptRoot 'prepare-signing.ps1') -JavaHome $JavaHome
 
 $androidRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -28,7 +33,7 @@ if ($LASTEXITCODE -ne 0) { throw 'APK-Build fehlgeschlagen.' }
 $apk = Resolve-Path (Join-Path $PSScriptRoot '..\app\build\outputs\apk\release\app-release.apk')
 Write-Host "Fertig: $apk"
 
-$releaseName = 'KR-Compiler-Android-IDE-v3.0.apk'
+$releaseName = 'KR-Compiler-Android-IDE-v3.1.apk'
 $rootApk = Join-Path $RepositoryRoot $releaseName
 $localApk = Join-Path $androidRoot $releaseName
 Copy-Item -LiteralPath $apk -Destination $rootApk -Force

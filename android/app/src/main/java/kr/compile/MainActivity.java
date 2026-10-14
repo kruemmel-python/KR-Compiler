@@ -37,8 +37,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public final class MainActivity extends Activity implements
         BuildManager.Listener,
@@ -242,7 +244,7 @@ public final class MainActivity extends Activity implements
         titleLayout.setOrientation(LinearLayout.VERTICAL);
 
         titleLabel = new TextView(this);
-        titleLabel.setText("KR IDE v3.0");
+        titleLabel.setText("KR IDE v3.1");
         titleLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f);
         titleLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         titleLayout.addView(titleLabel);
@@ -683,7 +685,7 @@ public final class MainActivity extends Activity implements
 
         if (DocumentManager.getInstance().getOpenDocuments().isEmpty()) {
             DocumentModel starter = DocumentManager.getInstance().openDocument("main.cpp",
-                    "#include <iostream>\n\nint main() {\n    std::cout << \"KR IDE v3.0 C++20 ready!\" << std::endl;\n    return 0;\n}\n",
+                    "#include <iostream>\n\nint main() {\n    std::cout << \"KR IDE v3.1 C++20 ready!\" << std::endl;\n    return 0;\n}\n",
                     null, null);
             codeEditor.setDocument(starter);
             refreshDocTabs();
@@ -1267,11 +1269,13 @@ public final class MainActivity extends Activity implements
         String[] items = {
                 "Projektordner öffnen…",
                 "GitHub-Projekt klonen…",
+                "Neues GUI-Projekt…",
+                "VCPKG-Bibliotheken…",
                 "Neue Datei…",
                 "Neuer Ordner…",
                 "Zuletzt geöffnete Projekte…",
                 "Einstellungen…",
-                "Über KR IDE v3.0"
+                "Über KR IDE v3.1"
         };
         new AlertDialog.Builder(this)
                 .setTitle("Menü")
@@ -1279,14 +1283,89 @@ public final class MainActivity extends Activity implements
                     switch (which) {
                         case 0: chooseProjectFolder(); break;
                         case 1: showGitCloneDialog(); break;
-                        case 2: showCreateFileDialog(null); break;
-                        case 3: showCreateFolderDialog(null); break;
-                        case 4: showRecentProjectsDialog(); break;
-                        case 5: showSettingsDialog(); break;
-                        case 6: showAboutDialog(); break;
+                        case 2: showCreateGuiProjectDialog(); break;
+                        case 3: showVcpkgLibrariesDialog(); break;
+                        case 4: showCreateFileDialog(null); break;
+                        case 5: showCreateFolderDialog(null); break;
+                        case 6: showRecentProjectsDialog(); break;
+                        case 7: showSettingsDialog(); break;
+                        case 8: showAboutDialog(); break;
                     }
                 })
                 .setNegativeButton("Schließen", null)
+                .show();
+    }
+
+    private void showCreateGuiProjectDialog() {
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText("KR-GUI-Beispiel");
+        input.setSelectAllOnFocus(true);
+        input.setHint("Projektname");
+        new AlertDialog.Builder(this)
+                .setTitle("Neues GUI-Projekt")
+                .setMessage("Erstellt eine portable SDL3-/Dear-ImGui-Anwendung mit CMake und vcpkg.json für Windows x64 und Linux x64.")
+                .setView(input)
+                .setPositiveButton("Projekt erstellen", (dialog, which) -> {
+                    try {
+                        File project = VcpkgManager.createGuiProject(this, input.getText().toString());
+                        ProjectManager.getInstance().setProject(this, null, project, project.getName());
+                        getPreferences(MODE_PRIVATE).edit().putString(PREF_KEY_LOCAL, project.getAbsolutePath()).remove(PREF_KEY_URI).apply();
+                        updateProjectHeader();
+                        refreshProjectTree();
+                        openDefaultProjectFile();
+                        switchView(ViewMode.DATEIEN);
+                        Toast.makeText(this, "GUI-Projekt erstellt: " + project.getName(), Toast.LENGTH_LONG).show();
+                    } catch (Exception e) {
+                        new AlertDialog.Builder(this).setTitle("Projekt konnte nicht erstellt werden")
+                                .setMessage(e.getMessage()).setPositiveButton("OK", null).show();
+                    }
+                })
+                .setNegativeButton("Abbrechen", null)
+                .show();
+    }
+
+    private void showVcpkgLibrariesDialog() {
+        File project = ProjectManager.getInstance().getActiveLocalDir();
+        if (project == null || !project.isDirectory()) {
+            new AlertDialog.Builder(this).setTitle("VCPKG-Bibliotheken")
+                    .setMessage("Die Bibliotheksverwaltung benötigt derzeit ein lokales Projekt. Öffne ein geklontes Projekt oder erstelle ein neues GUI-Projekt.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        List<VcpkgManager.Library> catalog = VcpkgManager.catalog();
+        String[] labels = new String[catalog.size()];
+        boolean[] checked = new boolean[catalog.size()];
+        final Set<String> selected = new LinkedHashSet<>();
+        try { selected.addAll(VcpkgManager.readDependencies(project)); }
+        catch (Exception e) {
+            new AlertDialog.Builder(this).setTitle("vcpkg.json konnte nicht gelesen werden")
+                    .setMessage(e.getMessage()).setPositiveButton("OK", null).show();
+            return;
+        }
+        for (int i = 0; i < catalog.size(); i++) {
+            VcpkgManager.Library library = catalog.get(i);
+            labels[i] = library.title + "\n" + library.description;
+            checked[i] = selected.contains(library.port);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("VCPKG-Bibliotheken")
+                .setMultiChoiceItems(labels, checked, (dialog, which, enabled) -> {
+                    String port = catalog.get(which).port;
+                    if (enabled) selected.add(port); else selected.remove(port);
+                })
+                .setPositiveButton("Manifest speichern", (dialog, which) -> {
+                    try {
+                        if (selected.contains("imgui")) selected.add("sdl3");
+                        VcpkgManager.writeDependencies(project, selected);
+                        refreshProjectTree();
+                        Toast.makeText(this, "vcpkg.json gespeichert: " + selected.size() + " Bibliothek(en)", Toast.LENGTH_LONG).show();
+                    } catch (Exception e) {
+                        new AlertDialog.Builder(this).setTitle("Manifest konnte nicht gespeichert werden")
+                                .setMessage(e.getMessage()).setPositiveButton("OK", null).show();
+                    }
+                })
+                .setNegativeButton("Abbrechen", null)
                 .show();
     }
 
@@ -1449,11 +1528,12 @@ public final class MainActivity extends Activity implements
 
     private void showAboutDialog() {
         new AlertDialog.Builder(this)
-                .setTitle("KR Compiler Android IDE v3.0")
+                .setTitle("KR Compiler Android IDE v3.1")
                 .setMessage("Adaptive, produktive C++20-Entwicklungsumgebung für Android.\n\n" +
                         "• Clang/LLVM 21.1.8 C++20 Toolchain\n" +
                         "• Targets: Android ARM64, Windows x64, Linux x64\n" +
                         "• CMake & Ninja Integration\n" +
+                        "• VCPKG-Manifeste und GUI-Projekte mit SDL3/Dear ImGui\n" +
                         "• Mobile C++ Symbol-Tastatur\n" +
                         "• Automatisches Hoch-/Querformat\n" +
                         "• Fehlernavigation & Runner-APK-Installation\n" +

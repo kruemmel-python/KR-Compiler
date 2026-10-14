@@ -192,6 +192,14 @@ Copy-Item (Join-Path $RepositoryRoot 'host\linux-x64\sysroot') $linuxTarget -Rec
 Copy-Item (Join-Path $RepositoryRoot 'host\linux-x64\backend\include') (Join-Path $linuxTarget 'gcc') -Recurse
 Copy-Item (Join-Path $RepositoryRoot 'host\linux-x64\backend\lib') (Join-Path $linuxTarget 'gcc') -Recurse
 
+# Add the X11 development subset required by SDL GUI applications. The helper
+# downloads fixed Ubuntu 24.04 packages, verifies their hashes and materializes
+# Unix symlinks so the Windows-created ZIP remains portable on Android.
+$linuxGuiRoot = Join-Path $cache 'linux-gui-root'
+& (Join-Path $PSScriptRoot 'prepare-linux-gui-sysroot.ps1') -Output $linuxGuiRoot
+if ($LASTEXITCODE -ne 0) { throw 'Linux-GUI-Sysroot konnte nicht vorbereitet werden.' }
+Copy-Item (Join-Path $linuxGuiRoot '*') (Join-Path $linuxTarget 'sysroot') -Recurse -Force
+
 # Termux is built for a fixed 31-byte prefix. The application id deliberately has
 # the same length, allowing a safe in-place replacement without corrupting ELF files.
 $old = [Text.Encoding]::ASCII.GetBytes('/data/data/com.termux/files/usr')

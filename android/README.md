@@ -16,13 +16,19 @@ Für Android wird ein CMake-`add_executable` intern in eine vom Runner ladbare A
 Arbeitsverzeichnis der entpackte Ressourcenordner. Für Windows und Linux wird das ausgewählte
 Ziel als `programm.exe` beziehungsweise `programm` exportiert.
 
+Grafische Desktop-Projekte können über „Neues GUI-Projekt“ als SDL3-/Dear-ImGui-Vorlage erzeugt
+werden. „vcpkg-Bibliotheken“ pflegt das Manifest `vcpkg.json`. Beim Build bindet die App die
+integrierte vcpkg-Toolchain ein. `kr-gui-target.txt` kennzeichnet ein Desktop-GUI-Projekt, damit
+Windows ohne Konsolenfenster und Linux gegen die bereitgestellten X11/Xext-Grundlagen gelinkt wird.
+
 ## Enthaltene Laufzeit
 
 Die Release-Laufzeit enthält CMake, Ninja, Git, `pkg-config`, CA-Zertifikate, Clang/LLVM sowie
-Sysroots für Android ARM64, Windows x64 und Linux x64. Sie ist wegen ihrer Größe nicht Teil des
-Git-Verlaufs. `scripts/download-toolchain.ps1` lädt die unveränderte ZIP-Datei aus Release
-`v2.6.5` und verifiziert SHA-256
-`36a62d8f8a20de53b217543cf5438f23000478ac97d6ed161a450f677d2cba5c`.
+Sysroots für Android ARM64, Windows x64 und Linux x64. Das Linux-Profil enthält ab Version 3.1
+zusätzlich die X11/Xext-Bestandteile für grafische Programme. Die Laufzeit ist wegen ihrer Größe
+nicht Teil des Git-Verlaufs. `scripts/download-toolchain.ps1` lädt die unveränderte ZIP-Datei aus
+Release `v3.1.0` und verifiziert SHA-256
+`bb1b24d80d7ffbbcbe24e96ada527370f97bd9d169a97ffcd9d78b9670810b08`.
 
 Wenn Online-Abhängigkeiten eingeschaltet sind, dürfen normale CMake-`FetchContent`-Deklarationen
 und Git benötigte Quellen laden. Zusätzlich erkennt die App `find_package` für `fmt`,
@@ -50,4 +56,5 @@ exportierten Schlüsseldateien liegen nur im ignorierten Assets-Arbeitsordner. O
 können über die `KR_SIGNING_*`-Umgebungsvariablen eine andere Signatur verwenden.
 
 `scripts/package-toolchain.ps1` ist das Maintainer-Skript, mit dem die Laufzeit aus Termux-Paketen
-und den KR-Desktop-Sysroots erzeugt wird. Für normale Fork-Builds wird es nicht benötigt.
+und den KR-Desktop-Sysroots erzeugt wird. `scripts/prepare-linux-gui-sysroot.ps1` ergänzt dafür die
+Linux-X11/Xext-Dateien. Für normale Fork-Builds werden beide Skripte nicht benötigt.
