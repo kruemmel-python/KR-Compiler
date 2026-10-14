@@ -1,0 +1,37 @@
+# Generated Android/Gradle files
+.gradle/
+**/.gradle/
+**/build/
+**/.cxx/
+local.properties
+.android-cache/
+
+# Downloaded compiler runtime and generated runner/signing assets
+android/app/src/main/assets/toolchain.zip
+android/app/src/main/assets/toolchain.zip.download
+android/app/src/main/assets/runner-template.apk
+android/app/src/main/assets/kr-runner-key.pk8
+android/app/src/main/assets/kr-runner-cert.der
+android/.local-signing/
+android/signing/
+
+# Local artifacts and working folders
+*.apk
+*.apk.sha256
+*.aab
+*.keystore
+*.jks
+*.pk8
+*.der
+*.zip.001
+*.zip.002
+*.7z.001
+*.7z.002
+*.7z.003
+*.7z.004
+.docx_work*/
+android/docs_work/
+android/android.zip
+android/codedump_android.md
+desktop.ini
+setup.log

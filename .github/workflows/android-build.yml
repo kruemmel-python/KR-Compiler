@@ -1,0 +1,43 @@
+name: Android APK bauen
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Quellen auschecken
+        uses: actions/checkout@v4
+
+      - name: JDK 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK einrichten
+        uses: android-actions/setup-android@v3
+
+      - name: Android-Komponenten installieren
+        shell: pwsh
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.0.12077973' 'cmake;3.22.1'
+
+      - name: APK bauen
+        shell: pwsh
+        run: .\android\scripts\build-apk.ps1
+
+      - name: APK als Workflow-Artefakt bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: KR-Compiler-Android-v2.6.5
+          path: KR-Compiler-Android-v2.6.5.apk
+          if-no-files-found: error

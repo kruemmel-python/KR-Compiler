@@ -1,0 +1,57 @@
+plugins { id 'com.android.application' }
+
+def signingStorePath = System.getenv('KR_SIGNING_STORE') ?: file('../.local-signing/kr-development.keystore').absolutePath
+def signingStorePassword = System.getenv('KR_SIGNING_STORE_PASSWORD') ?: 'android'
+def signingKeyAlias = System.getenv('KR_SIGNING_KEY_ALIAS') ?: 'kr-runner'
+def signingKeyPassword = System.getenv('KR_SIGNING_KEY_PASSWORD') ?: signingStorePassword
+
+android {
+    namespace 'kr.compile'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'kr.compile'
+        minSdk 26
+        // API 28 intentionally permits executing the compiler unpacked in private app storage.
+        targetSdk 28
+        versionCode 265
+        versionName '2.6.5'
+    }
+    signingConfigs {
+        release {
+            // The public repository never contains a private signing key.
+            // scripts/prepare-signing.ps1 creates a local development key, while
+            // official builds can supply their keystore through KR_SIGNING_*.
+            storeFile file(signingStorePath)
+            storePassword signingStorePassword
+            keyAlias signingKeyAlias
+            keyPassword signingKeyPassword
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    packagingOptions { resources.excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*'] }
+    androidResources { noCompress += ['zip', 'apk', 'keystore'] }
+    lint { checkReleaseBuilds false; abortOnError false }
+}
+
+dependencies {
+    implementation 'com.android.tools.build:apksig:8.7.3'
+}
+
+def runnerApk = project(':runner').layout.buildDirectory.file('outputs/apk/debug/runner-debug.apk')
+tasks.register('prepareRunnerTemplate', Copy) {
+    dependsOn ':runner:assembleDebug'
+    from(runnerApk)
+    into(layout.projectDirectory.dir('src/main/assets'))
+    rename { 'runner-template.apk' }
+}
+tasks.named('preBuild').configure { dependsOn 'prepareRunnerTemplate' }
