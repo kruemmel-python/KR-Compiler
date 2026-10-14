@@ -26,6 +26,8 @@ jobs:
 
       - name: Android SDK einrichten
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Android-Komponenten installieren
         shell: pwsh
