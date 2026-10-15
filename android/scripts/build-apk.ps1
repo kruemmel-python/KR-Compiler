@@ -33,7 +33,7 @@ if ($LASTEXITCODE -ne 0) { throw 'APK-Build fehlgeschlagen.' }
 $apk = Resolve-Path (Join-Path $PSScriptRoot '..\app\build\outputs\apk\release\app-release.apk')
 Write-Host "Fertig: $apk"
 
-$releaseName = 'KR-Compiler-Android-IDE-v3.2.apk'
+$releaseName = 'KR-Compiler-Android-IDE-v3.2.1.apk'
 $rootApk = Join-Path $RepositoryRoot $releaseName
 $localApk = Join-Path $androidRoot $releaseName
 Copy-Item -LiteralPath $apk -Destination $rootApk -Force

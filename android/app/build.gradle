@@ -14,8 +14,8 @@ android {
         minSdk 26
         // API 28 intentionally permits executing the compiler unpacked in private app storage.
         targetSdk 28
-        versionCode 320
-        versionName '3.2.0'
+        versionCode 321
+        versionName '3.2.1'
     }
     signingConfigs {
         release {

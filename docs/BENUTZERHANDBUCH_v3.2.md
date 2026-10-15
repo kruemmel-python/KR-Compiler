@@ -70,4 +70,4 @@ Im Querformat ordnet KR IDE Kopfzeile und Bereichs-Tabs automatisch nebeneinande
 | Installation wird blockiert | In Android die Installation aus KR Compiler erlauben und die Paketabfrage bestätigen. |
 | Vorhandener Runner hat eine andere Signatur | Den alten Eintrag **KR C++ Programm** deinstallieren und das neue Artefakt erneut installieren. Die Projektdateien in KR Compiler bleiben erhalten. |
 
-Teststand: KR Compiler Android IDE 3.2.0 auf RMX3853, 15. Oktober 2026.
+Teststand: KR Compiler Android IDE 3.2.1 auf RMX3853, 15. Oktober 2026.

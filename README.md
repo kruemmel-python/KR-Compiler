@@ -2,9 +2,9 @@
 
 KR Compiler Android IDE ist eine mobile C- und C++-Entwicklungsumgebung für ARM64-Android-Geräte. Projekte können direkt auf dem Smartphone geöffnet, bearbeitet und mit der integrierten Clang/LLVM-, CMake- und Ninja-Werkzeugkette gebaut werden. Als Ziele stehen Android ARM64, Windows x64 und Linux x64 zur Verfügung.
 
-## Version 3.2 herunterladen
+## Version 3.2.1 herunterladen
 
-Die installierbare APK und drei deutschsprachige Dokumentationen befinden sich im [GitHub-Release v3.2.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v3.2.0). Das unveränderte große Compiler-Werkzeugpaket wird weiterhin geprüft aus Release v3.1.0 geladen.
+Die installierbare APK und drei deutschsprachige Dokumentationen befinden sich im [GitHub-Release v3.2.1](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v3.2.1). Das unveränderte große Compiler-Werkzeugpaket wird weiterhin geprüft aus Release v3.1.0 geladen.
 
 Voraussetzungen:
 
@@ -54,6 +54,7 @@ Die IDE bietet:
 - automatische Hoch- und Querformatdarstellung für Smartphones und Tablets
 - GUI-Projektvorlage und vcpkg-Bibliotheksverwaltung
 - native Android-GUI-Paketierung über SDLActivity
+- kompakter Querformateditor für TV-Spiegelung und kleine Landscape-Höhen
 
 ## Compiler und Zielsysteme
 
@@ -93,7 +94,7 @@ cd KR-Compiler
 powershell -ExecutionPolicy Bypass -File .\android\scripts\build-apk.ps1
 ```
 
-Beim ersten Build lädt das Skript die geprüfte Compilerlaufzeit aus Release v3.1.0. Anschließend erzeugt es ausschließlich lokal einen Entwicklungsschlüssel. Weder der Werkzeugkasten noch private Schlüssel werden im Git-Repository gespeichert. Die fertige APK liegt unter `android/app/build/outputs/apk/release/app-release.apk` und zusätzlich als `KR-Compiler-Android-IDE-v3.2.apk` im Repository-Arbeitsordner.
+Beim ersten Build lädt das Skript die geprüfte Compilerlaufzeit aus Release v3.1.0. Anschließend erzeugt es ausschließlich lokal einen Entwicklungsschlüssel. Weder der Werkzeugkasten noch private Schlüssel werden im Git-Repository gespeichert. Die fertige APK liegt unter `android/app/build/outputs/apk/release/app-release.apk` und zusätzlich als `KR-Compiler-Android-IDE-v3.2.1.apk` im Repository-Arbeitsordner.
 
 Für eine eigene dauerhafte Release-Signatur können diese Umgebungsvariablen gesetzt werden:
 
