@@ -102,6 +102,19 @@ public final class KrParser {
             seg.calledFunctionNames.addAll(b.calledFunctions);
         }
 
+        // Also scan all tokens within this segment's span to catch any called function
+        for (int i = 0; i < tokenCount - 1; i++) {
+            KrToken tok = tokens.get(i);
+            if (tok.startOffset >= startOffset && tok.endOffset <= endOffset) {
+                if (tok.type == KrTokenType.IDENTIFIER) {
+                    KrToken next = tokens.get(i + 1);
+                    if (next.type == KrTokenType.LPAREN) {
+                        seg.calledFunctionNames.add(tok.text);
+                    }
+                }
+            }
+        }
+
         segments.add(seg);
     }
 
@@ -310,31 +323,34 @@ public final class KrParser {
     private RawBlock parsePotentialCppOrAmbiguous(KrToken first, int startLine, int startCol, int startOffset) {
         // Look ahead to see if this is a function definition: <type> <name>(...) { ... }
         int scan = cursor;
-        boolean hasParen = false;
         boolean hasBrace = false;
         String fnName = null;
         String returnTypeName = first.text;
+        int parenDepth = 0;
 
-        while (scan < tokenCount && scan < cursor + 20) {
+        while (scan < tokenCount) {
             KrToken t = tokens.get(scan);
-            if (t.type == KrTokenType.SEMICOLON) {
+            if (t.type == KrTokenType.SEMICOLON && parenDepth == 0) {
                 // Simple statement or variable declaration e.g. int x = 0;
                 break;
             }
             if (t.type == KrTokenType.LPAREN) {
-                hasParen = true;
-                if (scan > cursor) {
+                parenDepth++;
+                if (parenDepth == 1 && scan > cursor) {
                     fnName = tokens.get(scan - 1).text;
                 }
-            }
-            if (t.type == KrTokenType.LBRACE && hasParen) {
-                hasBrace = true;
+            } else if (t.type == KrTokenType.RPAREN) {
+                parenDepth--;
+            } else if (t.type == KrTokenType.LBRACE && parenDepth == 0) {
+                if (fnName != null) {
+                    hasBrace = true;
+                }
                 break;
             }
             scan++;
         }
 
-        if (hasParen && hasBrace && fnName != null) {
+        if (hasBrace && fnName != null) {
             // This is a C++ function definition!
             KrFunction fn = parseCppFunctionSignature(startLine, startCol, returnTypeName, fnName);
             Set<String> called = new HashSet<>();
