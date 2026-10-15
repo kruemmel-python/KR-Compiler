@@ -55,6 +55,12 @@ Für die Desktop-Ziele wird dasselbe Projekt verwendet. Zielplattform umstellen 
 - Linux x64 erzeugt `programm` als ELF-Desktopprogramm. [Bebilderter Testlauf](BENUTZERHANDBUCH_v3.1.md#6-linux-x64-bauen)
 - Windows x64 erzeugt `programm.exe` als Windows-Desktopprogramm. [Bebilderter Testlauf](BENUTZERHANDBUCH_v3.1.md#7-windows-x64-bauen)
 
+## 7. Querformat und TV-Spiegelung
+
+![Kompakter Editor im Querformat](images/v3.2/12-landscape-editor.png)
+
+Im Querformat ordnet KR IDE Kopfzeile und Bereichs-Tabs automatisch nebeneinander an. Auf niedrigen Smartphone- und TV-Spiegelungsflächen werden Dokument-, Symbol- und Aktionsleisten kompakter, die Dateiseitenleiste schmaler und die Editoranzeige auf eine gut lesbare Größe angepasst. In der CODE-Ansicht wird die untere Build-Leiste ausgeblendet; über **BUILD** erscheint sie sofort wieder. Beim Wechsel zurück ins Hochformat gilt wieder die persönlich eingestellte Editor-Schriftgröße.
+
 ## Fehlerbehebung
 
 | Meldung | Lösung |

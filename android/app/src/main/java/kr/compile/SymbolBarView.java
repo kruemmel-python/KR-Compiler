@@ -70,6 +70,23 @@ public final class SymbolBarView extends HorizontalScrollView {
         applyTheme();
     }
 
+    public void setCompactMode(boolean compact) {
+        int height = dp(compact ? 36 : 48);
+        int horizontal = dp(compact ? 42 : 48);
+        container.setPadding(dp(4), dp(compact ? 2 : 4), dp(4), dp(compact ? 2 : 4));
+        for (int i = 0; i < container.getChildCount(); i++) {
+            View child = container.getChildAt(i);
+            if (!(child instanceof Button)) continue;
+            Button button = (Button) child;
+            String text = button.getText().toString();
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    text.length() > 2 ? dp(compact ? 52 : 60) : horizontal, height);
+            lp.setMargins(dp(2), 0, dp(2), 0);
+            button.setLayoutParams(lp);
+            button.setTextSize(TypedValue.COMPLEX_UNIT_SP, compact ? 14f : 16f);
+        }
+    }
+
     private void applyTheme() {
         int barBg = isDarkTheme ? Color.parseColor("#1E2227") : Color.parseColor("#EAEAEA");
         setBackgroundColor(barBg);

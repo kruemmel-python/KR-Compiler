@@ -64,6 +64,7 @@ public final class MainActivity extends Activity implements
 
     // UI Root and Structure
     private LinearLayout rootContainer;
+    private LinearLayout headerContainer;
     private LinearLayout topBar;
     private TextView titleLabel;
     private TextView fileInfoLabel;
@@ -114,6 +115,7 @@ public final class MainActivity extends Activity implements
 
     // Multi-pane / Landscape mode
     private boolean isWideLayout = false;
+    private boolean compactLandscapeMode = false;
     private LinearLayout splitContainer = null;
     private FrameLayout sidebarContainer = null;
 
@@ -178,13 +180,19 @@ public final class MainActivity extends Activity implements
         rootContainer.setOrientation(LinearLayout.VERTICAL);
         rootContainer.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 1. Top Bar
+        // 1. Responsive header. In portrait the two rows stay stacked; in
+        // landscape they share one row so the editor keeps useful height.
+        headerContainer = new LinearLayout(this);
+        headerContainer.setOrientation(LinearLayout.VERTICAL);
+        headerContainer.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         topBar = createTopBar();
-        rootContainer.addView(topBar);
+        headerContainer.addView(topBar);
 
         // 2. Navigation Tabs (CODE | DATEIEN | BUILD | ARTEFAKTE)
         navTabBar = createNavTabBar();
-        rootContainer.addView(navTabBar);
+        headerContainer.addView(navTabBar);
+        rootContainer.addView(headerContainer);
 
         // 3. Document Tabs Strip
         docTabStripScroll = new HorizontalScrollView(this);
@@ -546,8 +554,12 @@ public final class MainActivity extends Activity implements
     private void adaptLayout(Configuration config) {
         boolean isLandscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE;
         int screenWidthDp = config.screenWidthDp;
+        boolean compactLandscape = isLandscape && config.screenHeightDp > 0 && config.screenHeightDp < 500;
+        compactLandscapeMode = compactLandscape;
         // Large screen / tablet or landscape phone
         isWideLayout = isLandscape && screenWidthDp >= 540;
+
+        applyResponsiveChrome(isLandscape, compactLandscape);
 
         contentFrame.removeAllViews();
 
@@ -559,7 +571,8 @@ public final class MainActivity extends Activity implements
 
             // Left Pane (Files or Build)
             sidebarContainer = new FrameLayout(this);
-            sidebarContainer.setLayoutParams(new LinearLayout.LayoutParams(dp(280), ViewGroup.LayoutParams.MATCH_PARENT));
+            int sidebarWidth = compactLandscape ? 220 : 260;
+            sidebarContainer.setLayoutParams(new LinearLayout.LayoutParams(dp(sidebarWidth), ViewGroup.LayoutParams.MATCH_PARENT));
             sidebarContainer.addView(filesView);
             splitContainer.addView(sidebarContainer);
 
@@ -577,9 +590,98 @@ public final class MainActivity extends Activity implements
         }
     }
 
+    private void applyResponsiveChrome(boolean landscape, boolean compact) {
+        if (landscape) {
+            int headerHeight = dp(compact ? 42 : 48);
+            headerContainer.setOrientation(LinearLayout.HORIZONTAL);
+            topBar.setLayoutParams(new LinearLayout.LayoutParams(0, headerHeight, 1.05f));
+            navTabBar.setLayoutParams(new LinearLayout.LayoutParams(0, headerHeight, 1.15f));
+            topBar.setMinimumHeight(0);
+            topBar.setPadding(dp(6), 0, dp(4), 0);
+            navTabBar.setMinimumHeight(0);
+            fileInfoLabel.setVisibility(compact ? View.GONE : View.VISIBLE);
+            titleLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, compact ? 14f : 15f);
+            codeEditor.setFontSize(Math.min(editorFontSize, compact ? 14f : 15f));
+            resizeTopBarButtons(compact ? 36 : 40);
+            resizeNavTabs(ViewGroup.LayoutParams.MATCH_PARENT, compact ? 11f : 12f);
+
+            docTabStripScroll.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(compact ? 30 : 34)));
+            symbolBar.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(compact ? 40 : 44)));
+            symbolBar.setCompactMode(true);
+
+            bottomBar.setMinimumHeight(0);
+            bottomBar.setPadding(dp(8), 0, dp(8), 0);
+            bottomBar.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(compact ? 44 : 48)));
+            statusIndicator.setVisibility(compact ? View.GONE : View.VISIBLE);
+            btnCompile.setMinimumHeight(0);
+            btnCompile.setTextSize(TypedValue.COMPLEX_UNIT_SP, compact ? 14f : 15f);
+            btnCompile.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(compact ? 38 : 42)));
+        } else {
+            headerContainer.setOrientation(LinearLayout.VERTICAL);
+            topBar.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            navTabBar.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            topBar.setMinimumHeight(dp(52));
+            topBar.setPadding(dp(12), dp(8), dp(12), dp(8));
+            navTabBar.setMinimumHeight(dp(48));
+            fileInfoLabel.setVisibility(View.VISIBLE);
+            titleLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f);
+            codeEditor.setFontSize(editorFontSize);
+            resizeTopBarButtons(44);
+            resizeNavTabs(dp(48), 13f);
+
+            docTabStripScroll.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+            symbolBar.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+            symbolBar.setCompactMode(false);
+
+            bottomBar.setMinimumHeight(dp(54));
+            bottomBar.setPadding(dp(12), dp(6), dp(12), dp(6));
+            bottomBar.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            statusIndicator.setVisibility(View.VISIBLE);
+            btnCompile.setMinimumHeight(dp(48));
+            btnCompile.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
+            btnCompile.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        updateBottomBarVisibility();
+    }
+
+    private void updateBottomBarVisibility() {
+        bottomBar.setVisibility(compactLandscapeMode && currentMode == ViewMode.CODE
+                ? View.GONE : View.VISIBLE);
+    }
+
+    private void resizeTopBarButtons(int sizeDp) {
+        for (int i = 1; i < topBar.getChildCount(); i++) {
+            View child = topBar.getChildAt(i);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp));
+            lp.setMargins(dp(2), 0, dp(2), 0);
+            child.setLayoutParams(lp);
+        }
+    }
+
+    private void resizeNavTabs(int height, float textSizeSp) {
+        for (int i = 0; i < navTabBar.getChildCount(); i++) {
+            View child = navTabBar.getChildAt(i);
+            child.setLayoutParams(new LinearLayout.LayoutParams(0, height, 1f));
+            if (child instanceof Button) {
+                ((Button) child).setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp);
+            }
+        }
+    }
+
     private void switchView(ViewMode mode) {
         currentMode = mode;
         updateNavTabStyles();
+        updateBottomBarVisibility();
 
         if (isWideLayout) {
             if (sidebarContainer != null) {
