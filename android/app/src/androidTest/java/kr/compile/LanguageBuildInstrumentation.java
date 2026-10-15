@@ -100,6 +100,11 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
             jobs.add(new TestJob("kr-rust", false, "fn main() {\n    println!(\"Hallo von reinem Rust in .kr!\");\n}\n"));
         } else if (mode.equals("KR_GO")) {
             jobs.add(new TestJob("kr-go", false, "package main\n\nimport \"fmt\"\n\nfunc main() {\n    fmt.Println(\"Hallo von reinem Go in .kr!\")\n}\n"));
+        } else if (mode.equals("ROPE")) {
+            File ropeFile = new File(context.getExternalFilesDir(null), "rope_main.kr");
+            byte[] bytes = java.nio.file.Files.readAllBytes(ropeFile.toPath());
+            String code = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            jobs.add(new TestJob("kr-rope-attention", false, code));
         } else if (mode.equals("KR") || mode.equals("ALL") || mode.equals("KR_FUSION")) {
             if (!mode.equals("KR_FUSION")) {
                 jobs.add(new TestJob("kr-console", LanguageProjectManager.KrTemplate.KR_CONSOLE));
