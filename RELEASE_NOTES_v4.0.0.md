@@ -7,7 +7,7 @@ Version 4.0.0 führt die bahnbrechende **KR Unified Language (`.kr`)** ein sowie
 - **Freie Sprachfusion**: Entwickler schreiben C++20, Rust und Go nahtlos innerhalb einer einzigen `.kr`-Quelldatei, ohne künstliche Sprachdeklarationen wie `@cpp`, `@rust` oder `@go`.
 - **Deterministische Frontend-Pipeline**:
   - `KrLexer`: Zuverlässige Unterscheidung von Tokens, Raw-Strings (C++, Rust `r#""#`, Go backticks), Kommentaren und Präprozessor.
-  - `KrParser`: Strukturelle Erkennung von C++-, Rust- und Go-Deklarationen und Top-Level-Blöcken.
+  - `KrParser`: Strukturelle Erkennung von C++-, Rust- und Go-Deklarationen, Top-Level-Blöcken sowie vollständige Auflösung komplexer Funktionssignaturen mit Standardargumenten.
   - `KrSymbolTable`: Sprachübergreifende Symbolauflösung, Typverifikation und Erkennung von Kreuzaufrufen in allen 6 Richtungen (C++ ↔ Rust, C++ ↔ Go, Rust ↔ Go).
   - `KrCodeGenerator`: Automatische Generierung einer C-kompatiblen ABI, typ-sicherer Wrapper und Module für alle beteiligten Original-Compiler.
 - **Vier integrierte `.kr`-Projektvorlagen**:
@@ -25,7 +25,7 @@ Version 4.0.0 führt die bahnbrechende **KR Unified Language (`.kr`)** ein sowie
 
 ## Vollständige End-to-End-Verifikation
 
-Auf einem physischen Android-Smartphone (RMX3853) wurden alle **18 Kombinationen** (6 Projekttypen × 3 Zielplattformen) erfolgreich kompiliert, installiert und ausgeführt:
+Auf einem physischen Android-Smartphone (RMX3853) wurden alle **18 Kombinationen** (6 Projekttypen × 3 Zielplattformen) sowie komplexe rechenintensive Algorithmen (z. B. **RoPE + Online-Softmax Attention** mit C++-Tensorkern, Rust-RoPE-Frequenzberechnung und Go-Fehlerabnahme) erfolgreich kompiliert, installiert und ausgeführt:
 - **Android APKs**: Installiert und ausgeführt via `kr.compile.runner`. Korrekte Bildschirmausgaben und SDL3-Oberflächen verifiziert.
 - **Windows EXEs**: Ausgeführt und Ausgaben verifiziert:
   - C++ berechnet Ergebnis (54).
@@ -37,4 +37,4 @@ Auf einem physischen Android-Smartphone (RMX3853) wurden alle **18 Kombinationen
 
 `KR-Compiler-Android-IDE-v4.0.0.apk`
 
-`SHA-256 EC57C9C99C13769A8FF0040F2BBDCD564CF04EDEED9ABE633D61F80CBD49A392`
+`SHA-256 EA445F39EA7DF69CA1BB1050A1AC93CA5A4F6A7D4E9A01F1CC225FE93791C7B9`
