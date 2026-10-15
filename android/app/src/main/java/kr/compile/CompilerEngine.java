@@ -75,7 +75,13 @@ final class CompilerEngine {
         try {
             File cmakeProject = new File(project, "CMakeLists.txt");
             File artifact;
-            if (cmakeProject.isFile()) {
+            if (new File(project, "Cargo.toml").isFile()) {
+                log.line("Rust-Projekt erkannt; Cargo und rustc werden verwendet.");
+                artifact = buildRust();
+            } else if (new File(project, "go.mod").isFile() || !goSources(project).isEmpty()) {
+                log.line("Go-Projekt erkannt; go build wird verwendet.");
+                artifact = buildGo();
+            } else if (cmakeProject.isFile()) {
                 log.line("CMakeLists.txt erkannt; das Projekt wird mit CMake ausgewertet.");
                 artifact = buildCMake();
             } else {
@@ -119,6 +125,10 @@ final class CompilerEngine {
     }
 
     private File buildCMake() throws Exception {
+        return buildCMake(project, project);
+    }
+
+    private File buildCMake(File sourceProject, File runtimeProject) throws Exception {
         File cmake = new File(toolchain, "usr/bin/cmake");
         File ninja = new File(toolchain, "usr/bin/ninja");
         if (!cmake.canExecute() || !ninja.canExecute())
@@ -135,9 +145,9 @@ final class CompilerEngine {
         File projectInclude = new File(config, "kr-project.cmake");
         File targetList = new File(binary, "kr-executable-targets.txt");
         writeText(toolchainFile, cmakeToolchain());
-        Set<String> packages = findCMakePackages(project);
-        Set<String> manifestPackages = VcpkgManager.readDependencies(project);
-        boolean guiProgram = VcpkgManager.isGuiProject(project, manifestPackages);
+        Set<String> packages = findCMakePackages(sourceProject);
+        Set<String> manifestPackages = VcpkgManager.readDependencies(sourceProject);
+        boolean guiProgram = VcpkgManager.isGuiProject(sourceProject, manifestPackages);
         if (guiProgram) {
             log.line("GUI-Projekt erkannt: SDL3-/Dear-ImGui-Fenster wird für "
                     + (target == Target.ANDROID ? "Android ARM64" : target == Target.WINDOWS ? "Windows x64" : "Linux x64")
@@ -171,7 +181,7 @@ final class CompilerEngine {
 
         String systemVersion = target == Target.ANDROID ? "26" : (target == Target.WINDOWS ? "10.0" : "1");
         List<String> configure = new ArrayList<>();
-        Collections.addAll(configure, cmake.getPath(), "-S", project.getPath(), "-B", binary.getPath(), "-G", "Ninja",
+        Collections.addAll(configure, cmake.getPath(), "-S", sourceProject.getPath(), "-B", binary.getPath(), "-G", "Ninja",
                 "-DCMAKE_BUILD_TYPE=Release",
                 "-DCMAKE_SYSTEM_VERSION=" + systemVersion,
                 "-DCMAKE_MAKE_PROGRAM=" + ninja.getPath(),
@@ -181,7 +191,7 @@ final class CompilerEngine {
                 "-DFETCHCONTENT_QUIET=OFF");
         if (!onlineDependencies) configure.add("-DFETCHCONTENT_FULLY_DISCONNECTED=ON");
         else log.line("Online-Abhängigkeiten sind erlaubt; CMake FetchContent und Git dürfen benötigte Quellen laden.");
-        run(configure, "CMake konfiguriert das Projekt", project);
+        run(configure, "CMake konfiguriert das Projekt", sourceProject);
 
         List<String> build = new ArrayList<>();
         int buildJobs = target == Target.ANDROID
@@ -190,7 +200,7 @@ final class CompilerEngine {
         if (target == Target.ANDROID) log.line("Android-GUI-Build: " + buildJobs + " parallele Compilerprozesse für stabilen Speicherverbrauch.");
         Collections.addAll(build, cmake.getPath(), "--build", binary.getPath(), "--config", "Release", "--parallel",
                 Integer.toString(buildJobs));
-        run(build, "CMake baut das Projekt", project);
+        run(build, "CMake baut das Projekt", sourceProject);
 
         List<String> targets = readLines(targetList);
         if (targets.isEmpty()) throw new IOException("CMake hat kein ausführbares Ziel aus add_executable erzeugt.");
@@ -203,7 +213,7 @@ final class CompilerEngine {
             copy(built, library);
             File apk = new File(output, "programm-android-arm64.apk");
             File cppRuntime = new File(toolchain, "usr/lib/libc++_shared.so");
-            RunnerPackager.create(context, library, cppRuntime, project, guiProgram, apk, log);
+            RunnerPackager.create(context, library, cppRuntime, runtimeProject, guiProgram, apk, log);
             if (!library.delete()) log.line("Hinweis: temporäre Android-Bibliothek bleibt in der Ausgabe.");
             return apk;
         }
@@ -459,6 +469,156 @@ final class CompilerEngine {
         return null;
     }
 
+    private File buildRust() throws Exception {
+        File cargo = new File(toolchain, "usr/bin/cargo");
+        File rustc = new File(toolchain, "usr/bin/rustc");
+        if (!cargo.canExecute() || !rustc.canExecute())
+            throw new IOException("Rust-Compiler fehlt in der Compilerlaufzeit. Bitte die vollständige KR-IDE-APK installieren.");
+        boolean gui = isLanguageGuiProject();
+        String triple = target == Target.ANDROID ? "aarch64-linux-android"
+                : target == Target.WINDOWS ? "x86_64-pc-windows-gnu" : "x86_64-unknown-linux-gnu";
+        log.line("Rust " + (gui ? "GUI" : "Konsole") + " → " + triple);
+        File targetDir = new File(project.getParentFile(), "rust-target");
+        File archive = new File(targetDir, triple + "/release/libkr_language.a");
+        Map<String, String> env = new HashMap<>();
+        env.put("CARGO_HOME", new File(context.getFilesDir(), "cargo-home").getPath());
+        env.put("CARGO_TARGET_DIR", targetDir.getPath());
+        env.put("CARGO_NET_OFFLINE", onlineDependencies ? "false" : "true");
+        env.put("RUST_BACKTRACE", "1");
+        env.put("RUSTC_BOOTSTRAP", "1");
+        env.put("CARGO_TARGET_" + triple.toUpperCase(Locale.ROOT).replace('-', '_') + "_LINKER",
+                new File(toolchain, "usr/bin/clang").getPath());
+        List<String> command = new ArrayList<>();
+        Collections.addAll(command, cargo.getPath(), "build", "--release", "--lib", "--target", triple);
+        if (target != Target.ANDROID) command.add("-Zbuild-std=std,panic_abort");
+        run(command, "Cargo kompiliert das Rust-Projekt", project, env);
+        if (!archive.isFile()) throw new IOException("Cargo hat die erwartete Rust-Bibliothek nicht erzeugt: " + archive.getName());
+        return linkLanguageArchive(archive, gui, "Rust");
+    }
+
+    private File buildGo() throws Exception {
+        File go = new File(toolchain, "usr/bin/go");
+        if (!go.canExecute()) throw new IOException("Go-Compiler fehlt in der Compilerlaufzeit. Bitte die vollständige KR-IDE-APK installieren.");
+        boolean gui = isLanguageGuiProject();
+        String goos = target == Target.ANDROID ? "android" : target == Target.WINDOWS ? "windows" : "linux";
+        String goarch = target == Target.ANDROID ? "arm64" : "amd64";
+        log.line("Go " + (gui ? "GUI" : "Konsole") + " → " + goos + "/" + goarch);
+        File languageDir = new File(project.getParentFile(), "go-target");
+        if (!languageDir.isDirectory() && !languageDir.mkdirs()) throw new IOException("Go-Ausgabeordner kann nicht erstellt werden.");
+        File archive = new File(languageDir, "libkr_language.a");
+        Map<String, String> env = new HashMap<>();
+        env.put("GOOS", goos); env.put("GOARCH", goarch); env.put("CGO_ENABLED", "1");
+        env.put("GOROOT", new File(toolchain, "usr/lib/go").getPath());
+        env.put("GOCACHE", new File(context.getCacheDir(), "go-build-cache").getPath());
+        env.put("GOMODCACHE", new File(context.getFilesDir(), "go-mod-cache").getPath());
+        env.put("GOPROXY", onlineDependencies ? "https://proxy.golang.org,direct" : "off");
+        env.put("CC", languageCrossCompiler());
+        List<String> command = new ArrayList<>();
+        if (target == Target.ANDROID) {
+            if (gui) {
+                File sdl = ensureAndroidSdlArchive();
+                env.put("CGO_LDFLAGS", "-Wl,-u,JNI_OnLoad " + sdl.getPath() + " "
+                        + "-L" + new File(toolchain, "usr/lib").getPath()
+                        + " -lc++_shared -llog -landroid -ldl -lm -lOpenSLES -lGLESv1_CM -lGLESv2");
+            }
+            File library = new File(output, "libuser.so");
+            Collections.addAll(command, go.getPath(), "build", "-buildvcs=false", "-buildmode=c-shared", "-o", library.getPath(), ".");
+            run(command, "Go kompiliert die Android-Bibliothek", project, env);
+            File apk = new File(output, "programm-android-arm64.apk");
+            RunnerPackager.create(context, library, new File(toolchain, "usr/lib/libc++_shared.so"), project, gui, apk, log);
+            if (!library.delete()) log.line("Hinweis: temporäre Go-Android-Bibliothek bleibt in der Ausgabe.");
+            return apk;
+        }
+        Collections.addAll(command, go.getPath(), "build", "-buildvcs=false", "-buildmode=c-archive", "-o", archive.getPath(), ".");
+        run(command, "Go kompiliert das Projekt", project, env);
+        if (!archive.isFile()) throw new IOException("Go hat die erwartete C-Archivdatei nicht erzeugt.");
+        return linkLanguageArchive(archive, gui, "Go");
+    }
+
+    private File ensureAndroidSdlArchive() throws Exception {
+        File dependencyCache = new File(context.getFilesDir(), "components/cmake/android");
+        File existing = findNamedFile(new File(dependencyCache, "sdl3-build"), "libSDL3.a");
+        if (existing != null) return existing;
+        File source = new File(project.getParentFile(), "sdl-prerequisite");
+        File binary = new File(source, "build");
+        File config = new File(source, "config");
+        if (!source.mkdirs() || !binary.mkdirs() || !config.mkdirs()) throw new IOException("SDL3-Vorbereitungsordner kann nicht erstellt werden.");
+        writeText(new File(source, "probe.c"), "int kr_sdl_probe(void) { return 0; }\n");
+        writeText(new File(source, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.20)\nproject(KRSdlPrerequisite LANGUAGES C CXX)\nfind_package(SDL3 CONFIG REQUIRED)\nadd_library(kr_sdl_probe STATIC probe.c)\ntarget_link_libraries(kr_sdl_probe PRIVATE SDL3::SDL3)\n");
+        File toolchainFile = new File(config, "kr-toolchain.cmake");
+        File includeFile = new File(config, "kr-project.cmake");
+        writeText(toolchainFile, cmakeToolchain());
+        LinkedHashSet<String> packages = new LinkedHashSet<>(); packages.add("sdl3");
+        writeText(includeFile, cmakeProjectInclude(new File(source, "artifacts"), new File(source, "targets.txt"), packages));
+        List<String> configure = new ArrayList<>();
+        Collections.addAll(configure, new File(toolchain, "usr/bin/cmake").getPath(), "-S", source.getPath(), "-B", binary.getPath(), "-G", "Ninja",
+                "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_SYSTEM_VERSION=26", "-DCMAKE_MAKE_PROGRAM=" + new File(toolchain, "usr/bin/ninja").getPath(),
+                "-DCMAKE_TOOLCHAIN_FILE=" + toolchainFile.getPath(), "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=" + includeFile.getPath(),
+                "-DFETCHCONTENT_BASE_DIR=" + dependencyCache.getPath(), "-DFETCHCONTENT_QUIET=OFF");
+        run(configure, "SDL3 wird für Go/Android vorbereitet", source);
+        run(Arrays.asList(new File(toolchain, "usr/bin/cmake").getPath(), "--build", binary.getPath(), "--parallel", "2"),
+                "SDL3 wird für Go/Android gebaut", source);
+        File built = findNamedFile(new File(dependencyCache, "sdl3-build"), "libSDL3.a");
+        if (built == null) throw new IOException("SDL3-Archiv für Go/Android wurde nicht gefunden.");
+        return built;
+    }
+
+    private static File findNamedFile(File root, String name) {
+        if (!root.exists()) return null;
+        if (root.isFile()) return root.getName().equals(name) ? root : null;
+        File[] children = root.listFiles();
+        if (children != null) for (File child : children) { File found = findNamedFile(child, name); if (found != null) return found; }
+        return null;
+    }
+
+    private boolean isLanguageGuiProject() {
+        return new File(project, "kr-gui-target.txt").isFile();
+    }
+
+    private String languageCrossCompiler() {
+        String clang = new File(toolchain, "usr/bin/clang").getPath();
+        if (target == Target.ANDROID) return clang + " --target=aarch64-linux-android26";
+        if (target == Target.WINDOWS) {
+            File win = new File(toolchain, "targets/windows");
+            return clang + " --target=x86_64-w64-windows-gnu --sysroot=" + win.getPath() + " -fuse-ld=lld";
+        }
+        File linux = new File(toolchain, "targets/linux");
+        return clang + " --target=x86_64-linux-gnu --sysroot=" + new File(linux, "sysroot").getPath()
+                + " --gcc-toolchain=" + new File(linux, "gcc").getPath()
+                + " -fuse-ld=lld -Wno-unused-command-line-argument";
+    }
+
+    private File linkLanguageArchive(File archive, boolean gui, String language) throws Exception {
+        File finalizer = new File(project.getParentFile(), "language-finalizer");
+        if (!finalizer.isDirectory() && !finalizer.mkdirs()) throw new IOException("Sprach-Linkordner kann nicht erstellt werden.");
+        String entry = gui && target == Target.ANDROID ? "SDL_main" : "main";
+        String wrapper = "#ifdef __cplusplus\nextern \"C\" {\n#endif\n"
+                + "int KrLanguageMain(void);\n#ifdef __cplusplus\n}\n#endif\n"
+                + "int " + entry + "(int argc, char **argv) { (void)argc; (void)argv; return KrLanguageMain(); }\n";
+        writeText(new File(finalizer, "kr_entry.c"), wrapper);
+        String a = cmakeEscape(archive.getPath());
+        StringBuilder cmake = new StringBuilder();
+        cmake.append("cmake_minimum_required(VERSION 3.20)\nproject(KRLanguageFinalizer LANGUAGES C CXX)\n");
+        cmake.append("add_library(kr_language STATIC IMPORTED GLOBAL)\nset_target_properties(kr_language PROPERTIES IMPORTED_LOCATION \"")
+                .append(a).append("\")\n");
+        if (gui) cmake.append("find_package(SDL3 CONFIG REQUIRED)\n");
+        cmake.append("add_executable(kr_program kr_entry.c)\n");
+        cmake.append("set_target_properties(kr_program PROPERTIES LINKER_LANGUAGE CXX)\n");
+        cmake.append("target_link_libraries(kr_program PRIVATE kr_language");
+        if (gui) cmake.append(" SDL3::SDL3");
+        if (target == Target.WINDOWS) cmake.append(" ws2_32 winmm advapi32 userenv shell32 ole32 bcrypt ntdll");
+        else if (target == Target.ANDROID) cmake.append(" log android dl m");
+        else cmake.append(" pthread dl rt m");
+        cmake.append(")\n");
+        writeText(new File(finalizer, "CMakeLists.txt"), cmake.toString());
+        if (gui) {
+            writeText(new File(finalizer, "kr-gui-target.txt"), "sdl3\n");
+            writeText(new File(finalizer, "vcpkg.json"), "{\n  \"name\": \"kr-language-gui\",\n  \"version-string\": \"1.0.0\",\n  \"dependencies\": [\"sdl3\"]\n}\n");
+        }
+        log.line(language + "-Bibliothek wird mit der KR-Ziellaufzeit" + (gui ? " und SDL3" : "") + " verbunden.");
+        return buildCMake(finalizer, project);
+    }
+
     private File buildDesktop(List<File> sources) throws Exception {
         File artifact = new File(output, target == Target.WINDOWS ? "programm.exe" : "programm");
         List<String> command = compiler();
@@ -523,6 +683,10 @@ final class CompilerEngine {
     }
 
     private void run(List<String> command, String phase, File directory) throws Exception {
+        run(command, phase, directory, Collections.emptyMap());
+    }
+
+    private void run(List<String> command, String phase, File directory, Map<String, String> extraEnvironment) throws Exception {
         log.line(phase + " …");
         appendText(buildLog, "\n=== " + phase + " ===\n" + String.join(" ", command) + "\n");
         ProcessBuilder pb = new ProcessBuilder(command); pb.directory(directory); pb.redirectErrorStream(true);
@@ -543,6 +707,7 @@ final class CompilerEngine {
         env.put("SSL_CERT_FILE", certificates.getPath());
         env.put("CURL_CA_BUNDLE", certificates.getPath());
         env.put("GIT_SSL_CAINFO", certificates.getPath());
+        env.putAll(extraEnvironment);
         if (cancelled) throw new IOException("Build abgebrochen.");
         Process process = pb.start();
         activeProcess = process;
@@ -578,6 +743,18 @@ final class CompilerEngine {
 
     private static List<File> sources(File root) {
         List<File> result = new ArrayList<>(); collect(root, result); return result;
+    }
+    private static List<File> goSources(File root) {
+        List<File> result = new ArrayList<>(); collectGo(root, result); return result;
+    }
+    private static void collectGo(File file, List<File> result) {
+        if (file.isDirectory()) {
+            String name = file.getName();
+            if (name.equals("KR_BUILD") || name.equals(".git") || name.equals("vendor")) return;
+            File[] children = file.listFiles(); if (children != null) for (File child : children) collectGo(child, result);
+            return;
+        }
+        if (file.getName().toLowerCase(Locale.ROOT).endsWith(".go")) result.add(file);
     }
     private static void collect(File file, List<File> result) {
         if (file.isDirectory()) { File[] children = file.listFiles(); if (children != null) for (File child : children) collect(child, result); return; }

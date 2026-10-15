@@ -252,7 +252,7 @@ public final class MainActivity extends Activity implements
         titleLayout.setOrientation(LinearLayout.VERTICAL);
 
         titleLabel = new TextView(this);
-        titleLabel.setText("KR IDE v3.2.1");
+        titleLabel.setText("KR IDE v4.0");
         titleLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f);
         titleLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         titleLayout.addView(titleLabel);
@@ -787,7 +787,7 @@ public final class MainActivity extends Activity implements
 
         if (DocumentManager.getInstance().getOpenDocuments().isEmpty()) {
             DocumentModel starter = DocumentManager.getInstance().openDocument("main.cpp",
-                    "#include <iostream>\n\nint main() {\n    std::cout << \"KR IDE v3.2.1 C++20 ready!\" << std::endl;\n    return 0;\n}\n",
+                    "#include <iostream>\n\nint main() {\n    std::cout << \"KR IDE v4.0 C++/Rust/Go ready!\" << std::endl;\n    return 0;\n}\n",
                     null, null);
             codeEditor.setDocument(starter);
             refreshDocTabs();
@@ -796,10 +796,13 @@ public final class MainActivity extends Activity implements
     }
 
     private void openDefaultProjectFile() {
-        // Try opening CMakeLists.txt or main.cpp
+        // Prefer the primary source of C++, Rust and Go projects.
         ProjectManager.FileNode root = ProjectManager.getInstance().getRootNode();
         if (root == null) return;
         ProjectManager.FileNode mainFile = findSourceFile(root, "main.cpp");
+        if (mainFile == null) mainFile = findSourceFile(root, "lib.rs");
+        if (mainFile == null) mainFile = findSourceFile(root, "main.rs");
+        if (mainFile == null) mainFile = findSourceFile(root, "main.go");
         if (mainFile == null) mainFile = findSourceFile(root, "CMakeLists.txt");
         if (mainFile != null) {
             openFileNode(mainFile);
@@ -985,6 +988,8 @@ public final class MainActivity extends Activity implements
         if (lower.endsWith(".cpp") || lower.endsWith(".cc") || lower.endsWith(".cxx")) return "🔷";
         if (lower.endsWith(".h") || lower.endsWith(".hpp")) return "🔶";
         if (lower.endsWith(".c")) return "🔹";
+        if (lower.endsWith(".rs") || lower.equals("cargo.toml")) return "🦀";
+        if (lower.endsWith(".go") || lower.equals("go.mod")) return "🐹";
         if (lower.equals("cmakelists.txt") || lower.endsWith(".cmake")) return "⚙️";
         if (lower.endsWith(".json") || lower.endsWith(".xml")) return "📜";
         if (lower.endsWith(".md") || lower.endsWith(".txt")) return "📄";
@@ -1372,12 +1377,13 @@ public final class MainActivity extends Activity implements
                 "Projektordner öffnen…",
                 "GitHub-Projekt klonen…",
                 "Neues GUI-Projekt…",
+                "Neues Rust-/Go-Projekt…",
                 "VCPKG-Bibliotheken…",
                 "Neue Datei…",
                 "Neuer Ordner…",
                 "Zuletzt geöffnete Projekte…",
                 "Einstellungen…",
-                "Über KR IDE v3.2.1"
+                "Über KR IDE v4.0"
         };
         new AlertDialog.Builder(this)
                 .setTitle("Menü")
@@ -1386,16 +1392,48 @@ public final class MainActivity extends Activity implements
                         case 0: chooseProjectFolder(); break;
                         case 1: showGitCloneDialog(); break;
                         case 2: showCreateGuiProjectDialog(); break;
-                        case 3: showVcpkgLibrariesDialog(); break;
-                        case 4: showCreateFileDialog(null); break;
-                        case 5: showCreateFolderDialog(null); break;
-                        case 6: showRecentProjectsDialog(); break;
-                        case 7: showSettingsDialog(); break;
-                        case 8: showAboutDialog(); break;
+                        case 3: showCreateLanguageProjectDialog(); break;
+                        case 4: showVcpkgLibrariesDialog(); break;
+                        case 5: showCreateFileDialog(null); break;
+                        case 6: showCreateFolderDialog(null); break;
+                        case 7: showRecentProjectsDialog(); break;
+                        case 8: showSettingsDialog(); break;
+                        case 9: showAboutDialog(); break;
                     }
                 })
                 .setNegativeButton("Schließen", null)
                 .show();
+    }
+
+    private void showCreateLanguageProjectDialog() {
+        String[] kinds = {"Rust Konsole", "Rust GUI (SDL3)", "Go Konsole", "Go GUI (SDL3)"};
+        new AlertDialog.Builder(this).setTitle("Neues Rust-/Go-Projekt")
+                .setItems(kinds, (first, selected) -> {
+                    boolean rust = selected < 2;
+                    boolean gui = selected % 2 == 1;
+                    final EditText input = new EditText(this);
+                    input.setSingleLine(true);
+                    input.setText("KR-" + (rust ? "Rust" : "Go") + (gui ? "-GUI" : "-Konsole"));
+                    input.setSelectAllOnFocus(true);
+                    new AlertDialog.Builder(this)
+                            .setTitle(kinds[selected])
+                            .setMessage("Das Projekt kann als Android-APK (ARM64), Windows-EXE (x64) und Linux-ELF (x64) kompiliert werden.")
+                            .setView(input)
+                            .setPositiveButton("Projekt erstellen", (dialog, which) -> {
+                                try {
+                                    LanguageProjectManager.Language language = rust
+                                            ? LanguageProjectManager.Language.RUST : LanguageProjectManager.Language.GO;
+                                    File created = LanguageProjectManager.create(this, language, gui, input.getText().toString());
+                                    ProjectManager.getInstance().setProject(this, null, created, created.getName());
+                                    getPreferences(MODE_PRIVATE).edit().putString(PREF_KEY_LOCAL, created.getAbsolutePath()).remove(PREF_KEY_URI).apply();
+                                    updateProjectHeader(); refreshProjectTree(); openDefaultProjectFile(); switchView(ViewMode.CODE);
+                                    Toast.makeText(this, "Projekt erstellt: " + created.getName(), Toast.LENGTH_LONG).show();
+                                } catch (Exception error) {
+                                    new AlertDialog.Builder(this).setTitle("Projekt konnte nicht erstellt werden")
+                                            .setMessage(error.getMessage()).setPositiveButton("OK", null).show();
+                                }
+                            }).setNegativeButton("Abbrechen", null).show();
+                }).setNegativeButton("Abbrechen", null).show();
     }
 
     private void showCreateGuiProjectDialog() {
@@ -1630,7 +1668,7 @@ public final class MainActivity extends Activity implements
 
     private void showAboutDialog() {
         new AlertDialog.Builder(this)
-                .setTitle("KR Compiler Android IDE v3.2.1")
+                .setTitle("KR Compiler Android IDE v4.0.0")
                 .setMessage("Adaptive, produktive C++20-Entwicklungsumgebung für Android.\n\n" +
                         "• Clang/LLVM 21.1.8 C++20 Toolchain\n" +
                         "• Targets: Android ARM64, Windows x64, Linux x64\n" +

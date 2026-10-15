@@ -43,10 +43,15 @@ Java_kr_compile_runner_RunnerActivity_execute(JNIEnv* env, jclass, jstring outpu
     using Main = int (*)(int, char**);
     void* user_library = dlopen(library_path.c_str(), RTLD_NOW | RTLD_LOCAL);
     auto main_function = user_library ? reinterpret_cast<Main>(dlsym(user_library, "main")) : nullptr;
+    using LanguageMain = int (*)();
+    auto language_main = user_library ? reinterpret_cast<LanguageMain>(dlsym(user_library, "KrLanguageMain")) : nullptr;
     int result = 127;
     if (main_function) {
         char name[] = "kr-program"; char* argv[] = {name, nullptr};
         result = main_function(1, argv);
+        std::fflush(nullptr);
+    } else if (language_main) {
+        result = language_main();
         std::fflush(nullptr);
     } else {
         const char* detail = dlerror();

@@ -30,6 +30,11 @@ android/signing/
 *.7z.003
 *.7z.004
 .docx_work*/
+.docx-work/
+test-results-*/
+*-failure*.log
+language-build-instrumentation.err
+language-build-instrumentation.out
 android/docs_work/
 android/android.zip
 android/codedump_android.md

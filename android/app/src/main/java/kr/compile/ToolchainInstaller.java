@@ -10,7 +10,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 final class ToolchainInstaller {
-    private static final String STAMP = "kr-toolchain-21.1.8-cmake-v9";
+    private static final String STAMP = "kr-toolchain-rust-1.99-go-1.27-v3";
     private static final String GRAPHICS_STAMP = "kr-android-graphics-headers-v1";
     private ToolchainInstaller() {}
 
@@ -24,6 +24,7 @@ final class ToolchainInstaller {
         File stamp = new File(root, STAMP);
         File clang = new File(root, "usr/bin/clang++");
         if (stamp.isFile() && clang.isFile()) {
+            makeExecutables(root);
             installGraphicsHeaders(context, root, log);
             verify(root);
             return root;
@@ -55,19 +56,36 @@ final class ToolchainInstaller {
         } catch (FileNotFoundException e) {
             throw new IOException("Die APK enthält keine Compilerlaufzeit. Bitte die vollständige APK installieren.", e);
         }
-        File bin = new File(root, "usr/bin");
-        File[] executables = bin.listFiles();
-        if (executables != null) for (File file : executables) file.setExecutable(true, false);
+        makeExecutables(root);
         installGraphicsHeaders(context, root, log);
         verify(root);
         if (!stamp.createNewFile()) throw new IOException("Compilerstatus kann nicht gespeichert werden.");
         return root;
     }
 
+    private static void makeExecutables(File root) {
+        markFilesExecutable(new File(root, "usr/bin"), false);
+        markFilesExecutable(new File(root, "usr/lib/go/pkg/tool"), true);
+    }
+
+    private static void markFilesExecutable(File file, boolean recursive) {
+        if (!file.exists()) return;
+        if (file.isFile()) { file.setExecutable(true, false); return; }
+        File[] children = file.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child.isFile()) child.setExecutable(true, false);
+            else if (recursive) markFilesExecutable(child, true);
+        }
+    }
+
     private static void verify(File root) throws IOException {
         String[] required = {
                 "usr/bin/clang++", "usr/bin/clang-21", "usr/bin/ld.lld",
                 "usr/bin/cmake", "usr/bin/ninja", "usr/bin/pkg-config", "usr/bin/git",
+                "usr/bin/rustc", "usr/bin/cargo", "usr/bin/go",
+                "usr/bin/x86_64-w64-mingw32-dlltool",
+                "usr/lib/rustlib/src/rust/library/Cargo.toml",
                 "usr/etc/tls/cert.pem",
                 "usr/lib/libLLVM.so", "usr/lib/libclang-cpp.so", "usr/lib/libc++_shared.so",
                 "usr/include/c++/v1/iostream", "usr/lib/clang/21/include/stddef.h",
@@ -83,7 +101,7 @@ final class ToolchainInstaller {
         };
         for (String path : required) if (!new File(root, path).isFile())
             throw new IOException("Compilerpaket ist unvollständig; erforderlich fehlt: " + path);
-        for (String executable : new String[]{"usr/bin/clang++", "usr/bin/clang-21", "usr/bin/ld.lld", "usr/bin/cmake", "usr/bin/ninja", "usr/bin/git"})
+        for (String executable : new String[]{"usr/bin/clang++", "usr/bin/clang-21", "usr/bin/ld.lld", "usr/bin/cmake", "usr/bin/ninja", "usr/bin/git", "usr/bin/rustc", "usr/bin/cargo", "usr/bin/go"})
             if (!new File(root, executable).canExecute()) throw new IOException("Compilerwerkzeug ist nicht ausführbar: " + executable);
     }
 

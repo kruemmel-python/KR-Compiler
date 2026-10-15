@@ -50,6 +50,9 @@ Add-Package 'pkg-config'
 Add-Package 'git'
 Add-Package 'ca-certificates'
 Add-Package 'dash'
+Add-Package 'rust'
+Add-Package 'rust-src'
+Add-Package 'golang'
 
 if (Test-Path $extract) { Remove-Item -LiteralPath $extract -Recurse -Force }
 if (Test-Path $packageRoot) { Remove-Item -LiteralPath $packageRoot -Recurse -Force }
@@ -122,6 +125,10 @@ if ($lldReal) {
         if ($lldReal.FullName -ne $aliasPath) { Copy-Item -LiteralPath $lldReal.FullName -Destination $aliasPath -Force }
     }
 }
+$dlltool = Join-Path $bin 'llvm-dlltool'
+if (Test-Path $dlltool) {
+    Copy-Item -LiteralPath $dlltool -Destination (Join-Path $bin 'x86_64-w64-mingw32-dlltool') -Force
+}
 # These packages also use symlink-style command aliases. Materialize the names
 # the Android build engine invokes so the ZIP remains independent of symlinks.
 $pkgconf = Get-ChildItem $bin -File | Where-Object Name -Match '^pkgconf$|^pkg-config$' | Select-Object -First 1
@@ -165,8 +172,18 @@ if (Test-Path $cmakeDetermineSystem) {
     }
 }
 
+function Resolve-HostRoot {
+    $direct = Join-Path $RepositoryRoot 'host'
+    if (Test-Path $direct) { return $direct }
+    # Release-Arbeitskopien liegen neben dem großen, nicht versionierten host-Verzeichnis.
+    $shared = Join-Path (Split-Path -Parent (Split-Path -Parent $RepositoryRoot)) 'host'
+    if (Test-Path $shared) { return $shared }
+    throw 'Host-Zielsysteme fehlen. Erwartet wurde host/ im Repository oder im gemeinsamen Projektordner.'
+}
+$hostRoot = Resolve-HostRoot
+
 Write-Host 'Füge Windows-x64-Zielsystem hinzu …'
-$windowsSource = Join-Path $RepositoryRoot 'host\windows-x64\toolchain'
+$windowsSource = Join-Path $hostRoot 'windows-x64\toolchain'
 $windowsTarget = Join-Path $stage 'targets\windows'
 New-Item -ItemType Directory -Force $windowsTarget | Out-Null
 Copy-Item (Join-Path $windowsSource 'include') $windowsTarget -Recurse
@@ -188,9 +205,9 @@ Copy-Item (Join-Path $windowsSource 'lib\clang\23\lib\windows\libclang_rt.builti
 Write-Host 'Füge Linux-x64-Zielsystem hinzu …'
 $linuxTarget = Join-Path $stage 'targets\linux'
 New-Item -ItemType Directory -Force (Join-Path $linuxTarget 'gcc') | Out-Null
-Copy-Item (Join-Path $RepositoryRoot 'host\linux-x64\sysroot') $linuxTarget -Recurse
-Copy-Item (Join-Path $RepositoryRoot 'host\linux-x64\backend\include') (Join-Path $linuxTarget 'gcc') -Recurse
-Copy-Item (Join-Path $RepositoryRoot 'host\linux-x64\backend\lib') (Join-Path $linuxTarget 'gcc') -Recurse
+Copy-Item (Join-Path $hostRoot 'linux-x64\sysroot') $linuxTarget -Recurse
+Copy-Item (Join-Path $hostRoot 'linux-x64\backend\include') (Join-Path $linuxTarget 'gcc') -Recurse
+Copy-Item (Join-Path $hostRoot 'linux-x64\backend\lib') (Join-Path $linuxTarget 'gcc') -Recurse
 
 # Add the X11 development subset required by SDL GUI applications. The helper
 # downloads fixed Ubuntu 24.04 packages, verifies their hashes and materializes
@@ -199,6 +216,9 @@ $linuxGuiRoot = Join-Path $cache 'linux-gui-root'
 & (Join-Path $PSScriptRoot 'prepare-linux-gui-sysroot.ps1') -Output $linuxGuiRoot
 if ($LASTEXITCODE -ne 0) { throw 'Linux-GUI-Sysroot konnte nicht vorbereitet werden.' }
 Copy-Item (Join-Path $linuxGuiRoot '*') (Join-Path $linuxTarget 'sysroot') -Recurse -Force
+
+# rust-src stammt aus demselben Termux-Build wie rustc. Cargo baut daraus die
+# Desktop-Standardbibliotheken einmalig und ABI-genau mit `-Z build-std`.
 
 # Termux is built for a fixed 31-byte prefix. The application id deliberately has
 # the same length, allowing a safe in-place replacement without corrupting ELF files.
