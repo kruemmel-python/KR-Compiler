@@ -796,10 +796,11 @@ public final class MainActivity extends Activity implements
     }
 
     private void openDefaultProjectFile() {
-        // Prefer the primary source of C++, Rust and Go projects.
+        // Prefer the primary source of KR (.kr), C++, Rust and Go projects.
         ProjectManager.FileNode root = ProjectManager.getInstance().getRootNode();
         if (root == null) return;
-        ProjectManager.FileNode mainFile = findSourceFile(root, "main.cpp");
+        ProjectManager.FileNode mainFile = findSourceFile(root, "main.kr");
+        if (mainFile == null) mainFile = findSourceFile(root, "main.cpp");
         if (mainFile == null) mainFile = findSourceFile(root, "lib.rs");
         if (mainFile == null) mainFile = findSourceFile(root, "main.rs");
         if (mainFile == null) mainFile = findSourceFile(root, "main.go");
@@ -1376,6 +1377,7 @@ public final class MainActivity extends Activity implements
         String[] items = {
                 "Projektordner öffnen…",
                 "GitHub-Projekt klonen…",
+                "Neues KR Unified-Projekt (.kr)…",
                 "Neues GUI-Projekt…",
                 "Neues Rust-/Go-Projekt…",
                 "VCPKG-Bibliotheken…",
@@ -1391,18 +1393,58 @@ public final class MainActivity extends Activity implements
                     switch (which) {
                         case 0: chooseProjectFolder(); break;
                         case 1: showGitCloneDialog(); break;
-                        case 2: showCreateGuiProjectDialog(); break;
-                        case 3: showCreateLanguageProjectDialog(); break;
-                        case 4: showVcpkgLibrariesDialog(); break;
-                        case 5: showCreateFileDialog(null); break;
-                        case 6: showCreateFolderDialog(null); break;
-                        case 7: showRecentProjectsDialog(); break;
-                        case 8: showSettingsDialog(); break;
-                        case 9: showAboutDialog(); break;
+                        case 2: showCreateKrProjectDialog(); break;
+                        case 3: showCreateGuiProjectDialog(); break;
+                        case 4: showCreateLanguageProjectDialog(); break;
+                        case 5: showVcpkgLibrariesDialog(); break;
+                        case 6: showCreateFileDialog(null); break;
+                        case 7: showCreateFolderDialog(null); break;
+                        case 8: showRecentProjectsDialog(); break;
+                        case 9: showSettingsDialog(); break;
+                        case 10: showAboutDialog(); break;
                     }
                 })
                 .setNegativeButton("Schließen", null)
                 .show();
+    }
+
+    private void showCreateKrProjectDialog() {
+        String[] kinds = {
+                "KR Konsole",
+                "KR GUI mit SDL3",
+                "KR Sprachfusion – C++ / Rust / Go",
+                "KR Sprachfusion – GUI"
+        };
+        LanguageProjectManager.KrTemplate[] templates = {
+                LanguageProjectManager.KrTemplate.KR_CONSOLE,
+                LanguageProjectManager.KrTemplate.KR_GUI,
+                LanguageProjectManager.KrTemplate.KR_FUSION_CONSOLE,
+                LanguageProjectManager.KrTemplate.KR_FUSION_GUI
+        };
+        new AlertDialog.Builder(this).setTitle("Neues KR Unified-Projekt (.kr)")
+                .setItems(kinds, (first, selected) -> {
+                    LanguageProjectManager.KrTemplate template = templates[selected];
+                    final EditText input = new EditText(this);
+                    input.setSingleLine(true);
+                    input.setText("KR-" + template.name().replace('_', '-'));
+                    input.setSelectAllOnFocus(true);
+                    new AlertDialog.Builder(this)
+                            .setTitle(kinds[selected])
+                            .setMessage("Erstellt ein Projekt mit der KR Unified Language (.kr). C++20, Rust und Go können frei kombiniert und sprachübergreifend aufgerufen werden.")
+                            .setView(input)
+                            .setPositiveButton("Projekt erstellen", (dialog, which) -> {
+                                try {
+                                    File created = LanguageProjectManager.createKr(this, template, input.getText().toString());
+                                    ProjectManager.getInstance().setProject(this, null, created, created.getName());
+                                    getPreferences(MODE_PRIVATE).edit().putString(PREF_KEY_LOCAL, created.getAbsolutePath()).remove(PREF_KEY_URI).apply();
+                                    updateProjectHeader(); refreshProjectTree(); openDefaultProjectFile(); switchView(ViewMode.CODE);
+                                    Toast.makeText(this, "KR-Projekt erstellt: " + created.getName(), Toast.LENGTH_LONG).show();
+                                } catch (Exception error) {
+                                    new AlertDialog.Builder(this).setTitle("Projekt konnte nicht erstellt werden")
+                                            .setMessage(error.getMessage()).setPositiveButton("OK", null).show();
+                                }
+                            }).setNegativeButton("Abbrechen", null).show();
+                }).setNegativeButton("Abbrechen", null).show();
     }
 
     private void showCreateLanguageProjectDialog() {

@@ -75,7 +75,11 @@ final class CompilerEngine {
         try {
             File cmakeProject = new File(project, "CMakeLists.txt");
             File artifact;
-            if (new File(project, "Cargo.toml").isFile()) {
+            List<File> krFiles = KrPipeline.findKrFiles(project);
+            if (!krFiles.isEmpty()) {
+                log.line("KR Unified Language Projekt erkannt (" + krFiles.size() + " .kr-Datei(en)).");
+                artifact = buildKrUnified(krFiles);
+            } else if (new File(project, "Cargo.toml").isFile()) {
                 log.line("Rust-Projekt erkannt; Cargo und rustc werden verwendet.");
                 artifact = buildRust();
             } else if (new File(project, "go.mod").isFile() || !goSources(project).isEmpty()) {
@@ -469,6 +473,250 @@ final class CompilerEngine {
         return null;
     }
 
+    private File buildKrUnified(List<File> krFiles) throws Exception {
+        boolean gui = isLanguageGuiProject();
+        log.line("KR-Frontend analysiert " + krFiles.size() + " .kr-Quelldatei(en) …");
+        File krGeneratedDir = new File(project.getParentFile(), "kr-generated");
+        delete(krGeneratedDir);
+        if (!krGeneratedDir.mkdirs()) throw new IOException("KR-Ausgabeordner kann nicht erstellt werden.");
+
+        KrPipeline.PipelineResult pipeline = KrPipeline.process(project, krGeneratedDir, gui);
+        if (!pipeline.success) {
+            for (KrDiagnostic diag : pipeline.diagnostics) {
+                log.line(diag.toString());
+                appendText(buildLog, diag.toString() + "\n");
+            }
+            throw new IOException(pipeline.diagnostics.isEmpty() ? "Fehler bei der KR-Sprachbereichsanalyse." : pipeline.diagnostics.get(0).message);
+        }
+
+        log.line(pipeline.segments.size() + " Sprachbereich(e) analysiert: " + pipeline.languagesUsed);
+        if (pipeline.languagesUsed.isEmpty()) {
+            throw new IOException("Keine ausführbaren Sprachbereiche in den .kr-Dateien gefunden.");
+        }
+
+        if (pipeline.languagesUsed.size() == 1 && !gui) {
+            if (pipeline.languagesUsed.contains(KrLanguage.CPP)) {
+                log.line("Reines C++ in .kr; direkter Compilerpfad wird verwendet.");
+                return target == Target.ANDROID ? buildAndroid(Collections.singletonList(pipeline.codeResult.cppSource))
+                        : buildDesktop(Collections.singletonList(pipeline.codeResult.cppSource));
+            } else if (pipeline.languagesUsed.contains(KrLanguage.RUST)) {
+                log.line("Reines Rust in .kr; Cargo und rustc werden verwendet.");
+                File archive = compileRustModule(pipeline.codeResult.rustDir);
+                return linkLanguageArchive(archive, false, "Rust");
+            } else if (pipeline.languagesUsed.contains(KrLanguage.GO)) {
+                log.line("Reines Go in .kr; go build wird verwendet.");
+                return buildGoModuleDirect(pipeline.codeResult.goDir, false);
+            }
+        }
+
+        log.line("KR Sprachfusion (" + pipeline.languagesUsed.size() + " Sprachen: " + pipeline.languagesUsed + ")");
+        File rustArchive = null;
+        if (pipeline.languagesUsed.contains(KrLanguage.RUST)) {
+            rustArchive = compileRustModule(pipeline.codeResult.rustDir);
+        }
+
+        File goArchive = null;
+        if (pipeline.languagesUsed.contains(KrLanguage.GO)) {
+            goArchive = compileGoModule(pipeline.codeResult.goDir);
+        }
+
+        return linkKrUnified(pipeline.codeResult.cppSource, rustArchive, goArchive, gui);
+    }
+
+    private File compileRustModule(File moduleDir) throws Exception {
+        File cargo = new File(toolchain, "usr/bin/cargo");
+        File rustc = new File(toolchain, "usr/bin/rustc");
+        if (!cargo.canExecute() || !rustc.canExecute())
+            throw new IOException("Rust-Compiler fehlt in der Compilerlaufzeit. Bitte die vollständige KR-IDE-APK installieren.");
+        String triple = target == Target.ANDROID ? "aarch64-linux-android"
+                : target == Target.WINDOWS ? "x86_64-pc-windows-gnu" : "x86_64-unknown-linux-gnu";
+        log.line("Rust-Modul wird kompiliert → " + triple);
+        File targetDir = new File(project.getParentFile(), "rust-target");
+        File archive = new File(targetDir, triple + "/release/libkr_rust.a");
+        Map<String, String> env = new HashMap<>();
+        env.put("CARGO_HOME", new File(context.getFilesDir(), "cargo-home").getPath());
+        env.put("CARGO_TARGET_DIR", targetDir.getPath());
+        env.put("CARGO_NET_OFFLINE", onlineDependencies ? "false" : "true");
+        env.put("RUST_BACKTRACE", "1");
+        env.put("RUSTC_BOOTSTRAP", "1");
+        env.put("CARGO_TARGET_" + triple.toUpperCase(Locale.ROOT).replace('-', '_') + "_LINKER",
+                new File(toolchain, "usr/bin/clang").getPath());
+        List<String> command = new ArrayList<>();
+        Collections.addAll(command, cargo.getPath(), "build", "--release", "--lib", "--target", triple);
+        if (target != Target.ANDROID) command.add("-Zbuild-std=std,panic_abort");
+        run(command, "Cargo kompiliert das Rust-Modul", moduleDir, env);
+        if (!archive.isFile()) throw new IOException("Cargo hat die erwartete Rust-Bibliothek nicht erzeugt: " + archive.getName());
+        return archive;
+    }
+
+    private File compileGoModule(File moduleDir) throws Exception {
+        File go = new File(toolchain, "usr/bin/go");
+        if (!go.canExecute()) throw new IOException("Go-Compiler fehlt in der Compilerlaufzeit. Bitte die vollständige KR-IDE-APK installieren.");
+        String goos = target == Target.ANDROID ? "android" : target == Target.WINDOWS ? "windows" : "linux";
+        String goarch = target == Target.ANDROID ? "arm64" : "amd64";
+        File languageDir = new File(project.getParentFile(), "go-target");
+        if (!languageDir.isDirectory() && !languageDir.mkdirs()) throw new IOException("Go-Ausgabeordner kann nicht erstellt werden.");
+        String ext = target == Target.ANDROID ? ".so" : ".a";
+        String buildmode = target == Target.ANDROID ? "-buildmode=c-shared" : "-buildmode=c-archive";
+        File archive = new File(languageDir, "libkr_go_" + target.name().toLowerCase(Locale.ROOT) + ext);
+        if (archive.exists()) archive.delete();
+        Map<String, String> env = new HashMap<>();
+        env.put("GOOS", goos); env.put("GOARCH", goarch); env.put("CGO_ENABLED", "1");
+        env.put("GOROOT", new File(toolchain, "usr/lib/go").getPath());
+        env.put("GOCACHE", new File(context.getCacheDir(), "go-build-cache").getPath());
+        env.put("GOMODCACHE", new File(context.getFilesDir(), "go-mod-cache").getPath());
+        env.put("GOPROXY", onlineDependencies ? "https://proxy.golang.org,direct" : "off");
+        env.put("CC", languageCrossCompiler());
+        List<String> command = new ArrayList<>();
+        Collections.addAll(command, go.getPath(), "build", "-buildvcs=false", buildmode);
+        if (target == Target.ANDROID) {
+            command.add("-ldflags=-extldflags=-Wl,-soname," + archive.getName());
+        }
+        Collections.addAll(command, "-o", archive.getPath(), ".");
+        run(command, "Go kompiliert das Go-Modul", moduleDir, env);
+        if (!archive.isFile()) throw new IOException("Go hat die erwartete C-Archivdatei nicht erzeugt.");
+        return archive;
+    }
+
+    private File buildGoModuleDirect(File moduleDir, boolean gui) throws Exception {
+        File go = new File(toolchain, "usr/bin/go");
+        if (!go.canExecute()) throw new IOException("Go-Compiler fehlt in der Compilerlaufzeit. Bitte die vollständige KR-IDE-APK installieren.");
+        String goos = target == Target.ANDROID ? "android" : target == Target.WINDOWS ? "windows" : "linux";
+        String goarch = target == Target.ANDROID ? "arm64" : "amd64";
+        log.line("Go " + (gui ? "GUI" : "Konsole") + " → " + goos + "/" + goarch);
+        File languageDir = new File(project.getParentFile(), "go-target");
+        if (!languageDir.isDirectory() && !languageDir.mkdirs()) throw new IOException("Go-Ausgabeordner kann nicht erstellt werden.");
+        File archive = new File(languageDir, "libkr_language.a");
+        Map<String, String> env = new HashMap<>();
+        env.put("GOOS", goos); env.put("GOARCH", goarch); env.put("CGO_ENABLED", "1");
+        env.put("GOROOT", new File(toolchain, "usr/lib/go").getPath());
+        env.put("GOCACHE", new File(context.getCacheDir(), "go-build-cache").getPath());
+        env.put("GOMODCACHE", new File(context.getFilesDir(), "go-mod-cache").getPath());
+        env.put("GOPROXY", onlineDependencies ? "https://proxy.golang.org,direct" : "off");
+        env.put("CC", languageCrossCompiler());
+        List<String> command = new ArrayList<>();
+        if (target == Target.ANDROID) {
+            if (gui) {
+                File sdl = ensureAndroidSdlArchive();
+                env.put("CGO_LDFLAGS", "-Wl,-u,JNI_OnLoad " + sdl.getPath() + " "
+                        + "-L" + new File(toolchain, "usr/lib").getPath()
+                        + " -lc++_shared -llog -landroid -ldl -lm -lOpenSLES -lGLESv1_CM -lGLESv2");
+            }
+            File library = new File(output, "libuser.so");
+            Collections.addAll(command, go.getPath(), "build", "-buildvcs=false", "-buildmode=c-shared", "-o", library.getPath(), ".");
+            run(command, "Go kompiliert die Android-Bibliothek", moduleDir, env);
+            File apk = new File(output, "programm-android-arm64.apk");
+            RunnerPackager.create(context, library, new File(toolchain, "usr/lib/libc++_shared.so"), project, gui, apk, log);
+            return apk;
+        }
+        Collections.addAll(command, go.getPath(), "build", "-buildvcs=false", "-buildmode=c-archive", "-o", archive.getPath(), ".");
+        run(command, "Go kompiliert das Projekt", moduleDir, env);
+        if (!archive.isFile()) throw new IOException("Go hat die erwartete C-Archivdatei nicht erzeugt.");
+        return linkLanguageArchive(archive, gui, "Go");
+    }
+
+    private File linkKrUnified(File cppSource, File rustArchive, File goArchive, boolean gui) throws Exception {
+        File finalizer = new File(project.getParentFile(), "kr-unified-finalizer");
+        if (!finalizer.isDirectory() && !finalizer.mkdirs()) throw new IOException("KR-Linkordner kann nicht erstellt werden.");
+
+        if (target == Target.ANDROID) {
+            File library = new File(output, "libuser.so");
+            List<String> command = compiler();
+            command.add("--target=aarch64-linux-android26"); command.add("-std=c++20");
+            command.add("-O2"); command.add("-fPIC"); command.add("-shared");
+            command.add("-L" + new File(toolchain, "usr/lib").getPath());
+            command.add("-Wl,--export-dynamic");
+            command.add("-Wl,--allow-multiple-definition");
+            File sdl = null;
+            if (gui) {
+                sdl = ensureAndroidSdlArchive();
+                File dependencyCache = new File(context.getFilesDir(), "components/cmake/android");
+                for (File inc : getAndroidSdlIncludeDirs(dependencyCache)) {
+                    command.add("-I" + inc.getPath());
+                }
+            }
+            if (cppSource != null && cppSource.isFile()) {
+                command.add("-I" + cppSource.getParentFile().getPath());
+                command.add(cppSource.getPath());
+            } else {
+                File stub = new File(finalizer, "kr_stub.cpp");
+                writeText(stub, "extern \"C\" int KrLanguageMain(void);\nint main(int argc, char** argv) { (void)argc; (void)argv; return KrLanguageMain(); }\n");
+                command.add(stub.getPath());
+            }
+            if (rustArchive != null && rustArchive.isFile()) command.add(rustArchive.getPath());
+            List<File> extraLibs = new ArrayList<>();
+            if (goArchive != null && goArchive.isFile()) {
+                if (goArchive.getName().endsWith(".so")) {
+                    command.add("-L" + goArchive.getParentFile().getPath());
+                    String libName = goArchive.getName();
+                    if (libName.startsWith("lib") && libName.endsWith(".so")) {
+                        libName = libName.substring(3, libName.length() - 3);
+                    }
+                    command.add("-l" + libName);
+                    extraLibs.add(goArchive);
+                } else {
+                    command.add(goArchive.getPath());
+                }
+            }
+            if (gui && sdl != null) {
+                command.add(sdl.getPath());
+                command.add("-lOpenSLES"); command.add("-lGLESv1_CM"); command.add("-lGLESv2");
+            }
+            command.add("-lc++_shared"); command.add("-llog"); command.add("-landroid"); command.add("-ldl"); command.add("-lm");
+            command.add("-o"); command.add(library.getPath());
+            run(command, "KR Unified Android-Bibliothek wird gelinkt", finalizer);
+
+            File apk = new File(output, "programm-android-arm64.apk");
+            RunnerPackager.create(context, library, new File(toolchain, "usr/lib/libc++_shared.so"), extraLibs, project, gui, apk, log);
+            return apk;
+        }
+
+        // Desktop: Windows & Linux via CMake finalizer
+        StringBuilder cmake = new StringBuilder();
+        cmake.append("cmake_minimum_required(VERSION 3.20)\nproject(KRUnifiedFinalizer LANGUAGES C CXX)\n");
+        if (rustArchive != null && rustArchive.isFile()) {
+            cmake.append("add_library(kr_rust STATIC IMPORTED GLOBAL)\nset_target_properties(kr_rust PROPERTIES IMPORTED_LOCATION \"")
+                    .append(cmakeEscape(rustArchive.getPath())).append("\")\n");
+        }
+        if (goArchive != null && goArchive.isFile()) {
+            cmake.append("add_library(kr_go STATIC IMPORTED GLOBAL)\nset_target_properties(kr_go PROPERTIES IMPORTED_LOCATION \"")
+                    .append(cmakeEscape(goArchive.getPath())).append("\")\n");
+        }
+        if (gui) cmake.append("find_package(SDL3 CONFIG REQUIRED)\n");
+
+        File entrySource;
+        if (cppSource != null && cppSource.isFile()) {
+            entrySource = cppSource;
+        } else {
+            entrySource = new File(finalizer, "kr_entry.cpp");
+            writeText(entrySource, "extern \"C\" int KrLanguageMain(void);\nint main(int argc, char** argv) { (void)argc; (void)argv; return KrLanguageMain(); }\n");
+        }
+
+        cmake.append("add_executable(kr_program \"").append(cmakeEscape(entrySource.getPath())).append("\")\n");
+        cmake.append("target_include_directories(kr_program PRIVATE \"").append(cmakeEscape(entrySource.getParentFile().getPath())).append("\")\n");
+        cmake.append("set_target_properties(kr_program PROPERTIES LINKER_LANGUAGE CXX)\n");
+        cmake.append("target_link_options(kr_program PRIVATE \"LINKER:--allow-multiple-definition\")\n");
+        cmake.append("target_link_libraries(kr_program PRIVATE");
+        if (rustArchive != null && rustArchive.isFile() && goArchive != null && goArchive.isFile()) {
+            cmake.append(" -Wl,--start-group kr_rust kr_go -Wl,--end-group");
+        } else {
+            if (rustArchive != null && rustArchive.isFile()) cmake.append(" kr_rust");
+            if (goArchive != null && goArchive.isFile()) cmake.append(" kr_go");
+        }
+        if (gui) cmake.append(" SDL3::SDL3");
+        if (target == Target.WINDOWS) cmake.append(" ws2_32 winmm advapi32 userenv shell32 ole32 bcrypt ntdll");
+        else cmake.append(" pthread dl rt m");
+        cmake.append(")\n");
+
+        writeText(new File(finalizer, "CMakeLists.txt"), cmake.toString());
+        if (gui) {
+            writeText(new File(finalizer, "kr-gui-target.txt"), "sdl3\n");
+            writeText(new File(finalizer, "vcpkg.json"), "{\n  \"name\": \"kr-unified-gui\",\n  \"version-string\": \"1.0.0\",\n  \"dependencies\": [\"sdl3\"]\n}\n");
+        }
+        log.line("KR Unified Programm wird mit der KR-Ziellaufzeit" + (gui ? " und SDL3" : "") + " gelinkt.");
+        return buildCMake(finalizer, project);
+    }
+
     private File buildRust() throws Exception {
         File cargo = new File(toolchain, "usr/bin/cargo");
         File rustc = new File(toolchain, "usr/bin/rustc");
@@ -561,6 +809,30 @@ final class CompilerEngine {
         File built = findNamedFile(new File(dependencyCache, "sdl3-build"), "libSDL3.a");
         if (built == null) throw new IOException("SDL3-Archiv für Go/Android wurde nicht gefunden.");
         return built;
+    }
+
+    private List<File> getAndroidSdlIncludeDirs(File dependencyCache) {
+        List<File> list = new ArrayList<>();
+        File srcInclude = new File(dependencyCache, "sdl3-src/include");
+        if (srcInclude.isDirectory()) list.add(srcInclude);
+        File build = new File(dependencyCache, "sdl3-build");
+        if (build.isDirectory()) {
+            collectSdl3Dirs(build, list);
+        }
+        return list;
+    }
+
+    private static void collectSdl3Dirs(File dir, List<File> list) {
+        if (!dir.isDirectory()) return;
+        if (new File(dir, "SDL3").isDirectory() || new File(dir, "SDL_build_config.h").isFile()) {
+            list.add(dir);
+        }
+        File[] children = dir.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (child.isDirectory()) collectSdl3Dirs(child, list);
+            }
+        }
     }
 
     private static File findNamedFile(File root, String name) {

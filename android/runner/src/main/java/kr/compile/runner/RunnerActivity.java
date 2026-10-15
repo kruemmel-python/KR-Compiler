@@ -50,6 +50,16 @@ public final class RunnerActivity extends Activity {
         new Thread(() -> {
             String shown;
             try {
+                File nativeDir = new File(getApplicationInfo().nativeLibraryDir);
+                File[] libs = nativeDir.listFiles();
+                if (libs != null) {
+                    for (File f : libs) {
+                        String name = f.getName();
+                        if (name.endsWith(".so") && !name.equals("libkr_runner.so") && !name.equals("libuser.so")) {
+                            try { System.load(f.getPath()); } catch (Throwable ignored) {}
+                        }
+                    }
+                }
                 File library = new File(getApplicationInfo().nativeLibraryDir, "libuser.so");
                 File project = RunnerFiles.prepareProjectFiles(this);
                 int code = execute(output.getPath(), library.getPath(), project.getPath());

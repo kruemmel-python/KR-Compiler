@@ -8,9 +8,24 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
-/** Creates dependency-free Rust and Go starter projects for all KR targets. */
+/** Creates dependency-free Rust, Go, and KR Unified Language starter projects for all KR targets. */
 final class LanguageProjectManager {
-    enum Language { RUST, GO }
+    enum Language { RUST, GO, KR }
+
+    enum KrTemplate {
+        KR_CONSOLE("KR Konsole", false),
+        KR_GUI("KR GUI mit SDL3", true),
+        KR_FUSION_CONSOLE("KR Sprachfusion – C++ / Rust / Go", false),
+        KR_FUSION_GUI("KR Sprachfusion – GUI", true);
+
+        final String displayName;
+        final boolean isGui;
+
+        KrTemplate(String displayName, boolean isGui) {
+            this.displayName = displayName;
+            this.isGui = isGui;
+        }
+    }
 
     private LanguageProjectManager() {}
 
@@ -25,10 +40,52 @@ final class LanguageProjectManager {
         File project = new File(projects, name);
         if (project.exists()) throw new IOException("Projekt existiert bereits: " + name);
         if (!project.mkdirs()) throw new IOException("Projektstruktur kann nicht erstellt werden.");
-        if (language == Language.RUST) createRust(project, name, gui); else createGo(project, name, gui);
+        if (language == Language.RUST) createRust(project, name, gui);
+        else if (language == Language.GO) createGo(project, name, gui);
+        else createKr(project, name, gui ? KrTemplate.KR_FUSION_GUI : KrTemplate.KR_FUSION_CONSOLE);
         if (gui) write(new File(project, "kr-gui-target.txt"), "sdl3\n");
         write(new File(project, "README.md"), readme(language, gui));
         return project;
+    }
+
+    static File createKr(Context context, KrTemplate template, String requestedName) throws IOException {
+        String fallback = "KR-" + template.name().replace('_', '-');
+        String name = requestedName == null ? fallback : requestedName.trim();
+        if (name.isEmpty()) name = fallback;
+        if (!name.matches("[A-Za-z0-9ÄÖÜäöüß._ -]{1,64}"))
+            throw new IOException("Der Projektname enthält nicht unterstützte Zeichen.");
+        File projects = new File(context.getFilesDir(), "projects");
+        if (!projects.isDirectory() && !projects.mkdirs()) throw new IOException("Projektordner kann nicht erstellt werden.");
+        File project = new File(projects, name);
+        if (project.exists()) throw new IOException("Projekt existiert bereits: " + name);
+        if (!project.mkdirs()) throw new IOException("Projektstruktur kann nicht erstellt werden.");
+
+        createKr(project, name, template);
+        if (template.isGui) {
+            write(new File(project, "kr-gui-target.txt"), "sdl3\n");
+        }
+        write(new File(project, "README.md"), readmeKr(template));
+        return project;
+    }
+
+    private static void createKr(File project, String name, KrTemplate template) throws IOException {
+        String code;
+        switch (template) {
+            case KR_CONSOLE:
+                code = krConsole();
+                break;
+            case KR_GUI:
+                code = krGui();
+                break;
+            case KR_FUSION_GUI:
+                code = krFusionGui();
+                break;
+            case KR_FUSION_CONSOLE:
+            default:
+                code = krFusionConsole();
+                break;
+        }
+        write(new File(project, "main.kr"), code);
     }
 
     private static void createRust(File project, String name, boolean gui) throws IOException {
@@ -43,6 +100,137 @@ final class LanguageProjectManager {
     private static void createGo(File project, String name, boolean gui) throws IOException {
         write(new File(project, "go.mod"), "module kr.local/" + sanitize(name) + "\n\ngo 1.24\n");
         write(new File(project, "main.go"), gui ? goGui() : goConsole());
+    }
+
+    private static String krConsole() {
+        return "#include <iostream>\n\n"
+                + "int main() {\n"
+                + "    std::cout << \"Hallo von KR Unified Language (.kr)!\" << std::endl;\n"
+                + "    std::cout << \"Plattformunabhaengig fuer Android, Windows und Linux kompiliert.\" << std::endl;\n"
+                + "    return 0;\n"
+                + "}\n";
+    }
+
+    private static String krGui() {
+        return "#include <SDL3/SDL.h>\n"
+                + "#include <SDL3/SDL_main.h>\n\n"
+                + "int main(int argc, char* argv[]) {\n"
+                + "    (void)argc; (void)argv;\n"
+                + "    if (!SDL_Init(SDL_INIT_VIDEO)) return 1;\n"
+                + "    SDL_Window* window = SDL_CreateWindow(\"KR Unified GUI - SDL3\", 900, 560, 0);\n"
+                + "    SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);\n"
+                + "    if (!window || !renderer) { SDL_Quit(); return 2; }\n"
+                + "    bool running = true;\n"
+                + "    SDL_Event event;\n"
+                + "    while (running) {\n"
+                + "        while (SDL_PollEvent(&event)) {\n"
+                + "            if (event.type == SDL_EVENT_QUIT) running = false;\n"
+                + "        }\n"
+                + "        SDL_SetRenderDrawColor(renderer, 24, 76, 135, 255);\n"
+                + "        SDL_RenderClear(renderer);\n"
+                + "        SDL_RenderPresent(renderer);\n"
+                + "        SDL_Delay(16);\n"
+                + "    }\n"
+                + "    SDL_DestroyRenderer(renderer);\n"
+                + "    SDL_DestroyWindow(window);\n"
+                + "    SDL_Quit();\n"
+                + "    return 0;\n"
+                + "}\n";
+    }
+
+    private static String krFusionConsole() {
+        return "#include <iostream>\n"
+                + "#include <cstdint>\n\n"
+                + "// --- C++20 Bereich ---\n"
+                + "int cpp_calculate(int a, int b) {\n"
+                + "    return a * b + 42;\n"
+                + "}\n\n"
+                + "int cpp_square(int x) {\n"
+                + "    return x * x;\n"
+                + "}\n\n"
+                + "// --- Rust Bereich ---\n"
+                + "fn rust_verify(val: i32) -> bool {\n"
+                + "    let check = val > 50;\n"
+                + "    if check {\n"
+                + "        let sq = cpp_square(4);\n"
+                + "        go_notify(sq);\n"
+                + "    }\n"
+                + "    check\n"
+                + "}\n\n"
+                + "// --- Go Bereich ---\n"
+                + "func go_notify(val int32) {\n"
+                + "    println(\"Go empfaengt Benachrichtigung von Rust: Wert =\", val)\n"
+                + "}\n\n"
+                + "func go_process(val int32, ok bool) {\n"
+                + "    if ok {\n"
+                + "        println(\"Go verarbeitet Ergebnis: gueltig! Wert =\", val)\n"
+                + "        extra := cpp_calculate(2, 5)\n"
+                + "        println(\"Go rief C++ auf: Zusatzwert =\", extra)\n"
+                + "        valid := rust_verify(extra)\n"
+                + "        println(\"Go prueft Zusatzwert mit Rust:\", valid)\n"
+                + "    } else {\n"
+                + "        println(\"Go: Ungueltiger Wert\")\n"
+                + "    }\n"
+                + "}\n\n"
+                + "// --- Gemeinsamer Einstiegspunkt ---\n"
+                + "int main() {\n"
+                + "    std::cout << \"=== KR Unified Language: Sprachfusion C++ / Rust / Go ===\" << std::endl;\n"
+                + "    int berechnet = cpp_calculate(3, 4);\n"
+                + "    std::cout << \"[C++] Ergebnis berechnet: \" << berechnet << std::endl;\n"
+                + "    bool geprueft = rust_verify(berechnet);\n"
+                + "    std::cout << \"[Rust] Verifizierung erfolgt: \" << (geprueft ? \"ERFOLGREICH\" : \"FEHLGESCHLAGEN\") << std::endl;\n"
+                + "    go_process(berechnet, geprueft);\n"
+                + "    std::cout << \"[KR] Alle Sprachgrenzen erfolgreich ueberschritten!\" << std::endl;\n"
+                + "    return 0;\n"
+                + "}\n";
+    }
+
+    private static String krFusionGui() {
+        return "#include <SDL3/SDL.h>\n"
+                + "#include <SDL3/SDL_main.h>\n"
+                + "#include <iostream>\n"
+                + "#include <cstdint>\n\n"
+                + "// --- Rust Bereich ---\n"
+                + "fn rust_calc_color(frame: i32) -> i32 {\n"
+                + "    ((frame * 2) % 255)\n"
+                + "}\n\n"
+                + "fn rust_validate_tick(tick: i32) -> bool {\n"
+                + "    tick >= 0\n"
+                + "}\n\n"
+                + "// --- Go Bereich ---\n"
+                + "func go_log_status(frame int32, ok bool) {\n"
+                + "    if ok && frame % 60 == 0 {\n"
+                + "        println(\"Go: GUI Frame =\", frame, \"aktiv\")\n"
+                + "    }\n"
+                + "}\n\n"
+                + "// --- C++ Bereich mit SDL3 GUI ---\n"
+                + "int main(int argc, char* argv[]) {\n"
+                + "    (void)argc; (void)argv;\n"
+                + "    if (!SDL_Init(SDL_INIT_VIDEO)) return 1;\n"
+                + "    SDL_Window* window = SDL_CreateWindow(\"KR Unified GUI - C++ / Rust / Go\", 900, 560, 0);\n"
+                + "    SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);\n"
+                + "    if (!window || !renderer) { SDL_Quit(); return 2; }\n"
+                + "    bool running = true;\n"
+                + "    SDL_Event event;\n"
+                + "    int frame = 0;\n"
+                + "    while (running) {\n"
+                + "        while (SDL_PollEvent(&event)) {\n"
+                + "            if (event.type == SDL_EVENT_QUIT) running = false;\n"
+                + "        }\n"
+                + "        int blue = rust_calc_color(frame);\n"
+                + "        bool valid = rust_validate_tick(frame);\n"
+                + "        go_log_status(frame, valid);\n"
+                + "        SDL_SetRenderDrawColor(renderer, 24, 76, (uint8_t)blue, 255);\n"
+                + "        SDL_RenderClear(renderer);\n"
+                + "        SDL_RenderPresent(renderer);\n"
+                + "        frame++;\n"
+                + "        SDL_Delay(16);\n"
+                + "    }\n"
+                + "    SDL_DestroyRenderer(renderer);\n"
+                + "    SDL_DestroyWindow(window);\n"
+                + "    SDL_Quit();\n"
+                + "    return 0;\n"
+                + "}\n";
     }
 
     private static String rustConsole() {
@@ -102,6 +290,13 @@ final class LanguageProjectManager {
         return "# KR " + (language == Language.RUST ? "Rust" : "Go") + " " + (gui ? "GUI" : "Konsole") + "\n\n"
                 + "Dieses Projekt wird unverändert als Android-APK (ARM64), Windows-EXE (x64) und Linux-ELF (x64) gebaut.\n"
                 + (gui ? "Die Oberfläche verwendet SDL3 aus dem integrierten KR-Bibliothekskatalog.\n" : "Es werden keine externen Bibliotheken benötigt.\n");
+    }
+
+    private static String readmeKr(KrTemplate template) {
+        return "# " + template.displayName + " (.kr)\n\n"
+                + "Dieses Projekt verwendet die KR Unified Language (.kr) und wird als Android-APK (ARM64), Windows-EXE (x64) und Linux-ELF (x64) kompiliert.\n\n"
+                + "Quellcode in C++20, Rust und Go kann innerhalb derselben .kr-Datei frei kombiniert und ohne manuelle FFI-Definitionen sprachübergreifend aufgerufen werden.\n\n"
+                + (template.isGui ? "Die Grafikausgabe erfolgt portabel über das integrierte SDL3.\n" : "Ausgaben erfolgen über die Standard-Konsole der Zielplattform.\n");
     }
 
     private static String sanitize(String value) {

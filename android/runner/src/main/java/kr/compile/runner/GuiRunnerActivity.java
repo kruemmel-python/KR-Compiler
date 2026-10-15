@@ -27,9 +27,22 @@ public final class GuiRunnerActivity extends SDLActivity {
     }
 
     @Override protected String[] getLibraries() {
-        // SDL3 is linked statically into the generated user library. Loading
-        // libuser.so also registers SDL's complete Android JNI bridge.
-        return new String[]{"user"};
+        File nativeDir = new File(getApplicationInfo().nativeLibraryDir);
+        File[] libs = nativeDir.listFiles();
+        java.util.List<String> list = new java.util.ArrayList<>();
+        if (libs != null) {
+            for (File f : libs) {
+                String name = f.getName();
+                if (name.startsWith("lib") && name.endsWith(".so")) {
+                    String base = name.substring(3, name.length() - 3);
+                    if (!base.equals("kr_runner") && !base.equals("user") && !base.equals("c++_shared")) {
+                        list.add(base);
+                    }
+                }
+            }
+        }
+        list.add("user");
+        return list.toArray(new String[0]);
     }
 
     @Override protected String getMainFunction() {

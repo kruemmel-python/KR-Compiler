@@ -78,6 +78,47 @@ public final class DiagnosticParser {
             return new Item(file, lineNum, 1, sev, msg, trimmed);
         }
 
+        // Rust location pointer: --> src/lib.rs:5:10
+        if (trimmed.startsWith("-->")) {
+            String rest = trimmed.substring(3).trim();
+            int colon1 = rest.indexOf(':');
+            if (colon1 > 0) {
+                String file = rest.substring(0, colon1);
+                int colon2 = rest.indexOf(':', colon1 + 1);
+                int lineNum = 1;
+                int colNum = 1;
+                if (colon2 > colon1) {
+                    try {
+                        lineNum = Integer.parseInt(rest.substring(colon1 + 1, colon2));
+                        colNum = Integer.parseInt(rest.substring(colon2 + 1).replaceAll("[^0-9].*$", ""));
+                    } catch (Exception ignored) {}
+                }
+                return new Item(file, lineNum, colNum, Severity.ERROR, "Rust-Fehlerposition", trimmed);
+            }
+        }
+
+        // Go compiler message: ./main.go:5:2: undefined: foo
+        int firstColon = trimmed.indexOf(':');
+        if (firstColon > 0 && (trimmed.endsWith(".go") || trimmed.contains(".go:") || trimmed.contains(".kr:"))) {
+            int secondColon = trimmed.indexOf(':', firstColon + 1);
+            if (secondColon > firstColon) {
+                try {
+                    String file = trimmed.substring(0, firstColon);
+                    int lineNum = Integer.parseInt(trimmed.substring(firstColon + 1, secondColon));
+                    int thirdColon = trimmed.indexOf(':', secondColon + 1);
+                    int colNum = 1;
+                    String msg = trimmed.substring(secondColon + 1).trim();
+                    if (thirdColon > secondColon) {
+                        try {
+                            colNum = Integer.parseInt(trimmed.substring(secondColon + 1, thirdColon));
+                            msg = trimmed.substring(thirdColon + 1).trim();
+                        } catch (NumberFormatException ignored) {}
+                    }
+                    return new Item(file, lineNum, colNum, Severity.ERROR, msg, trimmed);
+                } catch (Exception ignored) {}
+            }
+        }
+
         return null;
     }
 }
