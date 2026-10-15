@@ -66,6 +66,13 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
             this.customKrCode = null;
             this.legacyLanguage = legacyLanguage;
         }
+        TestJob(String name) {
+            this.name = name;
+            this.isGui = false;
+            this.krTemplate = null;
+            this.customKrCode = null;
+            this.legacyLanguage = null;
+        }
     }
 
     private int buildAll() throws Exception {
@@ -100,11 +107,8 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
             jobs.add(new TestJob("kr-rust", false, "fn main() {\n    println!(\"Hallo von reinem Rust in .kr!\");\n}\n"));
         } else if (mode.equals("KR_GO")) {
             jobs.add(new TestJob("kr-go", false, "package main\n\nimport \"fmt\"\n\nfunc main() {\n    fmt.Println(\"Hallo von reinem Go in .kr!\")\n}\n"));
-        } else if (mode.equals("ROPE")) {
-            File ropeFile = new File(context.getExternalFilesDir(null), "rope_main.kr");
-            byte[] bytes = java.nio.file.Files.readAllBytes(ropeFile.toPath());
-            String code = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-            jobs.add(new TestJob("kr-rope-attention", false, code));
+        } else if (mode.equals("CC_OPENCL")) {
+            jobs.add(new TestJob("cc_opencl"));
         } else if (mode.equals("KR") || mode.equals("ALL") || mode.equals("KR_FUSION")) {
             if (!mode.equals("KR_FUSION")) {
                 jobs.add(new TestJob("kr-console", LanguageProjectManager.KrTemplate.KR_CONSOLE));
@@ -131,6 +135,12 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
                 if (!project.mkdirs()) throw new IOException("Projektordner kann nicht erstellt werden: " + projectName);
                 write(new File(project, "main.kr"), job.customKrCode);
                 if (job.isGui) write(new File(project, "kr-gui-target.txt"), "sdl3\n");
+            } else if (job.name.equals("cc_opencl")) {
+                File projects = new File(context.getFilesDir(), "projects");
+                project = new File(projects, "CC_OpenCl_Enterprise");
+                delete(project);
+                File externalProject = new File(context.getExternalFilesDir(null), "CC_OpenCl_Enterprise");
+                copyDir(externalProject, project);
             } else {
                 project = LanguageProjectManager.create(context, job.legacyLanguage, job.isGui, projectName);
             }
@@ -162,6 +172,28 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
                 File build = new File(project, "KR_BUILD");
                 File artifact = new File(build, target == CompilerEngine.Target.ANDROID
                         ? "programm-android-arm64.apk" : target == CompilerEngine.Target.WINDOWS ? "programm.exe" : "programm");
+                if (job.name.equals("cc_opencl")) {
+                    File dll = new File(build, "CC_OpenCl.dll");
+                    if (!dll.isFile()) dll = new File(new File(context.getCacheDir(), "active-project/cmake/build/bin"), "CC_OpenCl.dll");
+                    if (!dll.isFile()) dll = new File(new File(context.getCacheDir(), "active-project/cmake/artifacts"), "CC_OpenCl.dll");
+                    if (dll.isFile()) {
+                        try { copy(dll, new File(resultRoot, "CC_OpenCl.dll")); } catch (Exception ignored) {}
+                        try { copy(dll, new File("/sdcard/Download/CC_OpenCl_Enterprise/CC_OpenCl.dll")); } catch (Exception ignored) {}
+                    }
+                    File implib = new File(build, "libCC_OpenCl.dll.a");
+                    if (!implib.isFile()) implib = new File(new File(context.getCacheDir(), "active-project/cmake/build/lib"), "libCC_OpenCl.dll.a");
+                    if (!implib.isFile()) implib = new File(new File(context.getCacheDir(), "active-project/cmake/artifacts"), "libCC_OpenCl.dll.a");
+                    if (implib.isFile()) {
+                        try { copy(implib, new File(resultRoot, "libCC_OpenCl.dll.a")); } catch (Exception ignored) {}
+                        try { copy(implib, new File("/sdcard/Download/CC_OpenCl_Enterprise/libCC_OpenCl.dll.a")); } catch (Exception ignored) {}
+                    }
+                    File testExe = new File(build, "programm.exe");
+                    if (!testExe.isFile()) testExe = new File(new File(context.getCacheDir(), "active-project/cmake/build/bin"), "test_cc_opencl.exe");
+                    if (testExe.isFile()) {
+                        try { copy(testExe, new File(resultRoot, "test_cc_opencl.exe")); } catch (Exception ignored) {}
+                        try { copy(testExe, new File("/sdcard/Download/CC_OpenCl_Enterprise/test_cc_opencl.exe")); } catch (Exception ignored) {}
+                    }
+                }
                 if (!artifact.isFile() || artifact.length() == 0)
                     throw new IOException("Artefakt fehlt: " + artifact + "\n" + log);
                 File destination = new File(resultRoot, prefix
