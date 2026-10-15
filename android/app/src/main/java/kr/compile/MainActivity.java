@@ -244,7 +244,7 @@ public final class MainActivity extends Activity implements
         titleLayout.setOrientation(LinearLayout.VERTICAL);
 
         titleLabel = new TextView(this);
-        titleLabel.setText("KR IDE v3.1");
+        titleLabel.setText("KR IDE v3.2");
         titleLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f);
         titleLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         titleLayout.addView(titleLabel);
@@ -685,7 +685,7 @@ public final class MainActivity extends Activity implements
 
         if (DocumentManager.getInstance().getOpenDocuments().isEmpty()) {
             DocumentModel starter = DocumentManager.getInstance().openDocument("main.cpp",
-                    "#include <iostream>\n\nint main() {\n    std::cout << \"KR IDE v3.1 C++20 ready!\" << std::endl;\n    return 0;\n}\n",
+                    "#include <iostream>\n\nint main() {\n    std::cout << \"KR IDE v3.2 C++20 ready!\" << std::endl;\n    return 0;\n}\n",
                     null, null);
             codeEditor.setDocument(starter);
             refreshDocTabs();
@@ -1275,7 +1275,7 @@ public final class MainActivity extends Activity implements
                 "Neuer Ordner…",
                 "Zuletzt geöffnete Projekte…",
                 "Einstellungen…",
-                "Über KR IDE v3.1"
+                "Über KR IDE v3.2"
         };
         new AlertDialog.Builder(this)
                 .setTitle("Menü")
@@ -1304,7 +1304,7 @@ public final class MainActivity extends Activity implements
         input.setHint("Projektname");
         new AlertDialog.Builder(this)
                 .setTitle("Neues GUI-Projekt")
-                .setMessage("Erstellt eine portable SDL3-/Dear-ImGui-Anwendung mit CMake und vcpkg.json für Windows x64 und Linux x64.")
+                .setMessage("Erstellt eine portable SDL3-/Dear-ImGui-Anwendung mit CMake und vcpkg.json für Android ARM64, Windows x64 und Linux x64.")
                 .setView(input)
                 .setPositiveButton("Projekt erstellen", (dialog, which) -> {
                     try {
@@ -1528,7 +1528,7 @@ public final class MainActivity extends Activity implements
 
     private void showAboutDialog() {
         new AlertDialog.Builder(this)
-                .setTitle("KR Compiler Android IDE v3.1")
+                .setTitle("KR Compiler Android IDE v3.2")
                 .setMessage("Adaptive, produktive C++20-Entwicklungsumgebung für Android.\n\n" +
                         "• Clang/LLVM 21.1.8 C++20 Toolchain\n" +
                         "• Targets: Android ARM64, Windows x64, Linux x64\n" +

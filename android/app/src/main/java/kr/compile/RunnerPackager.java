@@ -27,14 +27,14 @@ final class RunnerPackager {
     }
 
     static void create(Context context, File userLibrary, File cppRuntime, File project,
-                       File destination, CompilerEngine.Logger log) throws Exception {
+                       boolean guiProgram, File destination, CompilerEngine.Logger log) throws Exception {
         File unsigned = new File(context.getCacheDir(), "kr-runner-unsigned.apk");
         File projectData = new File(context.getCacheDir(), "kr-runner-project-data.zip");
         ResourceStats resources = createProjectData(project, projectData);
         log.line(resources.count + " Laufzeitdatei(en) werden in die Android-APK übernommen (" +
                 readableSize(resources.bytes) + ").");
         try (InputStream template = context.getAssets().open("runner-template.apk")) {
-            inject(template, userLibrary, cppRuntime, projectData, unsigned);
+            inject(template, userLibrary, cppRuntime, projectData, guiProgram, unsigned);
         }
         // Do not use the desktop-only JKS provider here. Android universally
         // supports RSA PKCS#8 keys and X.509 certificates through its platform JCA.
@@ -75,7 +75,7 @@ final class RunnerPackager {
     }
 
     private static void inject(InputStream raw, File library, File cppRuntime, File projectData,
-                               File outFile) throws IOException {
+                               boolean guiProgram, File outFile) throws IOException {
         try (ZipInputStream in = new ZipInputStream(new BufferedInputStream(raw));
              ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(outFile)))) {
             ZipEntry entry; byte[] buffer = new byte[128 * 1024];
@@ -87,7 +87,8 @@ final class RunnerPackager {
                 if (name.length() == 0 || entry.isDirectory() || name.startsWith("META-INF/") ||
                         name.equals("lib/arm64-v8a/libuser.so") ||
                         name.equals("lib/arm64-v8a/libc++_shared.so") ||
-                        name.equals("assets/kr-project-data.zip")) continue;
+                        name.equals("assets/kr-project-data.zip") ||
+                        name.equals("assets/kr-gui-runner")) continue;
                 if (!written.add(name)) continue;
                 ZipEntry copy = new ZipEntry(name); copy.setTime(0); out.putNextEntry(copy);
                 int n; while ((n = in.read(buffer)) >= 0) out.write(buffer, 0, n); out.closeEntry();
@@ -95,6 +96,7 @@ final class RunnerPackager {
             addFile(out, written, "lib/arm64-v8a/libuser.so", library, buffer);
             addFile(out, written, "lib/arm64-v8a/libc++_shared.so", cppRuntime, buffer);
             addFile(out, written, "assets/kr-project-data.zip", projectData, buffer);
+            if (guiProgram) addBytes(out, written, "assets/kr-gui-runner", "SDL3\n".getBytes("UTF-8"));
         }
     }
 
@@ -161,5 +163,12 @@ final class RunnerPackager {
             int n; while ((n = in.read(buffer)) >= 0) out.write(buffer, 0, n);
         }
         out.closeEntry();
+    }
+
+    private static void addBytes(ZipOutputStream out, Set<String> written, String name,
+                                 byte[] data) throws IOException {
+        if (!written.add(name)) return;
+        ZipEntry entry = new ZipEntry(name); entry.setTime(0); out.putNextEntry(entry);
+        out.write(data); out.closeEntry();
     }
 }

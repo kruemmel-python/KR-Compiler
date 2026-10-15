@@ -5,6 +5,15 @@
 #include <cstdio>
 #include <string>
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_kr_compile_runner_GuiRunnerActivity_setWorkingDirectory(JNIEnv* env, jclass, jstring directory) {
+    const char* chars = env->GetStringUTFChars(directory, nullptr);
+    if (!chars) return JNI_FALSE;
+    const int result = chdir(chars);
+    env->ReleaseStringUTFChars(directory, chars);
+    return result == 0 ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_kr_compile_runner_RunnerActivity_execute(JNIEnv* env, jclass, jstring output_file,
                                               jstring library_file, jstring working_directory) {

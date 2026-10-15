@@ -1,4 +1,6 @@
+#ifndef __ANDROID__
 #define SDL_MAIN_HANDLED
+#endif
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <imgui.h>
@@ -22,6 +24,10 @@ static int run_app() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+#if defined(__ANDROID__)
+    ImGui::GetIO().FontGlobalScale = 2.0f;
+    ImGui::GetStyle().ScaleAllSizes(2.0f);
+#endif
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
 
@@ -35,9 +41,15 @@ static int run_app() {
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
+#if defined(__ANDROID__)
+        ImGui::SetNextWindowPos(ImVec2(32, 32), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(760, 320), ImGuiCond_Once);
+#endif
         ImGui::Begin("KR Compiler");
         ImGui::Text("GUI erfolgreich mit SDL3 + Dear ImGui gebaut.");
-#ifdef _WIN32
+#if defined(__ANDROID__)
+        ImGui::Text("Ziel: Android ARM64");
+#elif defined(_WIN32)
         ImGui::Text("Ziel: Windows x64");
 #else
         ImGui::Text("Ziel: Linux x64");
@@ -61,8 +73,8 @@ static int run_app() {
     return 0;
 }
 
-#ifdef _WIN32
+#if defined(_WIN32)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { return run_app(); }
 #else
-int main() { return run_app(); }
+int main(int, char**) { return run_app(); }
 #endif

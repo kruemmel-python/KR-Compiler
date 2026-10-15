@@ -137,6 +137,15 @@ final class CompilerEngine {
         writeText(toolchainFile, cmakeToolchain());
         Set<String> packages = findCMakePackages(project);
         Set<String> manifestPackages = VcpkgManager.readDependencies(project);
+        boolean guiProgram = VcpkgManager.isGuiProject(project, manifestPackages);
+        if (guiProgram) {
+            log.line("GUI-Projekt erkannt: SDL3-/Dear-ImGui-Fenster wird für "
+                    + (target == Target.ANDROID ? "Android ARM64" : target == Target.WINDOWS ? "Windows x64" : "Linux x64")
+                    + " gebaut.");
+            if (target == Target.ANDROID) {
+                log.line("Android-GUI-Modus: SDLActivity, Touch-Eingabe und OpenGL-ES-Runner werden eingebunden.");
+            }
+        }
         for (String port : manifestPackages) {
             if (!VcpkgManager.isSupported(port)) {
                 throw new IOException("VCPKG-Port '" + port + "' ist im mobilen KR-Katalog noch nicht verfügbar.");
@@ -156,6 +165,9 @@ final class CompilerEngine {
         File dependencyCache = new File(context.getFilesDir(), "components/cmake/" + target.name().toLowerCase(Locale.ROOT));
         if (!dependencyCache.isDirectory() && !dependencyCache.mkdirs())
             throw new IOException("Abhängigkeitscache kann nicht angelegt werden.");
+        if (target == Target.ANDROID && containsPackage(packages, "sdl3")) {
+            patchCachedAndroidSdl(dependencyCache);
+        }
 
         String systemVersion = target == Target.ANDROID ? "26" : (target == Target.WINDOWS ? "10.0" : "1");
         List<String> configure = new ArrayList<>();
@@ -172,8 +184,12 @@ final class CompilerEngine {
         run(configure, "CMake konfiguriert das Projekt", project);
 
         List<String> build = new ArrayList<>();
+        int buildJobs = target == Target.ANDROID
+                ? Math.min(2, Math.max(1, Runtime.getRuntime().availableProcessors()))
+                : Math.max(1, Runtime.getRuntime().availableProcessors());
+        if (target == Target.ANDROID) log.line("Android-GUI-Build: " + buildJobs + " parallele Compilerprozesse für stabilen Speicherverbrauch.");
         Collections.addAll(build, cmake.getPath(), "--build", binary.getPath(), "--config", "Release", "--parallel",
-                Integer.toString(Math.max(1, Runtime.getRuntime().availableProcessors())));
+                Integer.toString(buildJobs));
         run(build, "CMake baut das Projekt", project);
 
         List<String> targets = readLines(targetList);
@@ -187,7 +203,7 @@ final class CompilerEngine {
             copy(built, library);
             File apk = new File(output, "programm-android-arm64.apk");
             File cppRuntime = new File(toolchain, "usr/lib/libc++_shared.so");
-            RunnerPackager.create(context, library, cppRuntime, project, apk, log);
+            RunnerPackager.create(context, library, cppRuntime, project, guiProgram, apk, log);
             if (!library.delete()) log.line("Hinweis: temporäre Android-Bibliothek bleibt in der Ausgabe.");
             return apk;
         }
@@ -196,6 +212,25 @@ final class CompilerEngine {
         copy(built, artifact);
         artifact.setExecutable(true, false);
         return artifact;
+    }
+
+    private static boolean containsPackage(Set<String> packages, String wanted) {
+        for (String value : packages) {
+            if (value.replace('_', '-').equalsIgnoreCase(wanted)) return true;
+        }
+        return false;
+    }
+
+    private void patchCachedAndroidSdl(File dependencyCache) throws IOException {
+        File cmakeFile = new File(dependencyCache, "sdl3-src/CMakeLists.txt");
+        if (!cmakeFile.isFile()) return; // First extraction is handled by FetchContent PATCH_COMMAND.
+        String source = readText(cmakeFile);
+        String original = "if(((LINUX AND LIBC_IS_GLIBC) OR ANDROID) AND (NOT USE_TCC))";
+        String replacement = "if((LINUX AND LIBC_IS_GLIBC) AND (NOT USE_TCC) AND NOT ANDROID)";
+        if (source.contains(original)) {
+            writeText(cmakeFile, source.replace(original, replacement));
+            log.line("SDL3-CMake-Erkennung an den eingebetteten Android-Cross-Linker angepasst.");
+        }
     }
 
     private String cmakeToolchain() {
@@ -213,6 +248,12 @@ final class CompilerEngine {
         s.append("set(CMAKE_STRIP ").append(cmakeQuote(strip)).append(")\n");
         if (target == Target.ANDROID) {
             s.append("set(CMAKE_SYSTEM_NAME Linux)\nset(CMAKE_SYSTEM_PROCESSOR aarch64)\n");
+            // KR uses the standalone Android Clang/sysroot shipped in the app.
+            // Expose Android explicitly so dependencies select their Android
+            // backend without invoking CMake's desktop-NDK discovery module.
+            s.append("set(ANDROID TRUE CACHE BOOL \"KR Android cross target\" FORCE)\n");
+            s.append("set(ANDROID_ABI arm64-v8a CACHE STRING \"\" FORCE)\n");
+            s.append("set(CMAKE_ANDROID_ARCH_ABI arm64-v8a CACHE STRING \"\" FORCE)\n");
             s.append("set(CMAKE_SYSTEM_VERSION 26)\n");
             s.append("set(CMAKE_C_COMPILER_TARGET aarch64-linux-android26)\n");
             s.append("set(CMAKE_CXX_COMPILER_TARGET aarch64-linux-android26)\n");
@@ -295,15 +336,31 @@ final class CompilerEngine {
             String url = null;
             String hash = null;
             String options = "";
+            String patchCommand = "";
             if (key.equals("sdl3")) {
                 name = "SDL3"; url = "https://github.com/libsdl-org/SDL/archive/refs/tags/release-3.4.18.tar.gz";
                 hash = "12fcb5592016b27922b08d1580d75f5f15c72e67cf04415e2bd824dc7563ac940c25bbe368b03d0a755f5832803049467e3d0ee6784ed3684792bc4d7741af50";
                 options = "set(SDL_SHARED OFF CACHE BOOL \"\" FORCE)\nset(SDL_STATIC ON CACHE BOOL \"\" FORCE)\n"
                         + "set(SDL_TEST_LIBRARY OFF CACHE BOOL \"\" FORCE)\nset(SDL_TESTS OFF CACHE BOOL \"\" FORCE)\n"
                         + "set(SDL_EXAMPLES OFF CACHE BOOL \"\" FORCE)\nset(SDL_INSTALL OFF CACHE BOOL \"\" FORCE)\n"
+                        + (target == Target.ANDROID
+                        ? "set(SDL_ANDROID_JAR OFF CACHE BOOL \"\" FORCE)\nset(SDL_VULKAN OFF CACHE BOOL \"\" FORCE)\nset(SDL_SYSTEM_ICONV OFF CACHE BOOL \"\" FORCE)\nset(HAVE_WL_VERSION_SCRIPT TRUE CACHE INTERNAL \"\" FORCE)\n"
+                        : "")
                         + (target == Target.LINUX
                         ? "set(HAVE_WL_VERSION_SCRIPT TRUE CACHE INTERNAL \"\" FORCE)\nset(SDL_X11 ON CACHE BOOL \"\" FORCE)\nset(SDL_X11_SHARED ON CACHE BOOL \"\" FORCE)\nset(X11_INCLUDEDIR \"${CMAKE_SYSROOT}/usr/include\" CACHE PATH \"\" FORCE)\nset(X11_LIB \"${CMAKE_SYSROOT}/usr/lib/x86_64-linux-gnu/libX11.so\" CACHE FILEPATH \"\" FORCE)\nset(XEXT_LIB \"${CMAKE_SYSROOT}/usr/lib/x86_64-linux-gnu/libXext.so\" CACHE FILEPATH \"\" FORCE)\nset(HAVE_XEXT_H \"${CMAKE_SYSROOT}/usr/include/X11/extensions/Xext.h\" CACHE FILEPATH \"\" FORCE)\nset(SDL_X11_XCURSOR OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XDBE OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XINPUT OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XFIXES OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XRANDR OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XSCRNSAVER OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XSHAPE OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XSYNC OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XTEST OFF CACHE BOOL \"\" FORCE)\nset(SDL_WAYLAND OFF CACHE BOOL \"\" FORCE)\nset(SDL_KMSDRM OFF CACHE BOOL \"\" FORCE)\nset(SDL_OPENGL OFF CACHE BOOL \"\" FORCE)\nset(SDL_OPENGLES OFF CACHE BOOL \"\" FORCE)\n"
                         : "");
+                if (target == Target.ANDROID) {
+                    // CMAKE_TRY_COMPILE_TARGET_TYPE is STATIC_LIBRARY in KR's standalone
+                    // cross toolchain. SDL's linker probe therefore cannot test a linker
+                    // option although Android lld supports it. Patch only this false-negative
+                    // guard after the verified source archive has been extracted.
+                    s.append("file(WRITE \"${CMAKE_BINARY_DIR}/kr-patch-sdl-android.cmake\" [=[\n")
+                            .append("file(READ \"${KR_SDL_SOURCE}/CMakeLists.txt\" _kr_sdl_cmake)\n")
+                            .append("string(REPLACE \"if(((LINUX AND LIBC_IS_GLIBC) OR ANDROID) AND (NOT USE_TCC))\" \"if((LINUX AND LIBC_IS_GLIBC) AND (NOT USE_TCC) AND NOT ANDROID)\" _kr_sdl_cmake \"${_kr_sdl_cmake}\")\n")
+                            .append("file(WRITE \"${KR_SDL_SOURCE}/CMakeLists.txt\" \"${_kr_sdl_cmake}\")\n")
+                            .append("]=])\n");
+                    patchCommand = " PATCH_COMMAND \"${CMAKE_COMMAND}\" \"-DKR_SDL_SOURCE=<SOURCE_DIR>\" -P \"${CMAKE_BINARY_DIR}/kr-patch-sdl-android.cmake\"";
+                }
             } else if (key.equals("imgui")) {
                 log.line("VCPKG-Port imgui erkannt; SDL3-Renderer-Backend wird eingebunden.");
                 s.append("cmake_policy(PUSH)\ncmake_policy(SET CMP0169 OLD)\n");
@@ -341,7 +398,8 @@ final class CompilerEngine {
             s.append(options);
             s.append("FetchContent_Declare(").append(name).append(" URL \"").append(url)
                     .append("\" URL_HASH SHA512=").append(hash)
-                    .append(" DOWNLOAD_EXTRACT_TIMESTAMP TRUE OVERRIDE_FIND_PACKAGE)\n");
+                    .append(" DOWNLOAD_EXTRACT_TIMESTAMP TRUE OVERRIDE_FIND_PACKAGE")
+                    .append(patchCommand).append(")\n");
         }
     }
 
@@ -451,7 +509,7 @@ final class CompilerEngine {
         File apk = new File(output, "programm-android-arm64.apk");
         File cppRuntime = new File(toolchain, "usr/lib/libc++_shared.so");
         if (!cppRuntime.isFile()) throw new IOException("Eingebettete Android-C++-Laufzeit fehlt.");
-        RunnerPackager.create(context, library, cppRuntime, project, apk, log);
+        RunnerPackager.create(context, library, cppRuntime, project, false, apk, log);
         if (!library.delete()) log.line("Hinweis: temporäre Android-Bibliothek bleibt in der Ausgabe.");
         return apk;
     }
@@ -549,6 +607,15 @@ final class CompilerEngine {
     private static String cmakeEscape(String value) { return value.replace("\\", "/").replace("\"", "\\\"").replace(";", "\\;"); }
     private static void writeText(File file, String text) throws IOException {
         try (Writer out = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) { out.write(text); }
+    }
+    private static String readText(File file) throws IOException {
+        try (InputStream in = new BufferedInputStream(new FileInputStream(file))) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buffer = new byte[32 * 1024];
+            int n;
+            while ((n = in.read(buffer)) >= 0) out.write(buffer, 0, n);
+            return out.toString(StandardCharsets.UTF_8.name());
+        }
     }
     private static void appendText(File file, String text) throws IOException {
         try (Writer out = new OutputStreamWriter(new FileOutputStream(file, true), StandardCharsets.UTF_8)) { out.write(text); }

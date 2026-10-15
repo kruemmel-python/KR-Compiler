@@ -33,7 +33,7 @@ public final class VcpkgManager {
     }
 
     private static final List<Library> CATALOG = Arrays.asList(
-            new Library("sdl3", "SDL3", "Fenster, Eingabe und 2D-Rendering für Windows/Linux"),
+            new Library("sdl3", "SDL3", "Fenster, Touch, Eingabe und 2D-Rendering für Android/Windows/Linux"),
             new Library("imgui", "Dear ImGui", "Unmittelbare C++-Oberflächen für Werkzeuge und Editoren"),
             new Library("fmt", "fmt", "Formatierte Textausgabe"),
             new Library("nlohmann-json", "nlohmann-json", "JSON für modernes C++"),
@@ -96,6 +96,7 @@ public final class VcpkgManager {
         if (!src.mkdirs()) throw new IOException("Projektstruktur kann nicht erstellt werden.");
         write(new File(project, "CMakeLists.txt"), cmakeTemplate());
         write(new File(src, "main.cpp"), sourceTemplate());
+        write(new File(project, "kr-gui-target.txt"), "sdl3-imgui\n");
         LinkedHashSet<String> ports = new LinkedHashSet<>();
         ports.add("sdl3");
         ports.add("imgui");
@@ -107,6 +108,11 @@ public final class VcpkgManager {
     public static boolean isSupported(String port) {
         for (Library library : CATALOG) if (library.port.equals(normalize(port))) return true;
         return false;
+    }
+
+    public static boolean isGuiProject(File project, Set<String> dependencies) {
+        if (new File(project, "kr-gui-target.txt").isFile()) return true;
+        return dependencies.contains("sdl3") && dependencies.contains("imgui");
     }
 
     private static String normalize(String value) {
@@ -130,7 +136,7 @@ public final class VcpkgManager {
     }
 
     private static String sourceTemplate() {
-        return "#define SDL_MAIN_HANDLED\n"
+        return "#ifndef __ANDROID__\n#define SDL_MAIN_HANDLED\n#endif\n"
                 + "#include <SDL3/SDL.h>\n"
                 + "#include <SDL3/SDL_main.h>\n"
                 + "#include <imgui.h>\n"
@@ -146,6 +152,10 @@ public final class VcpkgManager {
                 + "    IMGUI_CHECKVERSION();\n"
                 + "    ImGui::CreateContext();\n"
                 + "    ImGui::StyleColorsDark();\n"
+                + "#if defined(__ANDROID__)\n"
+                + "    ImGui::GetIO().FontGlobalScale = 2.0f;\n"
+                + "    ImGui::GetStyle().ScaleAllSizes(2.0f);\n"
+                + "#endif\n"
                 + "    ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);\n"
                 + "    ImGui_ImplSDLRenderer3_Init(renderer);\n"
                 + "    bool running = true;\n"
@@ -158,10 +168,14 @@ public final class VcpkgManager {
                 + "        ImGui_ImplSDLRenderer3_NewFrame();\n"
                 + "        ImGui_ImplSDL3_NewFrame();\n"
                 + "        ImGui::NewFrame();\n"
+                + "#if defined(__ANDROID__)\n"
+                + "        ImGui::SetNextWindowPos(ImVec2(32, 32), ImGuiCond_Once);\n"
+                + "        ImGui::SetNextWindowSize(ImVec2(760, 320), ImGuiCond_Once);\n"
+                + "#endif\n"
                 + "        ImGui::Begin(\"KR Compiler\");\n"
                 + "        ImGui::Text(\"GUI erfolgreich mit SDL3 + Dear ImGui gebaut.\");\n"
                 + "        ImGui::Text(\"Ziel: %s\",\n"
-                + "#ifdef _WIN32\n                \"Windows x64\"\n#else\n                \"Linux x64\"\n#endif\n"
+                + "#if defined(__ANDROID__)\n                \"Android ARM64\"\n#elif defined(_WIN32)\n                \"Windows x64\"\n#else\n                \"Linux x64\"\n#endif\n"
                 + "        );\n"
                 + "        if (ImGui::Button(\"Beenden\")) running = false;\n"
                 + "        ImGui::End();\n"
@@ -182,14 +196,14 @@ public final class VcpkgManager {
                 + "#ifdef _WIN32\n"
                 + "int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { return run_app(); }\n"
                 + "#else\n"
-                + "int main() { return run_app(); }\n"
+                + "int main(int, char**) { return run_app(); }\n"
                 + "#endif\n";
     }
 
     private static String readmeTemplate() {
         return "# KR GUI-Beispiel\n\n"
                 + "Dieses Projekt verwendet ein vcpkg-Manifest sowie SDL3 und Dear ImGui.\n"
-                + "In KR IDE als Ziel Windows x64 oder Linux x64 wählen und kompilieren.\n";
+                + "In KR IDE als Ziel Android APK, Windows x64 oder Linux x64 wählen und kompilieren.\n";
     }
 
     private static String read(File file) throws IOException {

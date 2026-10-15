@@ -11,6 +11,7 @@ import java.util.zip.ZipInputStream;
 
 final class ToolchainInstaller {
     private static final String STAMP = "kr-toolchain-21.1.8-cmake-v9";
+    private static final String GRAPHICS_STAMP = "kr-android-graphics-headers-v1";
     private ToolchainInstaller() {}
 
     static File ensure(Context context, CompilerEngine.Logger log) throws IOException {
@@ -22,7 +23,11 @@ final class ToolchainInstaller {
         File root = context.getFilesDir();
         File stamp = new File(root, STAMP);
         File clang = new File(root, "usr/bin/clang++");
-        if (stamp.isFile() && clang.isFile()) { verify(root); return root; }
+        if (stamp.isFile() && clang.isFile()) {
+            installGraphicsHeaders(context, root, log);
+            verify(root);
+            return root;
+        }
         log.line("Compilerlaufzeit wird einmalig entpackt …");
         delete(new File(root, "usr"));
         delete(new File(root, "targets"));
@@ -53,6 +58,7 @@ final class ToolchainInstaller {
         File bin = new File(root, "usr/bin");
         File[] executables = bin.listFiles();
         if (executables != null) for (File file : executables) file.setExecutable(true, false);
+        installGraphicsHeaders(context, root, log);
         verify(root);
         if (!stamp.createNewFile()) throw new IOException("Compilerstatus kann nicht gespeichert werden.");
         return root;
@@ -65,6 +71,7 @@ final class ToolchainInstaller {
                 "usr/etc/tls/cert.pem",
                 "usr/lib/libLLVM.so", "usr/lib/libclang-cpp.so", "usr/lib/libc++_shared.so",
                 "usr/include/c++/v1/iostream", "usr/lib/clang/21/include/stddef.h",
+                "usr/include/EGL/egl.h", "usr/include/GLES/gl.h", "usr/include/GLES2/gl2.h",
                 "targets/windows/include/windows.h", "targets/windows/include/c++/v1/iostream",
                 "targets/windows/x86_64-w64-mingw32/lib/crt2.o",
                 "usr/lib/clang/21/lib/x86_64-w64-windows-gnu/libclang_rt.builtins.a",
@@ -78,6 +85,37 @@ final class ToolchainInstaller {
             throw new IOException("Compilerpaket ist unvollständig; erforderlich fehlt: " + path);
         for (String executable : new String[]{"usr/bin/clang++", "usr/bin/clang-21", "usr/bin/ld.lld", "usr/bin/cmake", "usr/bin/ninja", "usr/bin/git"})
             if (!new File(root, executable).canExecute()) throw new IOException("Compilerwerkzeug ist nicht ausführbar: " + executable);
+    }
+
+    private static void installGraphicsHeaders(Context context, File root, CompilerEngine.Logger log) throws IOException {
+        File header = new File(root, "usr/include/GLES2/gl2.h");
+        File stamp = new File(root, GRAPHICS_STAMP);
+        if (stamp.isFile() && header.isFile()) return;
+        log.line("Android EGL-/OpenGL-ES-Header für GUI-Projekte werden eingerichtet …");
+        try (InputStream raw = context.getAssets().open("android-graphics-headers.zip");
+             ZipInputStream zip = new ZipInputStream(new BufferedInputStream(raw))) {
+            ZipEntry entry;
+            byte[] buffer = new byte[32 * 1024];
+            String canonicalRoot = root.getCanonicalPath() + File.separator;
+            while ((entry = zip.getNextEntry()) != null) {
+                String entryName = entry.getName().replace('\\', '/');
+                while (entryName.startsWith("/")) entryName = entryName.substring(1);
+                File out = new File(root, entryName);
+                if (!out.getCanonicalPath().startsWith(canonicalRoot)) throw new IOException("Ungültiger Grafik-Header-Eintrag.");
+                if (entry.isDirectory()) {
+                    if (!out.isDirectory() && !out.mkdirs()) throw new IOException("Grafik-Header-Ordner kann nicht erstellt werden.");
+                    continue;
+                }
+                File parent = out.getParentFile();
+                if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new IOException("Grafik-Header-Ordner kann nicht erstellt werden.");
+                try (OutputStream stream = new BufferedOutputStream(new FileOutputStream(out))) {
+                    int n;
+                    while ((n = zip.read(buffer)) >= 0) stream.write(buffer, 0, n);
+                }
+            }
+        }
+        if (!header.isFile()) throw new IOException("Android-GUI-Header konnten nicht installiert werden.");
+        if (!stamp.isFile() && !stamp.createNewFile()) throw new IOException("Grafik-Header-Status kann nicht gespeichert werden.");
     }
 
     private static void copy(File source, File destination) throws IOException {

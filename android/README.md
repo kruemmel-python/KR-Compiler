@@ -16,10 +16,16 @@ Für Android wird ein CMake-`add_executable` intern in eine vom Runner ladbare A
 Arbeitsverzeichnis der entpackte Ressourcenordner. Für Windows und Linux wird das ausgewählte
 Ziel als `programm.exe` beziehungsweise `programm` exportiert.
 
-Grafische Desktop-Projekte können über „Neues GUI-Projekt“ als SDL3-/Dear-ImGui-Vorlage erzeugt
+Grafische Projekte können über „Neues GUI-Projekt“ als SDL3-/Dear-ImGui-Vorlage erzeugt
 werden. „vcpkg-Bibliotheken“ pflegt das Manifest `vcpkg.json`. Beim Build bindet die App die
-integrierte vcpkg-Toolchain ein. `kr-gui-target.txt` kennzeichnet ein Desktop-GUI-Projekt, damit
-Windows ohne Konsolenfenster und Linux gegen die bereitgestellten X11/Xext-Grundlagen gelinkt wird.
+integrierte vcpkg-Toolchain ein. `kr-gui-target.txt` kennzeichnet ein GUI-Projekt. Windows wird
+ohne Konsolenfenster, Linux gegen die bereitgestellten X11/Xext-Grundlagen und Android als native
+Bibliothek für einen SDLActivity-Runner mit Touch und OpenGL ES gebaut.
+
+Ab Version 3.2 setzt der Android-CMake-Pfad `ANDROID` und die ABI ausdrücklich. SDL3 verwendet
+damit sein mobiles Backend statt X11 oder Wayland. Ein reproduzierbares kleines Headerpaket ergänzt
+EGL, GLES, GLES2, GLES3 und KHR aus dem offiziellen Android-NDK. Der Launcher erkennt GUI-Projekte
+über einen Paketmarker und startet wahlweise den SDLActivity- oder den bisherigen Konsolenrunner.
 
 ## Enthaltene Laufzeit
 
@@ -50,6 +56,10 @@ Entwicklungsschlüssel und startet anschließend den enthaltenen Gradle Wrapper.
 - Android Build Tools
 - Android NDK `27.0.12077973`
 - CMake `3.22.1` aus dem Android SDK
+
+`scripts/package-android-graphics-headers.ps1` erzeugt das kleine Android-Grafikheaderpaket
+reproduzierbar aus dem lokal installierten NDK. Für normale Fork-Builds ist dieser Schritt nicht
+erforderlich, da das geprüfte Paket bereits als App-Asset enthalten ist.
 
 Der lokale Schlüssel liegt unter `android/.local-signing`; die für den Laufzeit-Paketierer
 exportierten Schlüsseldateien liegen nur im ignorierten Assets-Arbeitsordner. Offizielle Builds
