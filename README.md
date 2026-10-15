@@ -1,35 +1,49 @@
 # KR Compiler Android IDE
 
-KR Compiler Android IDE ist eine mobile Entwicklungsumgebung für C, C++, Rust und Go auf ARM64-Android-Geräten. Projekte werden direkt auf dem Smartphone bearbeitet und für Android ARM64, Windows x64 oder Linux x64 gebaut. Konsolenprogramme und grafische SDL3-Anwendungen werden unterstützt.
+KR Compiler Android IDE ist eine autarke, native mobile Entwicklungsumgebung für **KR Unified Language (`.kr`)**, **C++20**, **Rust** und **Go** auf ARM64-Android-Geräten. Projekte werden direkt auf dem Smartphone erstellt, analysiert und für **Android ARM64**, **Windows x64** oder **Linux x64** gebaut. Sowohl reine Konsolenprogramme als auch hardwarebeschleunigte grafische **SDL3-Anwendungen** werden nativ unterstützt.
+
+---
 
 ## Version 4.0.0 herunterladen
 
-Die installierbare APK, das bebilderte Benutzerhandbuch, die technische Dokumentation und ein Paket aller zwölf geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.0).
+Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Dokumentation und die geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.0).
 
-Voraussetzungen:
+- **Release-APK**: `KR-Compiler-Android-IDE-v4.0.0.apk`
+- **SHA-256**: `EA445F39EA7DF69CA1BB1050A1AC93CA5A4F6A7D4E9A01F1CC225FE93791C7B9`
 
-- Android 8.0 oder neuer
-- ARM64-Gerät (`arm64-v8a`)
-- rund 3 GiB freier Speicher für APK, entpackte Werkzeugkette und Builds
+### Systemvoraussetzungen
+- Android 8.0 oder neuer (API 26+)
+- 64-Bit ARM-Gerät (`arm64-v8a`)
+- Ca. 3 GiB freier interner Speicher für Toolchains, SDKs und Build-Cache
 
-## Neu in Version 4.0
+---
 
-Über das Projektmenü können vier neue Vorlagen angelegt werden:
+## Neu in Version 4.0: KR Unified Language (`.kr`)
 
-- Rust Konsole
-- Rust GUI mit SDL3
-- Go Konsole
-- Go GUI mit SDL3
+Mit Version 4.0.0 führt die IDE die **KR Unified Language (`.kr`)** ein. Entwickler können C++20, Rust und Go **ohne künstliche Sprachmarker** (`@cpp`, `@rust`, `@go`) in einer einzigen Datei frei kombinieren:
 
-Die IDE erkennt `Cargo.toml`, Rust-Quelldateien, `go.mod` und Go-Quelldateien automatisch. Rust wird mit `rustc` und Cargo gebaut, Go mit `go build`. Für grafische Programme verbindet die IDE die Sprachbibliothek mit dem vorhandenen SDL3-Runner.
+- **Deterministische Frontend-Pipeline**: Eigener `KrLexer`, `KrParser`, `KrSymbolTable` und `KrCodeGenerator`.
+- **Automatische Sprachfusion**: Vollständige Auflösung von Kreuzaufrufen in allen 6 Richtungen ($C++ \leftrightarrow Rust \leftrightarrow Go$).
+- **Automatische FFI-Brücke**: Generierung standardisierter C-ABIs (`kr_bridge.h`), Marshalling und Speichersicherheit.
+- **Vier neue `.kr`-Projektvorlagen**:
+  1. *KR Konsole* (Konsolenprogramm in `.kr`)
+  2. *KR GUI mit SDL3* (Grafische Anwendung in `.kr`)
+  3. *KR Sprachfusion Konsole* (C++20, Rust und Go interoperabel in einer Datei)
+  4. *KR Sprachfusion GUI* (Dreifache Sprachfusion mit SDL3-Grafikoberfläche)
 
-| Sprache | Android ARM64 | Windows x64 | Linux x64 |
+Zusätzlich werden reine **Rust-Projekte** (Cargo / `rustc`) und **Go-Projekte** (`go.mod` / `go build` / `cgo`) nativ unterstützt.
+
+---
+
+## Unterstützte Zielplattformen
+
+| Projektkategorie | Android ARM64 | Windows x64 | Linux x64 |
 |---|---|---|---|
-| C und C++ | APK | EXE | ELF |
-| Rust Konsole | APK | EXE | ELF |
-| Rust GUI | APK | EXE | ELF |
-| Go Konsole | APK | EXE | ELF |
-| Go GUI | APK | EXE | ELF |
+| **KR Unified Language (`.kr`)** | APK | EXE | ELF |
+| **KR Sprachfusion (C++ / Rust / Go)** | APK | EXE | ELF |
+| **C und C++20 (CMake / Ninja)** | APK | EXE | ELF |
+| **Rust (Cargo / rustc)** | APK | EXE | ELF |
+| **Go (go build / CGO)** | APK | EXE | ELF |
 
 | Rust Konsole auf Android | Go Konsole auf Android |
 |---|---|
@@ -39,40 +53,37 @@ Die IDE erkennt `Cargo.toml`, Rust-Quelldateien, `go.mod` und Go-Quelldateien au
 |---|---|
 | ![Rust GUI](docs/images/v4.0/rust-gui.png) | ![Go GUI](docs/images/v4.0/go-gui.png) |
 
-## Bedienung
+---
 
-1. Im Menü **Neues Rust-/Go-Projekt** wählen.
-2. Sprache und Projekttyp auswählen.
-3. In der Build-Ansicht Android APK, Windows EXE oder Linux Programm einstellen.
-4. **Kompilieren** antippen.
-5. Das Ergebnis unter **Artefakte** installieren, teilen oder kopieren.
+## Schnellstart
 
-Die vollständige Schrittfolge steht im [bebilderten Benutzerhandbuch v4.0](docs/BENUTZERHANDBUCH_v4.0.md).
+1. **Neues Projekt anlegen**: Im Menü **Neues .kr-Projekt** oder **Neues Rust-/Go-Projekt** wählen.
+2. **Vorlage bestimmen**: Z. B. *KR Sprachfusion (C++ / Rust / Go)* auswählen und Namen vergeben.
+3. **Quelltext schreiben**: C++-, Rust- und Go-Funktionen nahtlos in der `.kr`-Datei definieren und aufrufen.
+4. **Zielsystem wählen**: Android APK, Windows EXE oder Linux Programm einstellen.
+5. **Kompilieren**: Mit einem Tippen auf **Kompilieren** den automatisierten Multi-Toolchain-Build starten.
+6. **Ausführen & Teilen**: Unter **Artefakte** die Android-App direkt installieren/starten oder Desktop-Dateien exportieren.
 
-## Mobile Entwicklungsumgebung
+---
 
-Die IDE bietet einen Quelltexteditor, Dateireiter, Projektverwaltung, Suche und Ersetzen, GitHub-Import, Buildprotokolle und eine Artefaktansicht. Hoch- und Querformat passen sich automatisch an; im Querformat bleibt der Editor auch bei TV-Spiegelung nutzbar.
+## Vollständige Dokumentation im Repository
 
-C++-GUI-Projekte verwenden weiterhin SDL3, Dear ImGui und die integrierte vcpkg-Verwaltung. Rust- und Go-GUI-Vorlagen verwenden SDL3 über eine kleine native Brücke, damit derselbe Projektquelltext für alle drei Ziele gebaut werden kann.
+Alle Handbücher, Architekturberichte und Testprotokolle stehen im Ordner [`docs/`](docs/) bereit:
 
-## Geprüfter Stand
+- **[KR Unified Language Entwickler-Leitfaden](docs/KR_UNIFIED_LANGUAGE_GUIDE.md)**: Vollständige Sprachfusionsregeln, Speicherverwaltung, Datentypen, FFI-Konventionen und Best Practices für `.kr`.
+- **[Benutzerhandbuch v4.0 (Markdown)](docs/BENUTZERHANDBUCH_v4.0.md)**: Bebilderte Schritt-für-Schritt-Anleitung für die mobile IDE.
+- **[Benutzerhandbuch v4.0 (Word docx)](docs/KR_Compiler_Android_Benutzerhandbuch_v4.0_15-10-2026.docx)**: Vollständiges formatiertes Benutzerhandbuch.
+- **[Technische Dokumentation v4.0 (Markdown)](docs/DOKUMENTATION_v4.0.md)**: Architektur, Pipeline-Stufen, ABI-Design, Compiler-Orchestrierung und Plattform-Profile.
+- **[Technische Dokumentation v4.0 (Word docx)](docs/KR_Compiler_Android_Dokumentation_v4.0_15-10-2026.docx)**: Vollständige technische Dokumentation als Word-Dokument.
+- **[Testprotokoll v4.0](docs/TESTPROTOKOLL_v4.0.md)**: Verifikation aller 18 Zielkombinationen sowie des rechenintensiven DSP-Algorithmus (RoPE Attention) auf dem realen Smartphone RMX3853.
+- **[Release Notes v4.0.0](docs/RELEASE_NOTES_v4.0.0.md)**: Offizielle Versionshinweise und Änderungsprotokoll.
+- **[Projektgeschichte Kreta & KR IDE (Word docx)](docs/KR_Compiler_Android_Kreta_Geschichte_v4.0_15-10-2026.docx)**: Entstehungsgeschichte und Evolution der mobilen Entwicklungsumgebung.
 
-Alle zwölf Kombinationen aus Rust oder Go, Konsole oder GUI und Android, Windows oder Linux wurden auf dem angeschlossenen RMX3853 erzeugt. Die Android-APKs wurden installiert und gestartet. Die Windows-Konsolenprogramme liefen nativ, die Linux-Konsolenprogramme unter Ubuntu. Beide Windows-GUI-Programme öffneten ein Fenster; die Linux-GUI-Dateien wurden als x86-64-ELF geprüft und gestartet.
-
-Die Einzelgrößen und Prüfschritte stehen im [Testprotokoll v4.0](docs/TESTPROTOKOLL_v4.0.md).
-
-## Dokumentation
-
-- [Bebildertes Benutzerhandbuch v4.0](docs/BENUTZERHANDBUCH_v4.0.md)
-- [Benutzerhandbuch v4.0 als Word-Datei](docs/KR_Compiler_Android_Benutzerhandbuch_v4.0_15-10-2026.docx)
-- [Technische Dokumentation v4.0](docs/KR_Compiler_Android_Dokumentation_v4.0_15-10-2026.docx)
-- [Testprotokoll v4.0](docs/TESTPROTOKOLL_v4.0.md)
-- [Projektgeschichte Kreta und KR IDE v4.0](docs/KR_Compiler_Android_Kreta_Geschichte_v4.0_15-10-2026.docx)
-- [Technische Hinweise zum Android-Projekt](android/README.md)
+---
 
 ## Repository forken und selbst bauen
 
-Benötigt werden Windows, PowerShell, JDK 17 sowie das Android SDK mit API 35, Build Tools und NDK `27.0.12077973`.
+Benötigt werden Windows x64, PowerShell 7+, JDK 17 sowie das Android SDK mit API 35, Build Tools und NDK `27.0.12077973`.
 
 ```powershell
 git clone https://github.com/DEIN-NAME/KR-Compiler.git
@@ -80,18 +91,10 @@ cd KR-Compiler
 powershell -ExecutionPolicy Bypass -File .\android\scripts\build-apk.ps1
 ```
 
-Das Skript erstellt `KR-Compiler-Android-IDE-v4.0.0.apk`. Für eine eigene dauerhafte Release-Signatur können `KR_SIGNING_STORE`, `KR_SIGNING_STORE_PASSWORD`, `KR_SIGNING_KEY_ALIAS` und `KR_SIGNING_KEY_PASSWORD` gesetzt werden. Private Schlüssel werden nicht im Repository gespeichert.
+Das Skript erstellt die signierte Release-APK `KR-Compiler-Android-IDE-v4.0.0.apk`.
 
-## Projektstruktur
+---
 
-- `android/app`: Editor, Projektverwaltung, Compilersteuerung und APK-Paketierung
-- `android/runner`: Laufzeit-App für erzeugte Android-Programme
-- `android/scripts`: Werkzeugpaket und reproduzierbarer APK-Build
-- `android/tests`: CMake-, Abhängigkeits- und Kernfunktionstests
-- `docs`: Handbücher, Testprotokolle und Android-Screenshots
+## Lizenz & Dritte
 
-## Sicherheit und Lizenzen
-
-Online-Abhängigkeiten und GitHub-Importe sind ausdrückliche Benutzeraktionen. Fremde Projektdateien und Buildskripte können Befehle ausführen und sollten nur aus vertrauenswürdigen Quellen geöffnet werden.
-
-Der Quellcode steht unter GPL-3.0. Eingebettete Komponenten verwenden eigene Open-Source-Lizenzen; Einzelheiten stehen in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Der Quellcode von KR Compiler Android IDE steht unter der **GPL-3.0**. Eingebettete Open-Source-Komponenten (LLVM/Clang, Rust, Go, SDL3, Dear ImGui, MinGW-w64) unterliegen ihren jeweiligen Lizenzen; Einzelheiten finden sich in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
