@@ -252,7 +252,7 @@ public final class MainActivity extends Activity implements
         titleLayout.setOrientation(LinearLayout.VERTICAL);
 
         titleLabel = new TextView(this);
-        titleLabel.setText("KR IDE v4.0");
+        titleLabel.setText("KR IDE v4.0.1");
         titleLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f);
         titleLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         titleLayout.addView(titleLabel);
@@ -787,7 +787,7 @@ public final class MainActivity extends Activity implements
 
         if (DocumentManager.getInstance().getOpenDocuments().isEmpty()) {
             DocumentModel starter = DocumentManager.getInstance().openDocument("main.cpp",
-                    "#include <iostream>\n\nint main() {\n    std::cout << \"KR IDE v4.0 C++/Rust/Go ready!\" << std::endl;\n    return 0;\n}\n",
+                    "#include <iostream>\n\nint main() {\n    std::cout << \"KR IDE v4.0.1 C++/Rust/Go ready!\" << std::endl;\n    return 0;\n}\n",
                     null, null);
             codeEditor.setDocument(starter);
             refreshDocTabs();
@@ -1385,7 +1385,7 @@ public final class MainActivity extends Activity implements
                 "Neuer Ordner…",
                 "Zuletzt geöffnete Projekte…",
                 "Einstellungen…",
-                "Über KR IDE v4.0"
+                "Über KR IDE v4.0.1"
         };
         new AlertDialog.Builder(this)
                 .setTitle("Menü")
@@ -1710,7 +1710,7 @@ public final class MainActivity extends Activity implements
 
     private void showAboutDialog() {
         new AlertDialog.Builder(this)
-                .setTitle("KR Compiler Android IDE v4.0.0")
+                .setTitle("KR Compiler Android IDE v4.0.1")
                 .setMessage("Adaptive, produktive C++20-Entwicklungsumgebung für Android.\n\n" +
                         "• Clang/LLVM 21.1.8 C++20 Toolchain\n" +
                         "• Targets: Android ARM64, Windows x64, Linux x64\n" +

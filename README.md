@@ -4,17 +4,26 @@ KR Compiler Android IDE ist eine autarke, native mobile Entwicklungsumgebung fü
 
 ---
 
-## Version 4.0.0 herunterladen
+## Version 4.0.1 herunterladen
 
-Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Dokumentation und die geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.0).
+Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Dokumentation und die geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.1](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.1).
 
-- **Release-APK**: `KR-Compiler-Android-IDE-v4.0.0.apk`
-- **SHA-256**: `EA445F39EA7DF69CA1BB1050A1AC93CA5A4F6A7D4E9A01F1CC225FE93791C7B9`
+- **Release-APK**: `KR-Compiler-Android-IDE-v4.0.1.apk`
+- **SHA-256**: `7AD6D645596E53F8CC315B7752CCFCE18D3B618C64A31A9981650424FBF049FF`
 
 ### Systemvoraussetzungen
 - Android 8.0 oder neuer (API 26+)
 - 64-Bit ARM-Gerät (`arm64-v8a`)
 - Ca. 3 GiB freier interner Speicher für Toolchains, SDKs und Build-Cache
+
+---
+
+## Neu in Version 4.0.1
+
+Version 4.0.1 bringt vollständige Unterstützung für anspruchsvolle **Enterprise C++ OpenCL- und GPU-Bibliotheken** sowie gehärtete Windows-x64-Cross-Kompilierung:
+- **LLVM-MinGW Toolchain Härtung**: Vollständige Vermeidung von veralteten GCC-Laufzeitabhängigkeiten (`-lgcc`, `-lgcc_s`) zugunsten reiner LLVM-Runtimes (`libc++`, `compiler-rt`, `libunwind`).
+- **OpenCL-Integration**: Automatischer Fallback auf mitgelieferte Khronos OpenCL 3.0 Header und MinGW-Importbibliotheken.
+- **Verifizierter Nachweis**: 100,0 % API-Parität (140/140 Symbole) an `CC_OpenCl_Enterprise` sowie erfolgreiche Kernel-Ausführung auf AMD-Hardware (`gfx90c`).
 
 ---
 
