@@ -53,6 +53,10 @@ public final class KrPipeline {
     }
 
     public static PipelineResult process(File projectDir, File buildDir, boolean isGui) throws IOException {
+        File configFile = KrProjectConfig.findProjectConfigFile(projectDir);
+        KrProjectConfig config = KrProjectConfig.parse(configFile, projectDir.getName(), isGui);
+        boolean actualGui = config.isGui || isGui;
+
         List<File> krFiles = findKrFiles(projectDir);
         if (krFiles.isEmpty()) {
             throw new IOException("Keine .kr-Quelldateien im Projektordner gefunden.");
@@ -63,8 +67,9 @@ public final class KrPipeline {
         KrSymbolTable symbolTable = new KrSymbolTable();
 
         for (File krFile : krFiles) {
+            String relPath = projectDir.toPath().relativize(krFile.toPath()).toString().replace('\\', '/');
             String content = readFile(krFile);
-            KrParser parser = new KrParser(krFile.getName(), content);
+            KrParser parser = new KrParser(relPath, content);
             List<KrSegment> segments = parser.parse();
             allSegments.addAll(segments);
             allDiagnostics.addAll(parser.getDiagnostics());
@@ -96,8 +101,8 @@ public final class KrPipeline {
         }
 
         // Generate target code
-        KrCodeGenerator generator = new KrCodeGenerator(symbolTable, allSegments, buildDir, isGui);
-        KrCodeGenerator.Result codeResult = generator.generate();
+        KrCodeGenerator generator = new KrCodeGenerator(symbolTable, allSegments, buildDir, actualGui);
+        KrCodeGenerator.Result codeResult = generator.generate(config.vcpkgDependencies);
 
         PipelineResult result = new PipelineResult(true, symbolTable, codeResult);
         result.diagnostics.addAll(allDiagnostics);

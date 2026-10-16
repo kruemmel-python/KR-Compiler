@@ -14,8 +14,8 @@ android {
         minSdk 26
         // API 28 intentionally permits executing the compiler unpacked in private app storage.
         targetSdk 28
-        versionCode 402
-        versionName '4.0.2'
+        versionCode 403
+        versionName '4.0.3'
         testInstrumentationRunner "kr.compile.LanguageBuildInstrumentation"
     }
     signingConfigs {

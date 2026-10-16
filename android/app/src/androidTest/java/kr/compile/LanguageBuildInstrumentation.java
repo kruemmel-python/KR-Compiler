@@ -121,6 +121,8 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
             jobs.add(new TestJob("kr-fusion-gui", LanguageProjectManager.KrTemplate.KR_FUSION_GUI));
         } else if (mode.equals("KR_FUSION_CONSOLE")) {
             jobs.add(new TestJob("kr-fusion-console", LanguageProjectManager.KrTemplate.KR_FUSION_CONSOLE));
+        } else if (mode.equals("KR_MODULAR") || mode.equals("KR_FORGE")) {
+            jobs.add(new TestJob("kr-forge-modular", LanguageProjectManager.KrTemplate.KR_MODULAR));
         } else if (mode.equals("KR_CONSOLE")) {
             jobs.add(new TestJob("kr-console", LanguageProjectManager.KrTemplate.KR_CONSOLE));
         } else if (mode.equals("KR_GUI")) {
@@ -140,6 +142,7 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
             }
             jobs.add(new TestJob("kr-fusion-console", LanguageProjectManager.KrTemplate.KR_FUSION_CONSOLE));
             jobs.add(new TestJob("kr-fusion-gui", LanguageProjectManager.KrTemplate.KR_FUSION_GUI));
+            jobs.add(new TestJob("kr-forge-modular", LanguageProjectManager.KrTemplate.KR_MODULAR));
         }
 
         int successCount = 0;

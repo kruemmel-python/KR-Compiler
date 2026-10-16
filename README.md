@@ -4,12 +4,12 @@ KR Compiler Android IDE ist eine autarke, native mobile Entwicklungsumgebung fü
 
 ---
 
-## Version 4.0.2 herunterladen
+## Version 4.0.3 herunterladen
 
-Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Dokumentation und die geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.2](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.2).
+Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Dokumentation und die geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.3](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.3).
 
-- **Release-APK**: `KR-Compiler-Android-IDE-v4.0.2.apk`
-- **SHA-256**: `B22B6035425CCA7F1539B507E99F66673E2E0B9610E90371256B33D28A25DE51`
+- **Release-APK**: `KR-Compiler-Android-IDE-v4.0.3.apk`
+- **SHA-256**: `76A24510689776B77D64B7B0EFDB2B4E68B824295A38AE2EEA5A4B2607B0E917`
 
 ### Systemvoraussetzungen
 - Android 8.0 oder neuer (API 26+)
@@ -18,7 +18,19 @@ Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Doku
 
 ---
 
-## Neu in Version 4.0.2
+## Neu in Version 4.0.3: Modulare Großprojekte (`*.krproject`)
+
+Version 4.0.3 führt vollständigen Support für hierarchische Multi-File KR-Projekte ein:
+- **Modulare Projektarchitektur (`*.krproject`)**: Deklarative Konfiguration von Metadaten (`[project]`), rekursiven Modulverzeichnissen (`[modules]`), Drittpaketen (`[dependencies]`) und Compiler-Optimierungen (`[build]`).
+- **Hierarchische Enterprise-Strukturen (`KR_FORGE`)**: Volle Unterstützung für Enterprise-Strukturen am Referenzmodell `KR_FORGE` (`app/`, `gui/`, `research/`, `compute/`, `orchestration/`, `storage/`, `contracts/`, `tests/` und `docs/`).
+- **Modulare C++ Translation Units & zentraler ABI-Header**: Automatisches Aufteilen modularer C++-Inhalte in `modules/*.cpp`, Generierung von `kr_bridge.h` und modulübergreifende Bündelung von Rust (`kr_rust/src/lib.rs`) und Go (`kr_go/main.go`).
+- **Lückenloser Cross-File & Cross-Language FFI**: Funktionen rufen einander über Modul- und Sprachgrenzen ($C++ \leftrightarrow Rust \leftrightarrow Go$) direkt auf, ohne manuelle Header-Inkludierungen.
+- **Integriertes vcpkg-Manifest**: Automatische Erzeugung und Verwaltung von `vcpkg.json` für Drittbibliotheken (`opencl`, `sqlite3`, `nlohmann-json`).
+- **Physisch verifiziert auf Samsung Galaxy Tab S6 Lite (SM-P615)**: 3/3 Builds erfolgreich für Android ARM64 (`.apk`), Windows x64 (`.exe`) und Linux x64 (`.elf`).
+
+---
+
+## Neu in Version 4.0.2: Universelle C/C++ & CMake Kompatibilität
 
 Version 4.0.2 ist das universelle C/C++- und CMake-Sysroot-Kompatibilitäts-Release:
 - **100 % Erfolgsquote an 18 realen C/C++ Repositories (54/54 Builds)**: Vollständige native Kompilierung aller getesteten Praxis-Repositories (`MDraft`, `Tatarus-6`, `mycelia_Craft`, `Algorithmic-Genesis`, `LyricsStudio`, etc.) für Android ARM64, Windows x64 und Linux x64 ohne Code-Anpassungen im Zielprojekt.

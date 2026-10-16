@@ -5,6 +5,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,22 +33,32 @@ public final class KrCodeGenerator {
         public final boolean hasRust;
         public final boolean hasGo;
         public final File cppSource;
+        public final List<File> cppSources = new ArrayList<>();
         public final File rustDir;
         public final File goDir;
         public final File bridgeHeader;
+        public final Set<String> vcpkgDependencies = new LinkedHashSet<>();
 
-        Result(boolean hasCpp, boolean hasRust, boolean hasGo, File cppSource, File rustDir, File goDir, File bridgeHeader) {
+        Result(boolean hasCpp, boolean hasRust, boolean hasGo, File cppSource, List<File> cppSources,
+               File rustDir, File goDir, File bridgeHeader, Set<String> vcpkgDependencies) {
             this.hasCpp = hasCpp;
             this.hasRust = hasRust;
             this.hasGo = hasGo;
             this.cppSource = cppSource;
+            if (cppSources != null) this.cppSources.addAll(cppSources);
+            else if (cppSource != null) this.cppSources.add(cppSource);
             this.rustDir = rustDir;
             this.goDir = goDir;
             this.bridgeHeader = bridgeHeader;
+            if (vcpkgDependencies != null) this.vcpkgDependencies.addAll(vcpkgDependencies);
         }
     }
 
     public Result generate() throws IOException {
+        return generate(Collections.emptySet());
+    }
+
+    public Result generate(Set<String> projectDependencies) throws IOException {
         boolean hasCpp = false;
         boolean hasRust = false;
         boolean hasGo = false;
@@ -66,11 +77,12 @@ public final class KrCodeGenerator {
         File bridgeHeader = new File(buildDir, "kr_bridge.h");
         generateBridgeHeader(bridgeHeader);
 
-        // 2. Generate C++ source if C++ is used or if entry point wrapper needed
+        // 2. Generate C++ sources (modular + fallback main)
         File cppSource = null;
+        List<File> cppSources = new ArrayList<>();
         if (hasCpp || (hasRust && hasGo)) {
             cppSource = new File(buildDir, "kr_cpp.cpp");
-            generateCppSource(cppSource, hasCpp);
+            cppSources = generateCppSources(cppSource, hasCpp);
         }
 
         // 3. Generate Rust crate if Rust is used
@@ -87,7 +99,7 @@ public final class KrCodeGenerator {
             generateGoModule(goDir);
         }
 
-        return new Result(hasCpp, hasRust, hasGo, cppSource, rustDir, goDir, bridgeHeader);
+        return new Result(hasCpp, hasRust, hasGo, cppSource, cppSources, rustDir, goDir, bridgeHeader, projectDependencies);
     }
 
     private void generateBridgeHeader(File destination) throws IOException {
@@ -116,7 +128,8 @@ public final class KrCodeGenerator {
         writeText(destination, sb.toString());
     }
 
-    private void generateCppSource(File destination, boolean hasCppSegments) throws IOException {
+    private List<File> generateCppSources(File destination, boolean hasCppSegments) throws IOException {
+        List<File> generated = new ArrayList<>();
         StringBuilder sb = new StringBuilder();
         sb.append("// Automatisch generierte C++20-Quelle für KR Unified Language\n");
         sb.append("#include \"kr_bridge.h\"\n");
@@ -153,6 +166,35 @@ public final class KrCodeGenerator {
         }
 
         writeText(destination, sb.toString());
+        generated.add(destination);
+
+        // Also generate individual modular C++ files in a "modules" folder if multiple .kr files exist
+        Map<String, List<KrSegment>> fileMap = new java.util.LinkedHashMap<>();
+        for (KrSegment seg : segments) {
+            if (seg.language == KrLanguage.CPP) {
+                fileMap.computeIfAbsent(seg.file, k -> new ArrayList<>()).add(seg);
+            }
+        }
+
+        if (fileMap.size() > 1) {
+            File modulesDir = new File(buildDir, "modules");
+            if (!modulesDir.isDirectory()) modulesDir.mkdirs();
+            for (Map.Entry<String, List<KrSegment>> entry : fileMap.entrySet()) {
+                String safeName = entry.getKey().replace('\\', '_').replace('/', '_');
+                if (safeName.endsWith(".kr")) safeName = safeName.substring(0, safeName.length() - 3);
+                File modFile = new File(modulesDir, safeName + ".cpp");
+                StringBuilder mb = new StringBuilder();
+                mb.append("// Automatisch generiertes C++20-Modul aus ").append(entry.getKey()).append("\n");
+                mb.append("#include \"../kr_bridge.h\"\n");
+                mb.append("#include <iostream>\n#include <string>\n\n");
+                for (KrSegment s : entry.getValue()) {
+                    mb.append(s.source).append("\n");
+                }
+                writeText(modFile, mb.toString());
+            }
+        }
+
+        return generated;
     }
 
     private void generateRustCrate(File crateDir) throws IOException {

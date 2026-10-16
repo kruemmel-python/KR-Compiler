@@ -16,7 +16,8 @@ final class LanguageProjectManager {
         KR_CONSOLE("KR Konsole", false),
         KR_GUI("KR GUI mit SDL3", true),
         KR_FUSION_CONSOLE("KR Sprachfusion – C++ / Rust / Go", false),
-        KR_FUSION_GUI("KR Sprachfusion – GUI", true);
+        KR_FUSION_GUI("KR Sprachfusion – GUI", true),
+        KR_MODULAR("KR Modulares Projekt (.krproject)", true);
 
         final String displayName;
         final boolean isGui;
@@ -69,6 +70,10 @@ final class LanguageProjectManager {
     }
 
     private static void createKr(File project, String name, KrTemplate template) throws IOException {
+        if (template == KrTemplate.KR_MODULAR) {
+            createModularKrProject(project, name);
+            return;
+        }
         String code;
         switch (template) {
             case KR_CONSOLE:
@@ -86,6 +91,166 @@ final class LanguageProjectManager {
                 break;
         }
         write(new File(project, "main.kr"), code);
+    }
+
+    public static void createModularKrProject(File project, String name) throws IOException {
+        String safeName = sanitize(name);
+
+        // 1. Root configuration: forge.krproject
+        StringBuilder proj = new StringBuilder();
+        proj.append("[project]\n");
+        proj.append("name = \"").append(name).append("\"\n");
+        proj.append("version = \"0.1.0\"\n");
+        proj.append("entry = \"main.kr\"\n");
+        proj.append("target_type = \"gui\"\n\n");
+        proj.append("[modules]\n");
+        proj.append("paths = [\"app\", \"gui\", \"research\", \"compute\", \"orchestration\", \"storage\"]\n\n");
+        proj.append("[dependencies]\n");
+        proj.append("vcpkg = [\"sdl3\"]\n\n");
+        proj.append("[build]\n");
+        proj.append("cpp_standard = \"c++20\"\n");
+        proj.append("rust_edition = \"2024\"\n");
+        proj.append("go_version = \"1.24\"\n");
+        write(new File(project, safeName + ".krproject"), proj.toString());
+
+        // 2. Root main.kr
+        StringBuilder mainKr = new StringBuilder();
+        mainKr.append("// Haupteinstiegspunkt für modulares KR-Projekt: ").append(name).append("\n");
+        mainKr.append("#include <iostream>\n\n");
+        mainKr.append("extern \"C\" {\n");
+        mainKr.append("    int app_application_run();\n");
+        mainKr.append("}\n\n");
+        mainKr.append("int main(int argc, char** argv) {\n");
+        mainKr.append("    (void)argc; (void)argv;\n");
+        mainKr.append("    std::cout << \"[KR_FORGE] Initialisiere universelle Systemarchitektur...\" << std::endl;\n");
+        mainKr.append("    return app_application_run();\n");
+        mainKr.append("}\n");
+        write(new File(project, "main.kr"), mainKr.toString());
+
+        // 3. app/
+        File appDir = new File(project, "app");
+        write(new File(appDir, "application.kr"),
+                "// app/application.kr - Zentrale Orchestrierung\n#include <iostream>\n\n"
+                + "extern \"C\" {\n"
+                + "    int compute_cpu_executor_init();\n"
+                + "    int orchestration_job_scheduler_start();\n"
+                + "    int storage_database_init();\n"
+                + "    int gui_window_system_launch();\n"
+                + "}\n\n"
+                + "extern \"C\" int app_application_run() {\n"
+                + "    std::cout << \"[App] Starte KR_FORGE Engine...\" << std::endl;\n"
+                + "    storage_database_init();\n"
+                + "    compute_cpu_executor_init();\n"
+                + "    orchestration_job_scheduler_start();\n"
+                + "    return gui_window_system_launch();\n"
+                + "}\n");
+        write(new File(appDir, "lifecycle.kr"),
+                "// app/lifecycle.kr\n#include <iostream>\n\nextern \"C\" void app_lifecycle_shutdown() {\n    std::cout << \"[Lifecycle] Graceful shutdown.\" << std::endl;\n}\n");
+        write(new File(appDir, "configuration.kr"),
+                "// app/configuration.kr\n#include <iostream>\n\nextern \"C\" int app_config_load() { return 1; }\n");
+
+        // 4. gui/
+        File guiDir = new File(project, "gui");
+        write(new File(guiDir, "window_system.kr"),
+                "// gui/window_system.kr - SDL3 Windowing & Rendering\n#include <SDL3/SDL.h>\n#include <iostream>\n\n"
+                + "extern \"C\" int gui_window_system_launch() {\n"
+                + "    if (!SDL_Init(SDL_INIT_VIDEO)) {\n"
+                + "        std::cout << \"[GUI] SDL_Init fehlgeschlagen: \" << SDL_GetError() << std::endl;\n"
+                + "        return 1;\n"
+                + "    }\n"
+                + "    SDL_Window* window = SDL_CreateWindow(\"KR FORGE – Modulares System\", 900, 560, 0);\n"
+                + "    SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);\n"
+                + "    if (!window || !renderer) { SDL_Quit(); return 2; }\n"
+                + "    std::cout << \"[GUI] Fenster und SDL3 Renderer erfolgreich initialisiert.\" << std::endl;\n"
+                + "    for (int i = 0; i < 3; ++i) {\n"
+                + "        SDL_SetRenderDrawColor(renderer, 24, 48, 80, 255);\n"
+                + "        SDL_RenderClear(renderer);\n"
+                + "        SDL_RenderPresent(renderer);\n"
+                + "        SDL_Delay(10);\n"
+                + "    }\n"
+                + "    SDL_DestroyRenderer(renderer);\n"
+                + "    SDL_DestroyWindow(window);\n"
+                + "    SDL_Quit();\n"
+                + "    std::cout << \"[GUI] Modulares GUI-System erfolgreich beendet.\" << std::endl;\n"
+                + "    return 0;\n"
+                + "}\n");
+        write(new File(guiDir, "widget_engine.kr"), "// gui/widget_engine.kr\nextern \"C\" int gui_widget_count() { return 42; }\n");
+        write(new File(guiDir, "dock_manager.kr"), "// gui/dock_manager.kr\nextern \"C\" void gui_dock_init() {}\n");
+        write(new File(guiDir, "graph_renderer.kr"), "// gui/graph_renderer.kr\nextern \"C\" void gui_render_node() {}\n");
+        write(new File(guiDir, "formula_editor.kr"), "// gui/formula_editor.kr\nextern \"C\" void gui_editor_open() {}\n");
+        write(new File(guiDir, "discovery_view.kr"), "// gui/discovery_view.kr\nextern \"C\" void gui_discovery_update() {}\n");
+        write(new File(guiDir, "proof_view.kr"), "// gui/proof_view.kr\nextern \"C\" void gui_proof_render() {}\n");
+        write(new File(guiDir, "compute_view.kr"), "// gui/compute_view.kr\nextern \"C\" void gui_compute_status() {}\n");
+
+        // 5. research/
+        File resDir = new File(project, "research");
+        write(new File(resDir, "mathematical_ir.kr"), "// research/mathematical_ir.kr\nextern \"C\" int research_ir_version() { return 1; }\n");
+        write(new File(resDir, "algebra_engine.kr"), "// research/algebra_engine.kr\nextern \"C\" int research_algebra_simplify() { return 0; }\n");
+        write(new File(resDir, "structural_search.kr"), "// research/structural_search.kr\nextern \"C\" int research_search_patterns() { return 0; }\n");
+        write(new File(resDir, "equivalence_engine.kr"), "// research/equivalence_engine.kr\nextern \"C\" bool research_is_equivalent() { return true; }\n");
+        write(new File(resDir, "synthesis_engine.kr"), "// research/synthesis_engine.kr\nextern \"C\" void research_synthesize() {}\n");
+        write(new File(resDir, "verification_engine.kr"), "// research/verification_engine.kr\nextern \"C\" bool research_verify_proof() { return true; }\n");
+        write(new File(resDir, "strategy_evolution.kr"), "// research/strategy_evolution.kr\nextern \"C\" void research_evolve_step() {}\n");
+
+        // 6. compute/ (Integrierte Rust-Funktionen)
+        File compDir = new File(project, "compute");
+        write(new File(compDir, "cpu_executor.kr"),
+                "// compute/cpu_executor.kr - Geschrieben in Rust\n"
+                + "pub fn compute_cpu_executor_init() -> i32 {\n"
+                + "    println!(\"[Compute::CPU] Rust Tensor- & IR-Executor initialisiert.\");\n"
+                + "    0\n"
+                + "}\n\n"
+                + "pub fn compute_dot_product(a: f32, b: f32) -> f32 {\n"
+                + "    a * b\n"
+                + "}\n");
+        write(new File(compDir, "opencl_executor.kr"),
+                "// compute/opencl_executor.kr\n#include <iostream>\n\nextern \"C\" bool compute_opencl_available() {\n    std::cout << \"[Compute::OpenCL] Initialisiere GPU-Device.\" << std::endl;\n    return true;\n}\n");
+        write(new File(compDir, "code_generator.kr"), "// compute/code_generator.kr\nextern \"C\" void compute_emit_bytecode() {}\n");
+        write(new File(compDir, "benchmark_engine.kr"), "// compute/benchmark_engine.kr\nextern \"C\" double compute_bench_flops() { return 4.2e9; }\n");
+        write(new File(compDir, "memory_manager.kr"), "// compute/memory_manager.kr\nextern \"C\" size_t compute_vram_free() { return 1024 * 1024 * 512; }\n");
+
+        // 7. orchestration/ (Integrierte Go-Funktionen)
+        File orchDir = new File(project, "orchestration");
+        write(new File(orchDir, "job_scheduler.kr"),
+                "// orchestration/job_scheduler.kr - Geschrieben in Go\n"
+                + "package main\n\n"
+                + "import \"fmt\"\n\n"
+                + "func orchestration_job_scheduler_start() int32 {\n"
+                + "    fmt.Println(\"[Orchestration] Go Goroutine-Job-Scheduler aktiv.\")\n"
+                + "    return 0\n"
+                + "}\n");
+        write(new File(orchDir, "experiment_manager.kr"), "// orchestration/experiment_manager.kr\nfunc orchestration_exp_count() int32 { return 10 }\n");
+        write(new File(orchDir, "worker_runtime.kr"), "// orchestration/worker_runtime.kr\nfunc orchestration_worker_active() bool { return true }\n");
+        write(new File(orchDir, "event_dispatch.kr"), "// orchestration/event_dispatch.kr\nfunc orchestration_emit_event() int32 { return 1 }\n");
+
+        // 8. storage/
+        File storDir = new File(project, "storage");
+        write(new File(storDir, "database.kr"),
+                "// storage/database.kr\n#include <iostream>\n\nextern \"C\" int storage_database_init() {\n    std::cout << \"[Storage] Initialisiere lokale Daten- & Snapshot-Engine.\" << std::endl;\n    return 0;\n}\n");
+        write(new File(storDir, "artifact_store.kr"), "// storage/artifact_store.kr\nextern \"C\" void storage_put_artifact() {}\n");
+        write(new File(storDir, "provenance.kr"), "// storage/provenance.kr\nextern \"C\" void storage_record_provenance() {}\n");
+        write(new File(storDir, "snapshots.kr"), "// storage/snapshots.kr\nextern \"C\" void storage_create_snapshot() {}\n");
+
+        // 9. contracts/
+        File contrDir = new File(project, "contracts");
+        write(new File(contrDir, "abi_contract.md"), "# ABI Contract\nStandardisiertes C-ABI fuer KR Sprachfusion.\n");
+        write(new File(contrDir, "data_schema.md"), "# Data Schema\nSpeicher- und Nachrichtenschemata.\n");
+        write(new File(contrDir, "status_codes.md"), "# Status Codes\n0: OK, 1: Error.\n");
+
+        // 10. tests/
+        File testsDir = new File(project, "tests");
+        new File(testsDir, "cross_language").mkdirs();
+        new File(testsDir, "mathematics").mkdirs();
+        new File(testsDir, "verification").mkdirs();
+        new File(testsDir, "benchmarks").mkdirs();
+        new File(testsDir, "integration").mkdirs();
+
+        // 11. docs/
+        File docsDir = new File(project, "docs");
+        write(new File(docsDir, "ARCHITECTURE.md"), "# Architecture\nUmfassende modulare Architektur von KR_FORGE.\n");
+        write(new File(docsDir, "RESEARCH_METHOD.md"), "# Research Method\nForschungsmethoden und mathematische Verifikation.\n");
+        write(new File(docsDir, "GUI_SPECIFICATION.md"), "# GUI Specification\nSpezifikation des SDL3 / Dear ImGui Windowing-Systems.\n");
+        write(new File(docsDir, "MATHEMATICAL_PROVENANCE.md"), "# Mathematical Provenance\nMathematische Herleitung und Nachweise.\n");
     }
 
     private static void createRust(File project, String name, boolean gui) throws IOException {

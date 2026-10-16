@@ -1008,8 +1008,10 @@ final class CompilerEngine {
         if (pipeline.languagesUsed.size() == 1 && !gui) {
             if (pipeline.languagesUsed.contains(KrLanguage.CPP)) {
                 log.line("Reines C++ in .kr; direkter Compilerpfad wird verwendet.");
-                return target == Target.ANDROID ? buildAndroid(Collections.singletonList(pipeline.codeResult.cppSource))
-                        : buildDesktop(Collections.singletonList(pipeline.codeResult.cppSource));
+                List<File> cppSrcs = (pipeline.codeResult.cppSources != null && !pipeline.codeResult.cppSources.isEmpty())
+                        ? pipeline.codeResult.cppSources
+                        : Collections.singletonList(pipeline.codeResult.cppSource);
+                return target == Target.ANDROID ? buildAndroid(cppSrcs) : buildDesktop(cppSrcs);
             } else if (pipeline.languagesUsed.contains(KrLanguage.RUST)) {
                 log.line("Reines Rust in .kr; Cargo und rustc werden verwendet.");
                 File archive = compileRustModule(pipeline.codeResult.rustDir);
@@ -1031,7 +1033,7 @@ final class CompilerEngine {
             goArchive = compileGoModule(pipeline.codeResult.goDir);
         }
 
-        return linkKrUnified(pipeline.codeResult.cppSource, rustArchive, goArchive, gui);
+        return linkKrUnified(pipeline.codeResult.cppSource, pipeline.codeResult.cppSources, rustArchive, goArchive, gui, pipeline.codeResult.vcpkgDependencies);
     }
 
     private File compileRustModule(File moduleDir) throws Exception {
@@ -1126,7 +1128,7 @@ final class CompilerEngine {
         return linkLanguageArchive(archive, gui, "Go");
     }
 
-    private File linkKrUnified(File cppSource, File rustArchive, File goArchive, boolean gui) throws Exception {
+    private File linkKrUnified(File cppSource, List<File> cppSources, File rustArchive, File goArchive, boolean gui, Set<String> vcpkgDependencies) throws Exception {
         File finalizer = new File(project.getParentFile(), "kr-unified-finalizer");
         if (!finalizer.isDirectory() && !finalizer.mkdirs()) throw new IOException("KR-Linkordner kann nicht erstellt werden.");
 
@@ -1146,7 +1148,14 @@ final class CompilerEngine {
                     command.add("-I" + inc.getPath());
                 }
             }
-            if (cppSource != null && cppSource.isFile()) {
+            if (cppSources != null && !cppSources.isEmpty()) {
+                for (File src : cppSources) {
+                    if (src.isFile()) {
+                        command.add("-I" + src.getParentFile().getPath());
+                        command.add(src.getPath());
+                    }
+                }
+            } else if (cppSource != null && cppSource.isFile()) {
                 command.add("-I" + cppSource.getParentFile().getPath());
                 command.add(cppSource.getPath());
             } else {
@@ -1195,16 +1204,25 @@ final class CompilerEngine {
         }
         if (gui) cmake.append("find_package(SDL3 CONFIG REQUIRED)\n");
 
-        File entrySource;
-        if (cppSource != null && cppSource.isFile()) {
-            entrySource = cppSource;
+        List<File> compileSources = new ArrayList<>();
+        if (cppSources != null && !cppSources.isEmpty()) {
+            compileSources.addAll(cppSources);
+        } else if (cppSource != null && cppSource.isFile()) {
+            compileSources.add(cppSource);
         } else {
-            entrySource = new File(finalizer, "kr_entry.cpp");
+            File entrySource = new File(finalizer, "kr_entry.cpp");
             writeText(entrySource, "extern \"C\" int KrLanguageMain(void);\nint main(int argc, char** argv) { (void)argc; (void)argv; return KrLanguageMain(); }\n");
+            compileSources.add(entrySource);
         }
 
-        cmake.append("add_executable(kr_program \"").append(cmakeEscape(entrySource.getPath())).append("\")\n");
-        cmake.append("target_include_directories(kr_program PRIVATE \"").append(cmakeEscape(entrySource.getParentFile().getPath())).append("\")\n");
+        cmake.append("add_executable(kr_program");
+        for (File s : compileSources) {
+            cmake.append(" \"").append(cmakeEscape(s.getPath())).append("\"");
+        }
+        cmake.append(")\n");
+        for (File s : compileSources) {
+            cmake.append("target_include_directories(kr_program PRIVATE \"").append(cmakeEscape(s.getParentFile().getPath())).append("\")\n");
+        }
         cmake.append("set_target_properties(kr_program PROPERTIES LINKER_LANGUAGE CXX)\n");
         cmake.append("target_link_options(kr_program PRIVATE \"LINKER:--allow-multiple-definition\")\n");
         cmake.append("target_link_libraries(kr_program PRIVATE");
@@ -1220,9 +1238,22 @@ final class CompilerEngine {
         cmake.append(")\n");
 
         writeText(new File(finalizer, "CMakeLists.txt"), cmake.toString());
-        if (gui) {
-            writeText(new File(finalizer, "kr-gui-target.txt"), "sdl3\n");
-            writeText(new File(finalizer, "vcpkg.json"), "{\n  \"name\": \"kr-unified-gui\",\n  \"version-string\": \"1.0.0\",\n  \"dependencies\": [\"sdl3\"]\n}\n");
+        Set<String> allDeps = new LinkedHashSet<>();
+        if (gui) allDeps.add("sdl3");
+        if (vcpkgDependencies != null) allDeps.addAll(vcpkgDependencies);
+
+        if (!allDeps.isEmpty()) {
+            if (gui) writeText(new File(finalizer, "kr-gui-target.txt"), "sdl3\n");
+            StringBuilder vcpkgJson = new StringBuilder();
+            vcpkgJson.append("{\n  \"name\": \"kr-unified-project\",\n  \"version-string\": \"1.0.0\",\n  \"dependencies\": [");
+            int idx = 0;
+            for (String dep : allDeps) {
+                if (idx > 0) vcpkgJson.append(", ");
+                vcpkgJson.append("\"").append(dep).append("\"");
+                idx++;
+            }
+            vcpkgJson.append("]\n}\n");
+            writeText(new File(finalizer, "vcpkg.json"), vcpkgJson.toString());
         }
         log.line("KR Unified Programm wird mit der KR-Ziellaufzeit" + (gui ? " und SDL3" : "") + " gelinkt.");
         return buildCMake(finalizer, project);

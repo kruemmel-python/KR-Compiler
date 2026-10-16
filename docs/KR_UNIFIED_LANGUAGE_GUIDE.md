@@ -206,7 +206,7 @@ int main() {
 
 ---
 
-## 7. Zusammenfassung: Checkliste für den Entwickler
+## 7. Zusammenfassung: Checkliste für Einzeldatei-Projekte
 
 - [x] **Sprachwechsel**: Schreibe Code einfach in C++, Rust oder Go.
 - [x] **Dateiendung**: Speichere das Projekt als `main.kr`.
@@ -214,3 +214,255 @@ int main() {
 - [x] **Pointer**: Übergib Puffer als Rohzeiger (`const double*`, `len: usize`).
 - [x] **Einstiegspunkt**: Definiere genau ein `main()` (typischerweise in C++).
 - [x] **Build**: Klicke in der KR Compiler Android IDE auf **Kompilieren** – die IDE baut automatisch für deine Zielplattform (Android ARM64, Windows x64 oder Linux x64).
+
+---
+
+## 8. Modulare Großprojekte mit `*.krproject` & Multi-File KR-Architektur
+
+Für komplexe Enterprise-, Forschungs- und Simulationssysteme reicht eine einzelne Datei nicht aus. Die KR Compiler Android IDE unterstützt ab Version 4.0.3 **vollständige modulare Projektstrukturen** mit hierarchischen Unterverzeichnissen, automatischer Modulerkennung und projektweiter Cross-Language-Auflösung.
+
+```mermaid
+flowchart TD
+    subgraph ModularRoot ["Projektwurzel (z. B. KR_FORGE/)"]
+        PROJ["forge.krproject (TOML-Projektkonfiguration)"]
+        MAIN["main.kr (Einstiegspunkt & Koordination)"]
+    end
+
+    subgraph Submodules ["Modul-Verzeichnisse (*.kr)"]
+        APP["app/ (application.kr, lifecycle.kr)"]
+        GUI["gui/ (window_system.kr, widget_engine.kr)"]
+        RESEARCH["research/ (mathematical_ir.kr, algebra_engine.kr)"]
+        COMPUTE["compute/ (cpu_executor.kr, opencl_executor.kr)"]
+        ORCH["orchestration/ (job_scheduler.kr, worker_runtime.kr)"]
+        STORAGE["storage/ (database.kr, artifact_store.kr)"]
+    end
+
+    ModularRoot --> Pipeline["KR Modular Pipeline"]
+    Submodules --> Pipeline
+
+    Pipeline --> KrBridge["Zentraler ABI-Header: kr_bridge.h"]
+    Pipeline --> ModularCPP["Modulare C++ Translation Units (modules/*.cpp)"]
+    Pipeline --> AggRust["Rust Crate (kr_rust/src/lib.rs)"]
+    Pipeline --> AggGo["Go Module (kr_go/main.go)"]
+
+    ModularCPP --> Linker["KR Finalizer & Linker"]
+    AggRust --> Linker
+    AggGo --> Linker
+
+    Linker --> Artifacts["Android APK / Windows EXE / Linux ELF"]
+```
+
+---
+
+### 8.1 Die Projektkonfiguration (`*.krproject`)
+
+Ein modulares Projekt wird durch eine Konfigurationsdatei mit der Endung `.krproject` (z. B. `forge.krproject`) gesteuert. Die Syntax ist an TOML angelehnt und deklariert Metadaten, Scan-Pfade und Abhängigkeiten:
+
+```toml
+[project]
+name = "KR_FORGE"
+version = "1.0.0"
+entry = "main.kr"
+description = "KR_FORGE - Modular Mathematical Research and Algebraic Verification Platform"
+
+[modules]
+scan_directories = ["app", "gui", "research", "compute", "orchestration", "storage"]
+
+[dependencies]
+packages = ["opencl", "sqlite3", "nlohmann-json"]
+
+[build]
+cpp_standard = "c++20"
+optimization = "O3"
+```
+
+#### Bedeutung der Konfigurationssektionen:
+
+1. **`[project]`**:
+   - `name`: Eindeutiger Projektname.
+   - `version`: Semantische Versionierung des Projekts.
+   - `entry`: Relativer Pfad zur Haupteinstiegsdatei (standardmäßig `main.kr`).
+   - `description`: Beschreibung des Systems für die IDE und das Build-Log.
+
+2. **`[modules]`**:
+   - `scan_directories`: Liste von Ordnern relativ zur Projektwurzel, die rekursiv nach `.kr`-Dateien durchsucht werden.
+   - Jede gefundene `.kr`-Datei wird als Modul kompiliert und in den Namensraum eingebunden.
+
+3. **`[dependencies]`**:
+   - `packages`: Liste benötigter C/C++-Pakete (z. B. `opencl`, `sqlite3`, `nlohmann-json`).
+   - Der Compiler erzeugt daraus automatisch ein valides `vcpkg.json` für den Sysroot- und Paketmanager-Build.
+
+4. **`[build]`**:
+   - `cpp_standard`: Verwendeter C++-Standard (`c++17`, `c++20`, `c++23`).
+   - `optimization`: Compiler-Optimierungsstufe (`O0`, `O2`, `O3`, `Os`).
+
+---
+
+### 8.2 Kanonische Enterprise-Verzeichnisstruktur (`KR_FORGE`)
+
+Das folgende Referenzlayout demonstriert die empfohlene modulare Ordnerstruktur:
+
+```text
+KR_FORGE/
+│
+├── main.kr                          # Programmeinstieg & Modulorchestrierung
+├── forge.krproject                  # Projekt- und Abhängigkeitskonfiguration
+│
+├── app/
+│   ├── application.kr               # Anwendungsinitialisierung & Event-Schleife (C++)
+│   ├── lifecycle.kr                 # Zustandsübergänge & Ressourcenverwaltung
+│   └── configuration.kr             # Laufzeitkonfiguration & CLI-Parameter
+│
+├── gui/
+│   ├── window_system.kr             # SDL3-Fensterverwaltung & High-DPI-Skalierung
+│   ├── widget_engine.kr             # UI-Komponenten, Buttons, Textfelder
+│   ├── dock_manager.kr              # Andockbare Panels & Layout-Persistenz
+│   ├── graph_renderer.kr            # Hardwarebeschleunigtes Rendering mathematischer Graphen
+│   ├── formula_editor.kr            # Formeleingabe & LaTeX/Unicode-Editor
+│   ├── discovery_view.kr            # Interaktive Ansicht für mathematische Hypothesen
+│   ├── proof_view.kr                # Formaler Beweisbaum & Schrittvalidierung
+│   └── compute_view.kr              # Performance-Graphen & Hardware-Auslastung
+│
+├── research/
+│   ├── mathematical_ir.kr           # Intermediäre Repräsentation algebraischer Ausdrücke
+│   ├── algebra_engine.kr            # Symbolische Termersetzung & Vereinfachung (Rust)
+│   ├── structural_search.kr         # Mustererkennung in Ausdrucksbäumen
+│   ├── equivalence_engine.kr        # Beweis formaler Äquivalenz
+│   ├── synthesis_engine.kr          # Heuristische Synthese optimaler Formeln
+│   ├── verification_engine.kr       # Formale Verifikation gegen Axiomensysteme
+│   └── strategy_evolution.kr        # Evolutionäre Suchstrategien & Optimierung
+│
+├── compute/
+│   ├── cpu_executor.kr              # Multithreaded SIMD/AVX/NEON CPU-Rechenkern (C++)
+│   ├── opencl_executor.kr           # OpenCL-Kernel-Dispatch & GPU-Pipeline
+│   ├── code_generator.kr            # JIT-/AOT-Kompilierung validierter Formeln
+│   ├── benchmark_engine.kr          # Nanosekunden-genaue Zeitmessung & FLOPS-Zähler
+│   └── memory_manager.kr            # Cache-lokale Puffer- und Tensorallokation
+│
+├── orchestration/
+│   ├── job_scheduler.kr             # Asynchrone Task-Warteschlange (Go)
+│   ├── experiment_manager.kr        # Verwaltung von Parameterstudien & Läufen
+│   ├── worker_runtime.kr            # Hintergrund-Threads & Worker-Pools
+│   └── event_dispatch.kr            # Ereignisbus für Subsystem-Kommunikation
+│
+├── storage/
+│   ├── database.kr                  # SQLite-Speicherung von Entdeckungen & Metadaten
+│   ├── artifact_store.kr            # Speicherung kompilierter Binär- & Beweisartefakte
+│   ├── provenance.kr                # Mathematische Herkunft & Versionshistorie
+│   └── snapshots.kr                 # Sicherungspunkte & Wiederherstellung
+│
+├── contracts/
+│   ├── abi_contract.md              # Spezifikation der sprachübergreifenden ABI
+│   ├── data_schema.md               # Datenformate für Beweise und Graphen
+│   └── status_codes.md              # Einheitliche Rückgabecodes aller Schichten
+│
+├── tests/
+│   ├── cross_language/              # E2E-Tests über Sprach- und Modulgrenzen
+│   ├── mathematics/                 # Unit-Tests für algebraische Korrektheit
+│   ├── verification/                # Verifikationstests gegen mathematische Theoreme
+│   ├── benchmarks/                  # FLOPS- und Latenzbenchmarks
+│   └── integration/                 # Gesamtsystemtests
+│
+└── docs/
+    ├── ARCHITECTURE.md              # Schichtenarchitektur & Datenfluss
+    ├── RESEARCH_METHOD.md           # Wissenschaftliche Methodik & Heuristiken
+    ├── GUI_SPECIFICATION.md         # UI- und Interaktionsrichtlinien
+    └── MATHEMATICAL_PROVENANCE.md   # Nachvollziehbarkeitsmodell für Beweise
+```
+
+---
+
+### 8.3 Cross-File & Cross-Language Modulaufrufe
+
+In modularen `.kr`-Projekten können Funktionen **über Dateigrenzen hinweg** aufgerufen werden, ohne dass manuelle Header-Inkludierungen (`#include`) oder FFI-Importe erforderlich sind.
+
+#### Beispiel: Aufrufbeziehung im KR_FORGE-System
+
+1. **`research/algebra_engine.kr` (Rust-Segment)**:
+```rust
+pub fn forge_algebra_reduce(a: i64, b: i64) -> i64 {
+    if b == 0 {
+        a
+    } else {
+        forge_algebra_reduce(b, a % b)
+    }
+}
+```
+
+2. **`orchestration/job_scheduler.kr` (Go-Segment)**:
+```go
+func forge_orchestrate_task(taskId int32, workload int64) bool {
+    println("Go Scheduler: Starte Task #", taskId, "mit Workload:", workload)
+    return workload > 0
+}
+```
+
+3. **`app/application.kr` (C++-Segment)**:
+```cpp
+#include <iostream>
+#include <cstdint>
+
+void forge_app_init() {
+    std::cout << "[KR_FORGE] Initialisiere Core-Subsysteme..." << std::endl;
+
+    // Ruft die Go-Funktion aus orchestration/job_scheduler.kr auf:
+    bool taskOk = forge_orchestrate_task(101, 42000);
+
+    // Ruft die Rust-Funktion aus research/algebra_engine.kr auf:
+    int64_t gcd = forge_algebra_reduce(48, 18);
+
+    std::cout << "[KR_FORGE] Subsystem-Status: Task=" << (taskOk ? "OK" : "ERR")
+              << ", GCD(48, 18)=" << gcd << std::endl;
+}
+```
+
+4. **`main.kr` (Haupteinstieg)**:
+```cpp
+#include <iostream>
+
+void forge_app_init(); // Deklaration optional, Compiler bindet Module automatisch
+
+int main() {
+    std::cout << "=== Start von KR_FORGE ===" << std::endl;
+    forge_app_init();
+    std::cout << "=== KR_FORGE erfolgreich beendet ===" << std::endl;
+    return 0;
+}
+```
+
+---
+
+### 8.4 Wie der KR-Compiler modulare Projekte verarbeitet
+
+Wenn ein modulares Projekt mit `.krproject` kompiliert wird, führt die Compiler-Engine folgende Schritte automatisiert durch:
+
+1. **Projekt-Erkennung**:
+   - Erkennt das Vorhandensein von `*.krproject` im gewählten Projektordner.
+   - Parst die deklarierten Scan-Verzeichnisse (`[modules]`).
+
+2. **Relativer Modul-Scan**:
+   - Findet alle `.kr`-Dateien in den Scan-Verzeichnissen.
+   - Behält relative Pfade bei (z. B. `app/application.kr`, `gui/window_system.kr`), um Namenskollisionen zu verhindern.
+
+3. **Inkrementelle Source-Generierung**:
+   - **`kr_bridge.h`**: Zentraler ABI-Header mit allen Funktionsprototypen aus allen Modulen.
+   - **`modules/*.cpp`**: Jede modulare `.kr`-Datei mit C++-Inhalten erhält ihre eigene Translation Unit (z. B. `modules/app_application_kr.cpp`).
+   - **`kr_rust/src/lib.rs`**: Sammelt alle Rust-Funktionen modulübergreifend in einem zusammenhängenden Crate.
+   - **`kr_go/main.go`**: Sammelt alle Go-Routinen modulübergreifend in einem Cgo-kompatiblen Package.
+
+4. **Kompilierung & Linking**:
+   - Clang++ kompiliert alle modularen C++-Dateien parallel (`-c modules/*.cpp -o modules/*.o`).
+   - Cargo/Rustc baut die Rust-Komponenten als statische Bibliothek `libkr_rust.a`.
+   - Go baut die Go-Komponenten via `cgo` als Archiv `libkr_go.a`.
+   - Der LLD-Linker verlinkt alle C++-Objekte, die Rust- und Go-Bibliotheken sowie die Systembibliotheken zum Zielprodukt (**Android APK**, **Windows EXE** oder **Linux ELF**).
+
+---
+
+### 8.5 Checkliste für modulare Großprojekte
+
+- [x] **Projektdatei anlegen**: Platziere eine `*.krproject`-Datei im Wurzelverzeichnis.
+- [x] **Scan-Verzeichnisse angeben**: Trage alle Modulordner in `[modules] scan_directories` ein.
+- [x] **Einstiegspunkt festlegen**: Bestimme die Datei mit `main()` (z. B. `main.kr`).
+- [x] **Eindeutige Funktionsnamen**: Verwende aussagekräftige Präfixe für exportierte Funktionen (`modul_sprache_name`).
+- [x] **Abhängigkeiten deklarieren**: Nutze `[dependencies] packages = [...]` für externe C/C++-Bibliotheken via vcpkg.
+- [x] **Kompilieren**: Wähle in der IDE das Zielsystem (Android ARM64, Windows x64, Linux x64) und starte den Build.
