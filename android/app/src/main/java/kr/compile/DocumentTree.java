@@ -36,7 +36,9 @@ final class DocumentTree {
             if (c == null) throw new IOException("Projektordner ist nicht lesbar.");
             while (c.moveToNext()) {
                 String childId = c.getString(0), name = safeName(c.getString(1)), mime = c.getString(2);
-                if (name.equals("KR_BUILD")) continue;
+                if (name.equals("KR_BUILD") || name.equals(".git") || name.equals(".gradle") || name.equals(".idea")
+                        || name.equals("build") || name.equals("build_vs") || name.equals("node_modules")
+                        || name.startsWith("cmake-build-")) continue;
                 Uri child = DocumentsContract.buildDocumentUriUsingTree(tree, childId);
                 File target = new File(out, name);
                 if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) copyDirectoryFromProvider(context, tree, child, target);

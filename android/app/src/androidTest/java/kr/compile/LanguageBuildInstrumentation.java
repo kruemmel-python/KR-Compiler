@@ -16,10 +16,12 @@ import java.io.OutputStream;
 public final class LanguageBuildInstrumentation extends Instrumentation {
     private String onlyLanguage;
     private String onlyTarget;
+    private String onlyRepo;
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
         onlyLanguage = arguments == null ? null : arguments.getString("language");
         onlyTarget = arguments == null ? null : arguments.getString("target");
+        onlyRepo = arguments == null ? null : arguments.getString("repo");
         start();
     }
 
@@ -42,6 +44,7 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
         final LanguageProjectManager.KrTemplate krTemplate;
         final String customKrCode;
         final LanguageProjectManager.Language legacyLanguage;
+        final String externalRepoName;
 
         TestJob(String name, LanguageProjectManager.KrTemplate template) {
             this.name = name;
@@ -49,6 +52,7 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
             this.krTemplate = template;
             this.customKrCode = null;
             this.legacyLanguage = null;
+            this.externalRepoName = null;
         }
 
         TestJob(String name, boolean isGui, String customKrCode) {
@@ -57,6 +61,7 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
             this.krTemplate = null;
             this.customKrCode = customKrCode;
             this.legacyLanguage = null;
+            this.externalRepoName = null;
         }
 
         TestJob(String name, boolean isGui, LanguageProjectManager.Language legacyLanguage) {
@@ -65,6 +70,7 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
             this.krTemplate = null;
             this.customKrCode = null;
             this.legacyLanguage = legacyLanguage;
+            this.externalRepoName = null;
         }
         TestJob(String name) {
             this.name = name;
@@ -72,13 +78,22 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
             this.krTemplate = null;
             this.customKrCode = null;
             this.legacyLanguage = null;
+            this.externalRepoName = null;
+        }
+        TestJob(String name, String externalRepoName) {
+            this.name = name;
+            this.isGui = false;
+            this.krTemplate = null;
+            this.customKrCode = null;
+            this.legacyLanguage = null;
+            this.externalRepoName = externalRepoName;
         }
     }
 
     private int buildAll() throws Exception {
         Context context = getTargetContext();
         File resultRoot = new File(context.getExternalFilesDir(null), "language-build-tests");
-        if (onlyLanguage == null && onlyTarget == null) {
+        if (onlyLanguage == null && onlyTarget == null && onlyRepo == null) {
             delete(resultRoot);
         }
         if (!resultRoot.isDirectory() && !resultRoot.mkdirs()) throw new IOException("Ergebnisordner kann nicht erstellt werden.");
@@ -86,16 +101,23 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
         java.util.List<TestJob> jobs = new java.util.ArrayList<>();
         String mode = onlyLanguage == null ? "KR" : onlyLanguage.toUpperCase(java.util.Locale.ROOT);
 
-        if (mode.equals("RUST") || mode.equals("ALL_LEGACY")) {
+        if (onlyRepo != null && !onlyRepo.trim().isEmpty()) {
+            for (String r : onlyRepo.split(",")) {
+                String trimmed = r.trim();
+                if (!trimmed.isEmpty()) jobs.add(new TestJob(trimmed, trimmed));
+            }
+        } else if (mode.equals("RUST") || mode.equals("ALL_LEGACY")) {
             jobs.add(new TestJob("rust-console", false, LanguageProjectManager.Language.RUST));
             jobs.add(new TestJob("rust-gui", true, LanguageProjectManager.Language.RUST));
         }
-        if (mode.equals("GO") || mode.equals("ALL_LEGACY")) {
+        if (onlyRepo == null && (mode.equals("GO") || mode.equals("ALL_LEGACY"))) {
             jobs.add(new TestJob("go-console", false, LanguageProjectManager.Language.GO));
             jobs.add(new TestJob("go-gui", true, LanguageProjectManager.Language.GO));
         }
 
-        if (mode.equals("KR_FUSION_GUI")) {
+        if (onlyRepo != null && !onlyRepo.trim().isEmpty()) {
+            // handled above
+        } else if (mode.equals("KR_FUSION_GUI")) {
             jobs.add(new TestJob("kr-fusion-gui", LanguageProjectManager.KrTemplate.KR_FUSION_GUI));
         } else if (mode.equals("KR_FUSION_CONSOLE")) {
             jobs.add(new TestJob("kr-fusion-console", LanguageProjectManager.KrTemplate.KR_FUSION_CONSOLE));
@@ -121,13 +143,20 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
         }
 
         int successCount = 0;
+        java.util.List<String> failures = new java.util.ArrayList<>();
         for (TestJob job : jobs) {
             String projectName = "E2E-" + job.name.toUpperCase(java.util.Locale.ROOT);
             File existing = new File(new File(context.getFilesDir(), "projects"), projectName);
             delete(existing);
 
             File project;
-            if (job.krTemplate != null) {
+            if (job.externalRepoName != null) {
+                File projects = new File(context.getFilesDir(), "projects");
+                project = new File(projects, job.externalRepoName);
+                delete(project);
+                File externalProject = new File(new File(context.getExternalFilesDir(null), "test-repos"), job.externalRepoName);
+                copyDir(externalProject, project);
+            } else if (job.krTemplate != null) {
                 project = LanguageProjectManager.createKr(context, job.krTemplate, projectName);
             } else if (job.customKrCode != null) {
                 File projects = new File(context.getFilesDir(), "projects");
@@ -156,52 +185,52 @@ public final class LanguageBuildInstrumentation extends Instrumentation {
                 String summary;
                 try {
                     summary = engine.build();
+                    if (!summary.startsWith("Fertig:")) throw new IOException(summary);
+                    File build = new File(project, "KR_BUILD");
+                    File artifact = new File(build, target == CompilerEngine.Target.ANDROID
+                            ? "programm-android-arm64.apk" : target == CompilerEngine.Target.WINDOWS ? "programm.exe" : "programm");
+                    if (job.name.equals("cc_opencl")) {
+                        File dll = new File(build, "CC_OpenCl.dll");
+                        if (!dll.isFile()) dll = new File(new File(context.getCacheDir(), "active-project/cmake/build/bin"), "CC_OpenCl.dll");
+                        if (!dll.isFile()) dll = new File(new File(context.getCacheDir(), "active-project/cmake/artifacts"), "CC_OpenCl.dll");
+                        if (dll.isFile()) {
+                            try { copy(dll, new File(resultRoot, "CC_OpenCl.dll")); } catch (Exception ignored) {}
+                            try { copy(dll, new File("/sdcard/Download/CC_OpenCl_Enterprise/CC_OpenCl.dll")); } catch (Exception ignored) {}
+                        }
+                        File implib = new File(build, "libCC_OpenCl.dll.a");
+                        if (!implib.isFile()) implib = new File(new File(context.getCacheDir(), "active-project/cmake/build/lib"), "libCC_OpenCl.dll.a");
+                        if (!implib.isFile()) implib = new File(new File(context.getCacheDir(), "active-project/cmake/artifacts"), "libCC_OpenCl.dll.a");
+                        if (implib.isFile()) {
+                            try { copy(implib, new File(resultRoot, "libCC_OpenCl.dll.a")); } catch (Exception ignored) {}
+                            try { copy(implib, new File("/sdcard/Download/CC_OpenCl_Enterprise/libCC_OpenCl.dll.a")); } catch (Exception ignored) {}
+                        }
+                        File testExe = new File(build, "programm.exe");
+                        if (!testExe.isFile()) testExe = new File(new File(context.getCacheDir(), "active-project/cmake/build/bin"), "test_cc_opencl.exe");
+                        if (testExe.isFile()) {
+                            try { copy(testExe, new File(resultRoot, "test_cc_opencl.exe")); } catch (Exception ignored) {}
+                            try { copy(testExe, new File("/sdcard/Download/CC_OpenCl_Enterprise/test_cc_opencl.exe")); } catch (Exception ignored) {}
+                        }
+                    }
+                    if (!artifact.isFile() || artifact.length() == 0)
+                        throw new IOException("Artefakt fehlt: " + artifact + "\n" + log);
+                    File destination = new File(resultRoot, prefix
+                            + (target == CompilerEngine.Target.ANDROID ? ".apk" : target == CompilerEngine.Target.WINDOWS ? ".exe" : ".elf"));
+                    copy(artifact, destination);
+                    copy(new File(build, "build.log"), new File(resultRoot, destination.getName() + ".log"));
+                    File oldFail = new File(resultRoot, prefix + ".failure.log");
+                    if (oldFail.exists()) oldFail.delete();
+                    successCount++;
                 } catch (Exception error) {
                     write(new File(resultRoot, prefix + ".failure.log"), log.toString() + "\n" + error + "\n");
-                    File goArchive = new File(new File(project.getParentFile(), "go-target"), "libkr_go_" + target.name().toLowerCase(java.util.Locale.ROOT) + (target == CompilerEngine.Target.ANDROID ? ".so" : ".a"));
-                    if (goArchive.isFile()) {
-                        try { copy(goArchive, new File(resultRoot, prefix + "-" + goArchive.getName())); } catch (Exception ignored) {}
-                    }
-                    File krGen = new File(project.getParentFile(), "kr-generated");
-                    if (krGen.isDirectory()) {
-                        copyDir(krGen, new File(resultRoot, prefix + "-kr-gen"));
-                    }
-                    throw error;
-                }
-                if (!summary.startsWith("Fertig:")) throw new IOException(summary);
-                File build = new File(project, "KR_BUILD");
-                File artifact = new File(build, target == CompilerEngine.Target.ANDROID
-                        ? "programm-android-arm64.apk" : target == CompilerEngine.Target.WINDOWS ? "programm.exe" : "programm");
-                if (job.name.equals("cc_opencl")) {
-                    File dll = new File(build, "CC_OpenCl.dll");
-                    if (!dll.isFile()) dll = new File(new File(context.getCacheDir(), "active-project/cmake/build/bin"), "CC_OpenCl.dll");
-                    if (!dll.isFile()) dll = new File(new File(context.getCacheDir(), "active-project/cmake/artifacts"), "CC_OpenCl.dll");
-                    if (dll.isFile()) {
-                        try { copy(dll, new File(resultRoot, "CC_OpenCl.dll")); } catch (Exception ignored) {}
-                        try { copy(dll, new File("/sdcard/Download/CC_OpenCl_Enterprise/CC_OpenCl.dll")); } catch (Exception ignored) {}
-                    }
-                    File implib = new File(build, "libCC_OpenCl.dll.a");
-                    if (!implib.isFile()) implib = new File(new File(context.getCacheDir(), "active-project/cmake/build/lib"), "libCC_OpenCl.dll.a");
-                    if (!implib.isFile()) implib = new File(new File(context.getCacheDir(), "active-project/cmake/artifacts"), "libCC_OpenCl.dll.a");
-                    if (implib.isFile()) {
-                        try { copy(implib, new File(resultRoot, "libCC_OpenCl.dll.a")); } catch (Exception ignored) {}
-                        try { copy(implib, new File("/sdcard/Download/CC_OpenCl_Enterprise/libCC_OpenCl.dll.a")); } catch (Exception ignored) {}
-                    }
-                    File testExe = new File(build, "programm.exe");
-                    if (!testExe.isFile()) testExe = new File(new File(context.getCacheDir(), "active-project/cmake/build/bin"), "test_cc_opencl.exe");
-                    if (testExe.isFile()) {
-                        try { copy(testExe, new File(resultRoot, "test_cc_opencl.exe")); } catch (Exception ignored) {}
-                        try { copy(testExe, new File("/sdcard/Download/CC_OpenCl_Enterprise/test_cc_opencl.exe")); } catch (Exception ignored) {}
+                    failures.add(prefix + ": " + error.getMessage());
+                    if (onlyRepo == null) {
+                        throw error;
                     }
                 }
-                if (!artifact.isFile() || artifact.length() == 0)
-                    throw new IOException("Artefakt fehlt: " + artifact + "\n" + log);
-                File destination = new File(resultRoot, prefix
-                        + (target == CompilerEngine.Target.ANDROID ? ".apk" : target == CompilerEngine.Target.WINDOWS ? ".exe" : ".elf"));
-                copy(artifact, destination);
-                copy(new File(build, "build.log"), new File(resultRoot, destination.getName() + ".log"));
-                successCount++;
             }
+        }
+        if (!failures.isEmpty()) {
+            throw new IOException("OK=" + successCount + ", FAILED=" + failures.size() + " -> " + failures);
         }
         return successCount;
     }

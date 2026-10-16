@@ -11,7 +11,7 @@ import java.util.zip.ZipInputStream;
 
 final class ToolchainInstaller {
     private static final String STAMP = "kr-toolchain-rust-1.99-go-1.27-v3";
-    private static final String GRAPHICS_STAMP = "kr-android-graphics-headers-v1";
+    private static final String GRAPHICS_STAMP = "kr-android-graphics-headers-v6";
     private ToolchainInstaller() {}
 
     static File ensure(Context context, CompilerEngine.Logger log) throws IOException {

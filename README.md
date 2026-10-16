@@ -4,12 +4,12 @@ KR Compiler Android IDE ist eine autarke, native mobile Entwicklungsumgebung fü
 
 ---
 
-## Version 4.0.1 herunterladen
+## Version 4.0.2 herunterladen
 
-Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Dokumentation und die geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.1](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.1).
+Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Dokumentation und die geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.2](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.2).
 
-- **Release-APK**: `KR-Compiler-Android-IDE-v4.0.1.apk`
-- **SHA-256**: `7AD6D645596E53F8CC315B7752CCFCE18D3B618C64A31A9981650424FBF049FF`
+- **Release-APK**: `KR-Compiler-Android-IDE-v4.0.2.apk`
+- **SHA-256**: `B22B6035425CCA7F1539B507E99F66673E2E0B9610E90371256B33D28A25DE51`
 
 ### Systemvoraussetzungen
 - Android 8.0 oder neuer (API 26+)
@@ -18,12 +18,13 @@ Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Doku
 
 ---
 
-## Neu in Version 4.0.1
+## Neu in Version 4.0.2
 
-Version 4.0.1 bringt vollständige Unterstützung für anspruchsvolle **Enterprise C++ OpenCL- und GPU-Bibliotheken** sowie gehärtete Windows-x64-Cross-Kompilierung:
-- **LLVM-MinGW Toolchain Härtung**: Vollständige Vermeidung von veralteten GCC-Laufzeitabhängigkeiten (`-lgcc`, `-lgcc_s`) zugunsten reiner LLVM-Runtimes (`libc++`, `compiler-rt`, `libunwind`).
-- **OpenCL-Integration**: Automatischer Fallback auf mitgelieferte Khronos OpenCL 3.0 Header und MinGW-Importbibliotheken.
-- **Verifizierter Nachweis**: 100,0 % API-Parität (140/140 Symbole) an `CC_OpenCl_Enterprise` sowie erfolgreiche Kernel-Ausführung auf AMD-Hardware (`gfx90c`).
+Version 4.0.2 ist das universelle C/C++- und CMake-Sysroot-Kompatibilitäts-Release:
+- **100 % Erfolgsquote an 18 realen C/C++ Repositories (54/54 Builds)**: Vollständige native Kompilierung aller getesteten Praxis-Repositories (`MDraft`, `Tatarus-6`, `mycelia_Craft`, `Algorithmic-Genesis`, `LyricsStudio`, etc.) für Android ARM64, Windows x64 und Linux x64 ohne Code-Anpassungen im Zielprojekt.
+- **CMake & Sysroot Härtung**: Automatische Unterordner-Suche, Filterung restriktiver Compiler-/Linkerflags (`-Werror`, `/WX`), Bereitstellung vorkonfigurierter System-Header (`OpenCL`, `SQLite3`, `X11`) und Pfadaliasharmonisierung (`/data/data/` vs. `/data/user/0/`).
+- **GCC-14 libstdc++ & MinGW Header-Patches**: Behebung rekursiver Typdefinitionen in `std::pair` unter Clang und Anhebung der Standard-Windows-APIs auf Win 10/11 (`0x0A00`) für moderne High-DPI-Funktionen.
+- **Direkt-Build-Optimierung**: Unterstützung für getrennte C- und C++-Objekterzeugung, `-std=c++20` / `-std=gnu17` und automatische Shared-Library-Erzeugung.
 
 ---
 
