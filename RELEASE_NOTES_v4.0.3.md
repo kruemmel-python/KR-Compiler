@@ -1,6 +1,8 @@
 # KR Compiler Android IDE v4.0.3 – Release Notes
 
-Version 4.0.3 erweitert die KR Compiler Android IDE um **vollständigen Support für modulare Großprojekte (`*.krproject`)** und die Multi-File KR-Architektur. Damit können komplexe Enterprise-, Forschungs- und Simulationssysteme (wie `KR_FORGE`) mit hierarchischer Verzeichnisstruktur, modularen Übersetzungseinheiten und lückenlosem Cross-Language FFI nativ auf Android für alle drei Zielplattformen (**Android ARM64**, **Windows x64**, **Linux x64**) gebaut werden.
+Version 4.0.3 erweitert die KR Compiler Android IDE um zwei bahnbrechende Kernfeatures:
+1. **Vollständiger Support für modulare Großprojekte (`*.krproject`)** und die Multi-File KR-Architektur (C++20, Rust, Go) für Enterprise-, Forschungs- und Simulationssysteme (wie `KR_FORGE`) für alle drei Zielplattformen (**Android ARM64**, **Windows x64**, **Linux x64**).
+2. **Integrierter autonomer KI-Programmieragent („AGENT“)** direkt in der mobilen IDE mit Werkzeugschleife (`list`, `read`, `write`, `build`, `done`), OpenAI-kompatibler Modellanbindung und strikter Sandbox-Sicherheit.
 
 Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und modernisiert.
 
@@ -8,7 +10,26 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 
 ## Neuerungen in Version 4.0.3
 
-### 1. Modulare Multi-File KR-Architektur (`*.krproject`)
+### 1. Neuer autonomer KI-Programmierassistent („AGENT“)
+- **Nahtlose Integration in die IDE**: Neuer Menü- und Navigationsbutton **`AGENT`** in der Hauptleiste (`CODE | DATEIEN | BUILD | ARTEFAKTE | AGENT`).
+- **Autonome Problemlösungsschleife (ReAct)**:
+  - Führt auf Nutzerauftrag mehrstufige Entwicklungsaufgaben eigenständig aus.
+  - Erkennt Projektstrukturen (`list`), liest Quelldateien (`read`), modifiziert oder erstellt Code (`write`) und stößt den echten IDE-Kompilierungslauf an (`build`).
+  - Analysiert Compiler-Fehlermeldungen aus dem `BuildManager` und korrigiert Syntax-, Typ- und Linker-Fehler iterativ.
+- **Offener Modell-Standard**:
+  - Unterstützt jeden OpenAI-kompatiblen HTTPS-Endpunkt (OpenAI GPT-4o, Anthropic via Proxy, Mistral, Groq, OpenRouter).
+  - Ermöglicht den Betrieb privater, lokaler Open-Source-Modelle über **Ollama** oder LM Studio via `http://127.0.0.1:...` oder im lokalen Netzwerk.
+- **Sicherheits- & Freigabesystem („Human-in-the-Loop“)**:
+  - **Freigabepflicht**: Dateiänderungen und Build-Starts erfordern die ausdrückliche Genehmigung durch den Entwickler mit detaillierter Vorschau.
+  - **Strikte Projekt-Sandbox (`safeFile`)**: Zugriff ist strikt auf das geöffnete Projektverzeichnis beschränkt. Systempfade, fremde Ordner, `.git`, `.gradle` und `.kragent` sind physisch gesperrt.
+  - **Unantastbarer Compilerkern**: Der interne Compiler (`CompilerEngine`, `KrPipeline`, Toolchains, Sysroots) kann vom Agenten weder eingesehen noch verändert werden.
+  - **Revisionssicheres Audit-Log**: Sämtliche Aktionen werden lückenlos mit Zeitstempeln im Journal `kr_agent_audit.jsonl` festgehalten.
+  - **Sichere Token-Handhabung**: API-Schlüssel werden nach dem Start sofort aus dem Textfeld entfernt und verbleiben ausschließlich flüchtig im Speicher.
+  - **Sofortiger Abbruch**: Laufende Agentenprozesse und Builds können jederzeit über **`STOPP`** beendet werden.
+
+---
+
+### 2. Modulare Multi-File KR-Architektur (`*.krproject`)
 - **Deklarative Projektkonfiguration**: Neue TOML-basierte Konfigurationsdatei `*.krproject` mit Sektionen für Metadaten (`[project]`), rekursive Scan-Ordner (`[modules]`), Drittpakete (`[dependencies]`) und Compiler-Flags (`[build]`).
 - **Hierarchische Verzeichnisstrukturen**: Volle Unterstützung für Enterprise-Strukturen am Referenzmodell `KR_FORGE` (`app/`, `gui/`, `research/`, `compute/`, `orchestration/`, `storage/`, etc.).
 - **Automatischer Modul-Scan & Pfadnormalisierung**: `KrPipeline` erkennt alle deklarierten Unterordner, relativiert Quellpfade gegen das Projektverzeichnis und verhindert Namenskollisionen.
@@ -18,21 +39,21 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 
 ---
 
-### 2. Multi-Dependency Management mit vcpkg
+### 3. Multi-Dependency Management mit vcpkg
 - Automatische Erzeugung von kanonischen `vcpkg.json`-Manifesten direkt aus der `[dependencies]`-Sektion von `*.krproject`.
 - Nahtlose Verknüpfung externer C/C++-Bibliotheken (z. B. `opencl`, `sqlite3`, `nlohmann-json`) mit der integrierten Toolchain auf allen drei Zielsystemen.
 
 ---
 
-### 3. UI- & Versions-Harmonisierung
+### 4. UI- & Versions-Harmonisierung
 - **Menüeintrag vereinfacht**: Der Menüpunkt lautet nun prägnant **„Über KR IDE“** (ohne statisch veraltende Versionsanhängsel).
 - **Entwickler-Würdigung**: Im Infodialog wird **Entwickler: Ralf Krümmel** prominent aufgeführt.
 - **Dynamische Versionsauflösung**: `MainActivity` ermittelt die aktive Versionsnummer (`v4.0.3`) nun dynamisch via `PackageManager` / `getAppVersionName()`.
 
 ---
 
-### 4. Physische Verifikation auf Testgerät
-- Getestet auf **Samsung Galaxy Tab S6 Lite (SM-P615, Android 13, ARM64-v8a)**:
+### 5. Physische Verifikation auf Testgeräten
+- Getestet auf **Samsung Galaxy Tab S6 Lite (SM-P615)** und **Realme GT 6T (RMX3853)**:
   - **Android ARM64**: `programm-android-arm64.apk` (2.8 MB) + `libuser.so` (2.3 MB) – **PASS**
   - **Windows x64**: `programm.exe` (8.5 MB) – **PASS**
   - **Linux x64**: `programm` (7.9 MB) – **PASS**
@@ -40,7 +61,7 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 
 ---
 
-### 5. Volle Abwärtskompatibilität
+### 6. Volle Abwärtskompatibilität
 - Alle 18 realen C/C++ GitHub-Repositories (54/54 Builds) bleiben voll funktionsfähig.
 - Single-File `.kr`-Projekte, native Rust- und Go-Projekte laufen unverändert weiter.
 

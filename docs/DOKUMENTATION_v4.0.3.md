@@ -104,3 +104,38 @@ Die Methode `buildKrUnified` in `CompilerEngine.java` orchestriert die parallele
 | **Android ARM64** | `aarch64-linux-android28` | Clang++ 21 | LLD (ld.lld) | Standalone APK (`libuser.so` via Runner) |
 | **Windows x64** | `x86_64-w64-mingw32` | Clang++ 21 | LLD (lld-link) | Native PE/COFF (`.exe`, `.dll`) |
 | **Linux x64** | `x86_64-linux-gnu` | Clang++ 21 | LLD (ld.lld) | Native ELF 64-Bit (`.elf`) |
+
+---
+
+## 5. Autonome KI-Agenten-Architektur (`KrAgentCore` & `KrAgentDialog`)
+
+Version 4.0.3 führt eine vollständig entkoppelte, sandboxed Agenten-Schicht ein, die Entwickler bei der Codierung, Fehlersuche und Kompilierung unterstützt.
+
+```mermaid
+flowchart LR
+    User["Entwickler (Auftrag & Freigaben)"] <--> Dialog["KrAgentDialog (UI)"]
+    Dialog <--> Core["KrAgentCore (ReAct Engine)"]
+    Core <--> LLM["LLM Backend (OpenAI / Ollama / HTTPS)"]
+    Core --> ProjectFS["safeFile() Sandbox (Projektdateien)"]
+    Core --> BuildMgr["BuildManager (Kompilierung & Fehlerauswertung)"]
+    Core --> Audit["kr_agent_audit.jsonl (Audit-Log)"]
+```
+
+### 5.1 ReAct-Schleife & Werkzeugschnittstellen
+`KrAgentCore` interagiert mit LLMs über das standardisierte OpenAI Chat Completions Protokoll. Das Modell antwortet in einem streng typisierten JSON-Format mit genau einer Aktion pro Schritt:
+- `list`: Verzeichnisinhalte rekursiv erfassen.
+- `read`: UTF-8 Quelltext bis 256 KiB einlesen (Binärdateien sind blockiert).
+- `write`: Textdateien atomar via temporäre Dateien und `StandardCopyOption.ATOMIC_MOVE` schreiben.
+- `build`: Asynchronen Build über `BuildManager.getInstance().startBuild()` anstoßen und Compiler-Logs (bis 9000 Zeichen) zurück an das Modell zur Fehlerbehebung übergeben.
+- `done`: Abschlussnachricht an den Nutzer.
+
+### 5.2 Sicherheitsmodell & Sandbox
+1. **Pfadisolierung (`safeFile`)**:
+   Alle relativen Pfade werden gegen das kanonische Projektverzeichnis aufgelöst. Versuche, aus dem Projekt auszubrechen (`..`, absolute Pfade, Systemdateien), lösen eine sofortige `IOException` aus.
+   Geschützte Segmente (`.git`, `.gradle`, `KR_BUILD`, `.kragent`) sind tabu.
+2. **Human-in-the-Loop Freigaben**:
+   Schreiboperationen und Build-Starts blockieren den Hintergrund-Thread über einen `CountDownLatch`, bis der Entwickler im Hauptthread über einen Bestätigungsdialog mit Vorschau (`Approval`) zustimmt.
+3. **Compilerkern-Schutz**:
+   Der Agent operiert als optionale Schicht und hat keinerlei Schreibzugriff auf IDE-Systemdateien (`CompilerEngine`, `KrPipeline`, Toolchain-Sysroots).
+4. **Audit-Trail**:
+   Alle Aktionen, Zeitstempel und Modellmeldungen werden persistent in `kr_agent_audit.jsonl` protokolliert.

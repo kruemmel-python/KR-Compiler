@@ -18,15 +18,20 @@ Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Doku
 
 ---
 
-## Neu in Version 4.0.3: Modulare Großprojekte (`*.krproject`)
+## Neu in Version 4.0.3: Autonomer KI-Agent & Modulare Großprojekte
 
-Version 4.0.3 führt vollständigen Support für hierarchische Multi-File KR-Projekte ein:
+Version 4.0.3 führt zwei fundamentale Erweiterungen ein:
+- **Integrierter autonomer KI-Programmierassistent („AGENT“)**:
+  - Direkter Zugriff über den neuen **`AGENT`**-Button in der Navigationsleiste der App.
+  - Autonome Problemlösungsschleife (ReAct): Verzeichnisse scannen (`list`), Code lesen (`read`), Code modifizieren (`write`) und automatischen Kompilierungslauf (`build`) zur iterativen Fehlerbehebung starten.
+  - Kompatibel mit allen OpenAI-kompatiblen HTTPS-Endpunkten (OpenAI, Claude via Proxy, Mistral, Groq, OpenRouter) und lokalen Modellen (Ollama / LM Studio via `http://127.0.0.1:...`).
+  - Strikte Sicherheits-Sandbox (`safeFile`), Freigabepflicht für alle Dateiänderungen („Human-in-the-Loop“) und revisionssicheres Audit-Log (`kr_agent_audit.jsonl`).
 - **Modulare Projektarchitektur (`*.krproject`)**: Deklarative Konfiguration von Metadaten (`[project]`), rekursiven Modulverzeichnissen (`[modules]`), Drittpaketen (`[dependencies]`) und Compiler-Optimierungen (`[build]`).
 - **Hierarchische Enterprise-Strukturen (`KR_FORGE`)**: Volle Unterstützung für Enterprise-Strukturen am Referenzmodell `KR_FORGE` (`app/`, `gui/`, `research/`, `compute/`, `orchestration/`, `storage/`, `contracts/`, `tests/` und `docs/`).
 - **Modulare C++ Translation Units & zentraler ABI-Header**: Automatisches Aufteilen modularer C++-Inhalte in `modules/*.cpp`, Generierung von `kr_bridge.h` und modulübergreifende Bündelung von Rust (`kr_rust/src/lib.rs`) und Go (`kr_go/main.go`).
 - **Lückenloser Cross-File & Cross-Language FFI**: Funktionen rufen einander über Modul- und Sprachgrenzen ($C++ \leftrightarrow Rust \leftrightarrow Go$) direkt auf, ohne manuelle Header-Inkludierungen.
 - **Integriertes vcpkg-Manifest**: Automatische Erzeugung und Verwaltung von `vcpkg.json` für Drittbibliotheken (`opencl`, `sqlite3`, `nlohmann-json`).
-- **Physisch verifiziert auf Samsung Galaxy Tab S6 Lite (SM-P615)**: 3/3 Builds erfolgreich für Android ARM64 (`.apk`), Windows x64 (`.exe`) und Linux x64 (`.elf`).
+- **Physisch verifiziert**: Erfolgreich getestet auf Samsung Galaxy Tab S6 Lite (`SM-P615`) und Realme GT 6T (`RMX3853`).
 
 ---
 

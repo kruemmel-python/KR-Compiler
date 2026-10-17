@@ -127,3 +127,28 @@ Deklariere benötigte Pakete einfach in der `*.krproject`:
 packages = ["opencl", "sqlite3", "nlohmann-json"]
 ```
 Der Compiler erzeugt automatisch das passende Manifest `vcpkg.json` und bindet die Header und Import-Bibliotheken der Toolchain für alle drei Zielplattformen ein.
+
+---
+
+## 5. Nutzung des autonomen KI-Programmieragenten („AGENT“)
+
+Ab Version 4.0.3 verfügt die IDE über einen integrierten KI-Programmierassistenten:
+
+### 5.1 Agenten-Dialog öffnen
+Tippe in der oberen Navigationsleiste auf den Reiter **`AGENT`** (neben `CODE | DATEIEN | BUILD | ARTEFAKTE`).
+
+### 5.2 Verbindung & Modell konfigurieren
+- **HTTPS-Endpunkt**: Trage die URL deines Anbieters ein (z. B. `https://api.openai.com/v1/chat/completions` oder lokal `http://127.0.0.1:11434/v1/chat/completions` für Ollama).
+- **Modellname**: Wähle dein bevorzugtes Modell (z. B. `gpt-4o`, `claude-3-5-sonnet`, `llama3.1`, `qwen2.5-coder`).
+- **API-Key**: Gib deinen Schlüssel ein (wird sicher im Arbeitsspeicher gehalten und nicht dauerhaft unverschlüsselt gespeichert).
+
+### 5.3 Entwicklungsauftrag erteilen
+Beschreibe deine Aufgabe im Auftragsfeld:
+- *„Lies mein Projekt, implementiere eine Fehlerbehandlung in `main.kr` und kompiliere für Android ARM64.“*
+- *„Finde den Linkerfehler im letzten Build und passe die Signaturen in `kr_bridge.h` an.“*
+
+### 5.4 Genehmigung von Änderungen („Human-in-the-Loop“)
+Der Agent arbeitet autonom, aber sicher:
+- Vor jedem Schreibzugriff auf Projektdateien (`write`) erscheint ein Dialog mit einer **Vorschau der Änderungen**. Du entscheidest per **Genehmigen** oder **Ablehnen**.
+- Vor jedem Kompiliervorgang (`build`) wird ebenfalls eine Bestätigung erbeten.
+- Über den Button **`STOPP`** kann der Vorgang jederzeit sofort abgebrochen werden.
