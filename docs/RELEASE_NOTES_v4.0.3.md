@@ -75,9 +75,22 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 
 ---
 
-## Prüfsumme
+### 7. Neue Windows Desktop Edition (1 zu 1 Portierung)
+- Vollständiger 1:1 Desktop-Port im neuen Projektordner `windows/`.
+- Nativ lauffähig auf Windows 10 / 11 (64-Bit) mit Java 17+.
+- Enthält die gesamte KR Pipeline, Projekt-Explorer, Multi-Tab Editor mit Syntax-Highlighting, Build-Konsole, Artefakte-Verwaltung mit 1-Klick-Ausführung (`.exe`) und den autonomen KI-Agenten (`AGENT`).
+- Startbar über `windows/Start-KR-IDE.bat`, `windows/Start-KR-IDE-Console.bat` oder direkt via `KR-Compiler-IDE.jar`.
 
-- **Datei**: `KR-Compiler-Android-IDE-v4.0.3.apk`
-- **Größe**: `744.024.048 Bytes`
-- **SHA-256**: `ac7823db51e65b920d1445ea5ab6db8883d2fd692f4110412f1c61a1be35094d`
-- **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
+---
+
+## Prüfsummen & Assets
+
+- **Android Release**: `KR-Compiler-Android-IDE-v4.0.3.apk`
+  - **Größe**: `744.024.048 Bytes`
+  - **SHA-256**: `ac7823db51e65b920d1445ea5ab6db8883d2fd692f4110412f1c61a1be35094d`
+  - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
+
+- **Windows Desktop Edition**: `KR-Compiler-IDE.jar`
+  - **Größe**: `144.737 Bytes`
+  - **Plattform**: Windows 10 / 11 (Java 17+)
+  - **Starter**: `windows/Start-KR-IDE.bat`
