@@ -84,6 +84,50 @@ public final class KrAgentCore {
         logHistory.setLength(0);
     }
 
+    public synchronized String exportLogToProject() throws IOException {
+        String logContent = getLogHistory();
+        if (logContent.isEmpty()) {
+            throw new IOException("Das Protokoll ist leer.");
+        }
+
+        ProjectManager projects = ProjectManager.getInstance();
+        File localRoot = projects.getActiveLocalDir();
+        Uri safUri = projects.getActiveSafTreeUri();
+        if ((localRoot == null || !localRoot.isDirectory()) && safUri == null) {
+            throw new IOException("Kein Projekt geöffnet. Bitte zuerst ein Projekt öffnen.");
+        }
+
+        String fileName = "kr_agent_log.txt";
+        String dateStr = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date());
+        String fullExport = "=== KR Autonomous Agent Protokoll ===\n"
+                + "Projekt: " + projects.getActiveProjectName() + "\n"
+                + "Exportiert am: " + dateStr + "\n"
+                + "======================================\n\n"
+                + logContent;
+
+        if (localRoot != null && localRoot.isDirectory()) {
+            File target = new File(localRoot, fileName);
+            try (FileOutputStream fos = new FileOutputStream(target)) {
+                fos.write(fullExport.getBytes(StandardCharsets.UTF_8));
+            }
+            DocumentManager.getInstance().reloadIfOpen(fileName, fullExport);
+            projects.refreshTree(context);
+            return target.getAbsolutePath();
+        } else {
+            DocumentTree.writeSafFile(context, safUri, fileName, fullExport);
+            File ws = new File(context.getFilesDir(), "saf_agent_workspace");
+            if (ws.exists()) {
+                File wsFile = new File(ws, fileName);
+                try (FileOutputStream fos = new FileOutputStream(wsFile)) {
+                    fos.write(fullExport.getBytes(StandardCharsets.UTF_8));
+                }
+            }
+            DocumentManager.getInstance().reloadIfOpen(fileName, fullExport);
+            projects.refreshTree(context);
+            return fileName + " (im Projektordner)";
+        }
+    }
+
     public void addListener(Events l) {
         if (l != null && !listeners.contains(l)) listeners.add(l);
     }
@@ -170,6 +214,21 @@ public final class KrAgentCore {
         worker.execute(() -> {
             try {
                 execute(task, settings);
+            } catch (java.net.SocketTimeoutException te) {
+                String teMsg = te.getMessage() != null ? te.getMessage().toLowerCase(Locale.ROOT) : "";
+                if (teMsg.contains("connect")) {
+                    emit("❌ Timeout beim Verbindungsaufbau zu " + settings.endpoint() + " (nach 60s).\n"
+                            + "👉 Mögliche Ursachen:\n"
+                            + "  1. Ist der Server online und die URL/Port korrekt?\n"
+                            + "  2. Bei lokalem PC-Server (Ollama/LM Studio): Nutzen Sie die WLAN-IP Ihres PCs (z. B. http://192.168.x.x:11434) oder 'adb reverse tcp:11434 tcp:11434'.\n"
+                            + "  3. Prüfen Sie die Firewall auf dem Rechner.");
+                } else {
+                    emit("❌ Timeout beim Warten auf die Modellantwort von " + settings.endpoint() + " (nach 300s).\n"
+                            + "👉 Das Modell (" + settings.model() + ") hat die maximale Antwortzeit überschritten.");
+                }
+            } catch (java.net.ConnectException ce) {
+                emit("❌ Verbindungsaufbau verweigert (" + settings.endpoint() + "): " + ce.getMessage() + "\n"
+                        + "👉 Server läuft nicht oder Port ist blockiert.");
             } catch (Exception e) {
                 emit("❌ Agentenfehler: " + e.getMessage());
             } finally {
@@ -180,10 +239,14 @@ public final class KrAgentCore {
     }
 
     private void execute(String task, Settings settings) throws Exception {
-        if (!settings.endpoint().startsWith("https://")
-                && !settings.endpoint().startsWith("http://127.0.0.1:")
-                && !settings.endpoint().startsWith("http://localhost:")) {
-            throw new IOException("Für entfernte Modellserver ist HTTPS erforderlich.");
+        String ep = settings.endpoint().trim();
+        boolean isLocalOrLan = ep.startsWith("http://127.0.0.1:")
+                || ep.startsWith("http://localhost:")
+                || ep.startsWith("http://10.")
+                || ep.startsWith("http://192.168.")
+                || ep.startsWith("http://172.");
+        if (!ep.startsWith("https://") && !isLocalOrLan) {
+            throw new IOException("Für entfernte Modellserver im Internet ist HTTPS erforderlich (z. B. https://api.openai.com/...). Für lokale Modelle ist HTTP im Heimnetzwerk (192.168.x.x / 10.x.x.x) oder localhost erlaubt.");
         }
 
         ProjectManager projects = ProjectManager.getInstance();
@@ -336,8 +399,8 @@ public final class KrAgentCore {
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setRequestMethod("POST");
         c.setDoOutput(true);
-        c.setConnectTimeout(30000);
-        c.setReadTimeout(180000);
+        c.setConnectTimeout(60000);
+        c.setReadTimeout(300000);
         c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         if (!s.token().isEmpty()) {
             c.setRequestProperty("Authorization", "Bearer " + s.token());

@@ -2,9 +2,12 @@ package kr.compile;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -65,12 +68,7 @@ public final class KrAgentDialog {
         statusText.setPadding(12, 0, 0, 0);
         statusText.setTextColor(Color.parseColor("#4CAF50"));
         statusText.setText(core.isRunning() ? "Aktiv: " + core.getCurrentStatus() : "Status: " + core.getCurrentStatus());
-        statusRow.addView(statusText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        Button btnClearLog = new Button(a);
-        btnClearLog.setText("Log leeren");
-        btnClearLog.setTextSize(11);
-        statusRow.addView(btnClearLog);
+        statusRow.addView(statusText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         body.addView(statusRow);
 
         // 2. Eingabefelder
@@ -93,7 +91,36 @@ public final class KrAgentDialog {
         body.addView(token);
         body.addView(task);
 
-        // 3. Protokollfenster mit Auto-Scroll
+        // 3. Protokoll-Werkzeugleiste (Kopieren, Exportieren, Leeren)
+        LinearLayout logToolbar = new LinearLayout(a);
+        logToolbar.setOrientation(LinearLayout.HORIZONTAL);
+        logToolbar.setGravity(Gravity.CENTER_VERTICAL);
+        logToolbar.setPadding(0, 10, 0, 4);
+
+        TextView logLabel = new TextView(a);
+        logLabel.setText("Protokoll:");
+        logLabel.setTextSize(12);
+        logLabel.setTypeface(null, Typeface.BOLD);
+        logToolbar.addView(logLabel, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button btnCopyLog = new Button(a);
+        btnCopyLog.setText("📋 Kopieren");
+        btnCopyLog.setTextSize(11);
+        logToolbar.addView(btnCopyLog);
+
+        Button btnExportLog = new Button(a);
+        btnExportLog.setText("💾 Export");
+        btnExportLog.setTextSize(11);
+        logToolbar.addView(btnExportLog);
+
+        Button btnClearLog = new Button(a);
+        btnClearLog.setText("🗑️ Leeren");
+        btnClearLog.setTextSize(11);
+        logToolbar.addView(btnClearLog);
+
+        body.addView(logToolbar);
+
+        // 4. Protokollfenster mit Auto-Scroll
         TextView log = new TextView(a);
         log.setTextSize(12);
         log.setTextIsSelectable(true);
@@ -158,9 +185,34 @@ public final class KrAgentDialog {
         core.addListener(dialogListener);
         dialog.setOnDismissListener(d -> core.removeListener(dialogListener));
 
+        btnCopyLog.setOnClickListener(v -> {
+            String textToCopy = core.getLogHistory();
+            if (textToCopy.isEmpty()) {
+                textToCopy = log.getText().toString();
+            }
+            ClipboardManager cm = (ClipboardManager) a.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) {
+                ClipData clip = ClipData.newPlainText("KR Agent Log", textToCopy);
+                cm.setPrimaryClip(clip);
+                Toast.makeText(a, "📋 Log in Zwischenablage kopiert (" + textToCopy.length() + " Zeichen)", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(a, "Zwischenablage nicht verfügbar.", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        btnExportLog.setOnClickListener(v -> {
+            try {
+                String dest = core.exportLogToProject();
+                Toast.makeText(a, "💾 Protokoll exportiert:\n" + dest, Toast.LENGTH_LONG).show();
+            } catch (Exception e) {
+                Toast.makeText(a, "❌ Export fehlgeschlagen: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+
         btnClearLog.setOnClickListener(v -> {
             core.clearLogHistory();
             log.setText("Protokoll geleert.\n");
+            Toast.makeText(a, "Protokoll geleert.", Toast.LENGTH_SHORT).show();
         });
 
         cancel.setOnClickListener(v -> {

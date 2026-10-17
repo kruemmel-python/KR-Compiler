@@ -9,7 +9,7 @@ KR Compiler Android IDE ist eine autarke, native mobile Entwicklungsumgebung fü
 Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Dokumentation und die geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.3](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.3).
 
 - **Release-APK**: `KR-Compiler-Android-IDE-v4.0.3.apk`
-- **SHA-256**: `1ad2b512a49b90782099d039814216e4f50506f70f763a91b4ef7732b791433b`
+- **SHA-256**: `ac7823db51e65b920d1445ea5ab6db8883d2fd692f4110412f1c61a1be35094d`
 
 ### Systemvoraussetzungen
 - Android 8.0 oder neuer (API 26+)

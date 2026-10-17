@@ -7,7 +7,7 @@
         android:extractNativeLibs="true"
         android:label="KR Compiler IDE"
         android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:screenOrientation="unspecified"

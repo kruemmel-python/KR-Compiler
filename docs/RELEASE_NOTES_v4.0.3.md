@@ -24,9 +24,15 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Strikte Projekt-Sandbox (`safeFile`)**: Zugriff ist strikt auf das geöffnete Projektverzeichnis beschränkt. Systempfade, fremde Ordner, `.git`, `.gradle` und `.kragent` sind physisch gesperrt.
   - **Unantastbarer Compilerkern**: Der interne Compiler (`CompilerEngine`, `KrPipeline`, Toolchains, Sysroots) kann vom Agenten weder eingesehen noch verändert werden.
   - **Revisionssicheres Audit-Log**: Sämtliche Aktionen werden lückenlos mit Zeitstempeln im Journal `kr_agent_audit.jsonl` festgehalten.
-  - **Sichere Token-Handhabung**: API-Schlüssel werden nach dem Start sofort aus dem Textfeld entfernt und verbleiben ausschließlich flüchtig im Speicher.
   - **Volle Unterstützung für SAF- und Dateimanager-Projekte**: Der Agent analysiert und editiert nun sowohl frisch erstellte als auch über den Android-Dateiexplorer geöffnete externe Projektordner (Storage Access Framework).
   - **Persistenter Logverlauf & Live-Feedback**: Der Agentenfortschritt wird kontinuierlich angezeigt (ProgressBar, Status-Banner, AGENT-Button-Indikator). Beim Schließen des Dialogs läuft der Agent im Hintergrund weiter, ohne dass das Logfenster zurückgesetzt wird.
+  - **Zwischenablage & Projekt-Export**:
+    - **`📋 Kopieren`**: Überträgt das gesamte Agentenprotokoll mit einem Klick in die Android-Zwischenablage.
+    - **`💾 Export`**: Speichert das Protokoll formatiert mit Projektname und Zeitstempel als `kr_agent_log.txt` direkt in den Projektordner und aktualisiert die IDE-Dateiansicht.
+  - **Robuste Netzwerk- & Modell-Konnektivität**:
+    - Erhöhte Timeouts (60s Verbindungsaufbau, 300s Modell-Inferenz/Read).
+    - `usesCleartextTraffic="true"` und LAN-IP-Freigabe (`192.168.x.x`, `10.x.x.x`, `localhost`) für nahtlose Anbindung lokaler LLM-Server (Ollama, LM Studio).
+    - Detaillierte Fehlerdiagnostik bei Verbindungsproblemen mit konkreten Lösungshinweisen.
   - **Sofortiger Abbruch**: Laufende Agentenprozesse und Builds können jederzeit über **`STOPP`** beendet werden.
 
 ---
@@ -72,6 +78,6 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 ## Prüfsumme
 
 - **Datei**: `KR-Compiler-Android-IDE-v4.0.3.apk`
-- **Größe**: `744.022.196 Bytes`
-- **SHA-256**: `1ad2b512a49b90782099d039814216e4f50506f70f763a91b4ef7732b791433b`
+- **Größe**: `744.024.048 Bytes`
+- **SHA-256**: `ac7823db51e65b920d1445ea5ab6db8883d2fd692f4110412f1c61a1be35094d`
 - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
