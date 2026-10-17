@@ -119,6 +119,8 @@ public final class ProjectManager {
                 + "    std::cout << \"=== KR FORGE Enterprise Simulation Engine ===\" << std::endl;\n"
                 + "    forge_app_init();\n"
                 + "    std::cout << \"=== KR_FORGE Ausfuehrung erfolgreich abgeschlossen ===\" << std::endl;\n"
+                + "    std::cout << \"\\nDruecken Sie die Eingabetaste (Enter), um das Fenster zu beenden...\" << std::endl;\n"
+                + "    std::cin.get();\n"
                 + "    return 0;\n"
                 + "}\n";
         writeFile(new File(root, "main.kr"), mainKr);
@@ -147,6 +149,8 @@ public final class ProjectManager {
                 + "    int x = 42;\n"
                 + "    int y = 58;\n"
                 + "    std::cout << \"Berechnung in C++: \" << x << \" + \" << y << \" = \" << (x + y) << std::endl;\n"
+                + "    std::cout << \"\\nDruecken Sie Enter zum Beenden...\" << std::endl;\n"
+                + "    std::cin.get();\n"
                 + "    return 0;\n"
                 + "}\n";
         writeFile(new File(root, "main.kr"), code);

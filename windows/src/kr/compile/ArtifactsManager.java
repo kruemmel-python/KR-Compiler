@@ -73,10 +73,16 @@ public final class ArtifactsManager {
         if (exe == null || !exe.isFile()) {
             throw new IOException("Ausführbare Datei existiert nicht: " + exe);
         }
-        // Starte in neuer Konsole
-        new ProcessBuilder("cmd.exe", "/c", "start", "\"" + exe.getName() + "\"", "cmd.exe", "/k", "\"" + exe.getAbsolutePath() + "\"")
-                .directory(exe.getParentFile())
-                .start();
+        File runBat = new File(exe.getParentFile(), "start_" + exe.getName().replace(".exe", "") + ".bat");
+        if (runBat.isFile()) {
+            new ProcessBuilder("cmd.exe", "/c", "start", "KR-Programm", runBat.getAbsolutePath())
+                    .directory(exe.getParentFile())
+                    .start();
+        } else {
+            new ProcessBuilder("cmd.exe", "/c", "start", "KR-Programm", "cmd.exe", "/k", exe.getAbsolutePath())
+                    .directory(exe.getParentFile())
+                    .start();
+        }
     }
 
     public void openInExplorer(File file) throws IOException {

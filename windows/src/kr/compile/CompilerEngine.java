@@ -334,6 +334,30 @@ public final class CompilerEngine {
             }
         }
 
+        // Wenn Windows-Executable (.exe) erzeugt wurde, erstelle zusätzlich start_<name>.bat für bequemen Doppel-Klick mit Pause
+        if (artifact.getName().toLowerCase(Locale.ROOT).endsWith(".exe")) {
+            String base = artifact.getName().substring(0, artifact.getName().length() - 4);
+            File runBat = new File(outputDir, "start_" + base + ".bat");
+            String batContent = "@echo off\r\n"
+                    + "chcp 65001 >nul\r\n"
+                    + "title KR Programm - " + artifact.getName() + "\r\n"
+                    + "cd /d \"%~dp0\"\r\n"
+                    + "echo ========================================================\r\n"
+                    + "echo   KR Programm Ausfuehrung: " + artifact.getName() + "\r\n"
+                    + "echo ========================================================\r\n"
+                    + "echo.\r\n"
+                    + "\"%~dp0" + artifact.getName() + "\"\r\n"
+                    + "echo.\r\n"
+                    + "echo --------------------------------------------------------\r\n"
+                    + "echo [BEENDET] Rueckgabewert / Exit Code: %ERRORLEVEL%\r\n"
+                    + "echo.\r\n"
+                    + "echo Druecken Sie eine beliebige Taste, um dieses Fenster zu schliessen...\r\n"
+                    + "pause >nul\r\n";
+            try {
+                Files.writeString(runBat.toPath(), batContent, StandardCharsets.UTF_8);
+            } catch (Exception ignored) {}
+        }
+
         log.line("[ERFOLG] Build erfolgreich: " + artifact.getAbsolutePath() + " (" + artifact.length() + " Bytes)");
         return artifact;
     }
