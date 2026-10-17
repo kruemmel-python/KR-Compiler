@@ -324,7 +324,19 @@ public final class KrAgentCore {
     }
 
     private JSONObject askModel(Settings s, JSONArray messages) throws Exception {
-        URL url = new URL(s.endpoint());
+        String ep = s.endpoint().trim();
+        if (ep.endsWith("/api/v1/chat")) {
+            ep = ep.substring(0, ep.length() - "/api/v1/chat".length()) + "/v1/chat/completions";
+        } else if (ep.endsWith("/v1/chat")) {
+            ep = ep + "/completions";
+        } else if (ep.endsWith("/v1")) {
+            ep = ep + "/chat/completions";
+        } else if (!ep.endsWith("/chat/completions") && !ep.endsWith("/completions")) {
+            if (ep.endsWith("/")) ep = ep.substring(0, ep.length() - 1);
+            ep = ep + "/v1/chat/completions";
+        }
+
+        URL url = new URL(ep);
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setRequestMethod("POST");
         c.setDoOutput(true);

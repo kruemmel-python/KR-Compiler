@@ -144,7 +144,8 @@ public final class CompilerEngine {
         // Go-Kompilierung wenn im KR-Projekt verwendet
         File goArchive = null;
         if (res.codeResult != null && res.codeResult.hasGo && res.codeResult.goDir != null) {
-            String go = findExecutable("go");
+            String go = ToolchainManager.getInstance().getGoExecutable();
+            if (go == null) go = findExecutable("go");
             if (go != null) {
                 log.line("[INFO] Kompiliere Go-Modul mit Go …");
                 List<String> goCmd = Arrays.asList(go, "build", "-buildmode=c-archive", "-o", "libkr_go.a", ".");
@@ -314,10 +315,50 @@ public final class CompilerEngine {
             cmd.add(s.getAbsolutePath());
         }
 
+        // Automatische Erkennung und Verlinkung von SDL3 und SQLite3
+        boolean needsSdl3 = false;
+        boolean needsSqlite3 = false;
+        for (File s : sources) {
+            String name = s.getName().toLowerCase(Locale.ROOT);
+            if (name.endsWith(".cpp") || name.endsWith(".c")) {
+                try {
+                    String content = Files.readString(s.toPath(), StandardCharsets.UTF_8);
+                    if (content.contains("SDL3/SDL.h") || content.contains("SDL_Init")) needsSdl3 = true;
+                    if (content.contains("sqlite3.h") || content.contains("sqlite3_open")) needsSqlite3 = true;
+                } catch (Exception ignored) {}
+            }
+        }
+        File pf = KrProjectConfig.findProjectConfigFile(projectDir);
+        if (pf != null) {
+            KrProjectConfig pcfg = KrProjectConfig.parse(pf, projectDir.getName(), false);
+            for (String dep : pcfg.vcpkgDependencies) {
+                String d = dep.toLowerCase(Locale.ROOT);
+                if (d.contains("sdl3") || d.contains("sdl")) needsSdl3 = true;
+                if (d.contains("sqlite")) needsSqlite3 = true;
+            }
+        }
+
+        if (needsSqlite3) {
+            cmd.add("-lsqlite3");
+        }
+        if (needsSdl3) {
+            cmd.add("-lSDL3");
+            cmd.add("-lgdi32");
+            cmd.add("-luser32");
+            cmd.add("-limm32");
+            cmd.add("-lole32");
+            cmd.add("-loleaut32");
+            cmd.add("-lshell32");
+            cmd.add("-lsetupapi");
+            cmd.add("-lversion");
+            cmd.add("-lwinmm");
+        }
+
         cmd.add("-lws2_32");
         cmd.add("-luserenv");
         cmd.add("-lbcrypt");
         cmd.add("-lntdll");
+        cmd.add("-lwinmm");
 
         cmd.add("-o");
         cmd.add(artifact.getAbsolutePath());
@@ -331,6 +372,15 @@ public final class CompilerEngine {
                 artifact = withExe;
             } else {
                 throw new IOException("Kompilierung beendet, aber Artefakt wurde nicht erzeugt: " + artifact);
+            }
+        }
+
+        if (needsSdl3 && ToolchainManager.getInstance().getToolchainDir() != null) {
+            File sdlDll = new File(ToolchainManager.getInstance().getToolchainDir(), "bin/SDL3.dll");
+            if (sdlDll.isFile()) {
+                try {
+                    Files.copy(sdlDll.toPath(), new File(outputDir, "SDL3.dll").toPath(), StandardCopyOption.REPLACE_EXISTING);
+                } catch (Exception ignored) {}
             }
         }
 
@@ -538,6 +588,19 @@ public final class CompilerEngine {
 
     private static String findExecutable(String name) {
         String withExe = name.toLowerCase(Locale.ROOT).endsWith(".exe") ? name : name + ".exe";
+
+        // 1. Primär: Portable integrierte Toolchain der KR Compiler IDE
+        File tc = ToolchainManager.getInstance().getToolchainDir();
+        if (tc != null && tc.isDirectory()) {
+            File inBin = new File(new File(tc, "bin"), withExe);
+            if (inBin.isFile() && inBin.canExecute()) return inBin.getAbsolutePath();
+            File inGoBin = new File(new File(tc, "go/bin"), withExe);
+            if (inGoBin.isFile() && inGoBin.canExecute()) return inGoBin.getAbsolutePath();
+            File inRustBin = new File(new File(tc, "rust/bin"), withExe);
+            if (inRustBin.isFile() && inRustBin.canExecute()) return inRustBin.getAbsolutePath();
+        }
+
+        // 2. PATH des Systems
         String pathEnv = System.getenv("PATH");
         if (pathEnv != null) {
             for (String dir : pathEnv.split(File.pathSeparator)) {
@@ -545,6 +608,19 @@ public final class CompilerEngine {
                 if (candidate.isFile() && candidate.canExecute()) return candidate.getAbsolutePath();
             }
         }
+
+        // 3. Bekannte Standardpfade
+        String[] wellKnown = {
+                "C:\\msys64\\mingw64\\bin\\" + withExe,
+                "C:\\msys64\\ucrt64\\bin\\" + withExe,
+                "C:\\Program Files\\Go\\bin\\" + withExe,
+                System.getProperty("user.home") + "\\.cargo\\bin\\" + withExe
+        };
+        for (String p : wellKnown) {
+            File f = new File(p);
+            if (f.isFile() && f.canExecute()) return f.getAbsolutePath();
+        }
+
         return null;
     }
 

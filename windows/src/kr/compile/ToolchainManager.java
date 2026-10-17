@@ -119,12 +119,56 @@ public final class ToolchainManager {
         return null;
     }
 
+    public String getGccExecutable() {
+        if (isValidToolchain(toolchainDir)) {
+            File bin = new File(toolchainDir, "bin");
+            File gcc = new File(bin, "gcc.exe");
+            if (gcc.isFile()) return gcc.getAbsolutePath();
+        }
+        return null;
+    }
+
+    public String getGoExecutable() {
+        if (toolchainDir != null && toolchainDir.isDirectory()) {
+            File goBin = new File(toolchainDir, "go/bin/go.exe");
+            if (goBin.isFile()) return goBin.getAbsolutePath();
+            File binGo = new File(toolchainDir, "bin/go.exe");
+            if (binGo.isFile()) return binGo.getAbsolutePath();
+        }
+        File standardGo = new File("C:\\Program Files\\Go\\bin\\go.exe");
+        if (standardGo.isFile()) return standardGo.getAbsolutePath();
+        return null;
+    }
+
+    public File getGoRoot() {
+        if (toolchainDir != null && toolchainDir.isDirectory()) {
+            File goDir = new File(toolchainDir, "go");
+            if (new File(goDir, "bin/go.exe").isFile()) return goDir;
+        }
+        File standardGo = new File("C:\\Program Files\\Go");
+        if (new File(standardGo, "bin/go.exe").isFile()) return standardGo;
+        return null;
+    }
+
     public void injectEnvironment(Map<String, String> env) {
         if (toolchainDir != null && toolchainDir.isDirectory()) {
             File bin = new File(toolchainDir, "bin");
-            if (bin.isDirectory()) {
-                String existing = env.getOrDefault("PATH", "");
-                env.put("PATH", bin.getAbsolutePath() + File.pathSeparator + existing);
+            File goBin = new File(toolchainDir, "go/bin");
+            StringBuilder extra = new StringBuilder();
+            if (bin.isDirectory()) extra.append(bin.getAbsolutePath()).append(File.pathSeparator);
+            if (goBin.isDirectory()) extra.append(goBin.getAbsolutePath()).append(File.pathSeparator);
+
+            String existing = env.getOrDefault("PATH", "");
+            env.put("PATH", extra.toString() + existing);
+
+            File goRoot = getGoRoot();
+            if (goRoot != null) {
+                env.put("GOROOT", goRoot.getAbsolutePath());
+            }
+            env.put("CGO_ENABLED", "1");
+            String gcc = getGccExecutable();
+            if (gcc != null) {
+                env.put("CC", gcc);
             }
         }
     }
