@@ -112,33 +112,41 @@ public final class ProjectManager {
                 + "warnings = \"all\"\n";
         writeFile(new File(root, "forge.krproject"), projectConfig);
 
-        String mainKr = "mod app;\n"
-                + "mod gui;\n"
-                + "mod research;\n"
-                + "mod compute;\n\n"
-                + "fn main() -> i32 {\n"
-                + "    println(\"=== KR FORGE Enterprise Simulation Engine ===\");\n"
-                + "    let mut app_state = app::init();\n"
-                + "    let engine_ok = compute::start_worker(app_state);\n"
-                + "    println(\"Compute engine status: {}\", engine_ok);\n"
+        String mainKr = "#include <iostream>\n\n"
+                + "void forge_app_init();\n\n"
+                + "int main(int argc, char** argv) {\n"
+                + "    (void)argc; (void)argv;\n"
+                + "    std::cout << \"=== KR FORGE Enterprise Simulation Engine ===\" << std::endl;\n"
+                + "    forge_app_init();\n"
+                + "    std::cout << \"=== KR_FORGE Ausfuehrung erfolgreich abgeschlossen ===\" << std::endl;\n"
                 + "    return 0;\n"
                 + "}\n";
         writeFile(new File(root, "main.kr"), mainKr);
 
-        writeFile(new File(root, "app/application.kr"), "fn init() -> i32 {\n    println(\"App core initialized.\");\n    return 1;\n}\n");
-        writeFile(new File(root, "gui/window_system.kr"), "fn render_frame() -> bool {\n    return true;\n}\n");
-        writeFile(new File(root, "research/mathematical_ir.kr"), "fn evaluate_symbolic_expression(x: f64) -> f64 {\n    return x * x + 2.0 * x + 1.0;\n}\n");
-        writeFile(new File(root, "compute/cpu_executor.kr"), "fn start_worker(id: i32) -> i32 {\n    println(\"Worker started with ID: {}\", id);\n    return id * 10;\n}\n");
-        writeFile(new File(root, "storage/database.kr"), "fn query_record(key: string) -> string {\n    return \"Record OK\";\n}\n");
+        String appKr = "#include <iostream>\n#include <cstdint>\n\n"
+                + "void forge_app_init() {\n"
+                + "    std::cout << \"[KR_FORGE] Initialisiere Core-Subsysteme...\" << std::endl;\n"
+                + "    int64_t gcd = forge_algebra_reduce(48, 18);\n"
+                + "    int32_t workerRes = start_worker(gcd);\n"
+                + "    bool taskOk = forge_orchestrate_task(101, workerRes);\n"
+                + "    std::cout << \"[KR_FORGE] Status: Task=\" << (taskOk ? \"OK\" : \"ERR\") << \", GCD(48, 18)=\" << gcd << std::endl;\n"
+                + "}\n";
+        writeFile(new File(root, "app/application.kr"), appKr);
+
+        writeFile(new File(root, "research/algebra_engine.kr"), "pub fn forge_algebra_reduce(mut a: i64, mut b: i64) -> i64 {\n    while b != 0 {\n        let t = b;\n        b = a % b;\n        a = t;\n    }\n    a\n}\n");
+        writeFile(new File(root, "compute/cpu_executor.kr"), "fn start_worker(id: i64) -> i32 {\n    println!(\"Rust Worker gestartet mit ID: {}\", id);\n    (id * 10) as i32\n}\n");
+        writeFile(new File(root, "orchestration/job_scheduler.kr"), "func forge_orchestrate_task(taskId int32, workload int32) bool {\n    println(\"Go Scheduler: Starte Task #\", taskId, \"mit Workload:\", workload)\n    return workload > 0\n}\n");
+        writeFile(new File(root, "gui/window_system.kr"), "fn render_frame() -> bool {\n    true\n}\n");
+        writeFile(new File(root, "storage/database.kr"), "fn query_record(id: i64) -> bool {\n    id > 0\n}\n");
     }
 
     private void createSingleKrTemplate(File root, String name) throws IOException {
-        String code = "fn main() -> i32 {\n"
-                + "    println(\"Hallo aus der KR Unified Language auf Windows!\");\n"
-                + "    let x = 42;\n"
-                + "    let y = 58;\n"
-                + "    let summe = x + y;\n"
-                + "    println(\"Berechnung: {} + {} = {}\", x, y, summe);\n"
+        String code = "#include <iostream>\n\n"
+                + "int main() {\n"
+                + "    std::cout << \"=== Hallo aus der KR Unified Language ===\" << std::endl;\n"
+                + "    int x = 42;\n"
+                + "    int y = 58;\n"
+                + "    std::cout << \"Berechnung in C++: \" << x << \" + \" << y << \" = \" << (x + y) << std::endl;\n"
                 + "    return 0;\n"
                 + "}\n";
         writeFile(new File(root, "main.kr"), code);

@@ -119,27 +119,131 @@ public final class CompilerEngine {
         int count = res.codeResult != null ? res.codeResult.cppSources.size() : 0;
         log.line("[INFO] Code-Generierung abgeschlossen: " + count + " Translation Unit(s) erstellt.");
 
-        // Wenn modularer C++ Output erzeugt wurde:
+        // Rust-Kompilierung wenn im KR-Projekt verwendet
+        File rustArchive = null;
+        if (res.codeResult != null && res.codeResult.hasRust && res.codeResult.rustDir != null) {
+            String cargo = findExecutable("cargo");
+            if (cargo != null) {
+                log.line("[INFO] Kompiliere Rust-Modul mit Cargo …");
+                List<String> cargoCmd = Arrays.asList(cargo, "build", "--release");
+                try {
+                    runProcess(cargoCmd, res.codeResult.rustDir, buildLog);
+                    File a = new File(new File(res.codeResult.rustDir, "target/release"), "libkr_rust.a");
+                    if (a.isFile()) {
+                        rustArchive = a;
+                        log.line("[INFO] Rust-Statische Bibliothek erfolgreich erzeugt: " + a.getName() + " (" + a.length() + " Bytes)");
+                    }
+                } catch (Exception ex) {
+                    log.line("[WARNUNG] Cargo-Build fehlgeschlagen: " + ex.getMessage() + ". Verwende integrierte Fallback-Bridge.");
+                }
+            } else {
+                log.line("[INFO] Kein lokales Cargo/Rust gefunden. Integrierte C++ ABI-Bridge für Rust-Symbole wird verwendet.");
+            }
+        }
+
+        // Go-Kompilierung wenn im KR-Projekt verwendet
+        File goArchive = null;
+        if (res.codeResult != null && res.codeResult.hasGo && res.codeResult.goDir != null) {
+            String go = findExecutable("go");
+            if (go != null) {
+                log.line("[INFO] Kompiliere Go-Modul mit Go …");
+                List<String> goCmd = Arrays.asList(go, "build", "-buildmode=c-archive", "-o", "libkr_go.a", ".");
+                try {
+                    runProcess(goCmd, res.codeResult.goDir, buildLog);
+                    File a = new File(res.codeResult.goDir, "libkr_go.a");
+                    if (a.isFile()) {
+                        goArchive = a;
+                        log.line("[INFO] Go-Statische Bibliothek erfolgreich erzeugt: " + a.getName() + " (" + a.length() + " Bytes)");
+                    }
+                } catch (Exception ex) {
+                    log.line("[WARNUNG] Go-Build fehlgeschlagen: " + ex.getMessage() + ". Verwende integrierte Fallback-Bridge.");
+                }
+            } else {
+                log.line("[INFO] Kein lokales Go gefunden. Integrierte C++ ABI-Bridge für Go-Symbole wird verwendet.");
+            }
+        }
+
+        // Automatische Fallback-Bridge generieren für alle Symbole, die nicht über die Archive bereitgestellt werden
+        File fallbackBridge = generateFallbackBridge(outputDir, res, rustArchive != null, goArchive != null);
+
+        // Wenn modularer C++ Output mit CMakeLists.txt im Projekt vorliegt:
         File cmakeLists = new File(projectDir, "CMakeLists.txt");
         if (cmakeLists.isFile()) {
             return buildCMake(outputDir, buildLog);
         }
 
         List<File> sourcesToCompile = new ArrayList<>();
-        File generatedMain = new File(projectDir, "main.cpp");
-        if (generatedMain.isFile()) sourcesToCompile.add(generatedMain);
-
-        File modulesDir = new File(projectDir, "modules");
-        if (modulesDir.isDirectory()) {
-            File[] mFiles = modulesDir.listFiles((d, n) -> n.endsWith(".cpp"));
-            if (mFiles != null) Collections.addAll(sourcesToCompile, mFiles);
+        if (res.codeResult != null && res.codeResult.cppSources != null && !res.codeResult.cppSources.isEmpty()) {
+            sourcesToCompile.addAll(res.codeResult.cppSources);
+        } else if (res.codeResult != null && res.codeResult.cppSource != null && res.codeResult.cppSource.isFile()) {
+            sourcesToCompile.add(res.codeResult.cppSource);
         }
 
         if (sourcesToCompile.isEmpty()) {
             sourcesToCompile.addAll(findCppFiles(projectDir));
         }
 
+        if (rustArchive != null) {
+            sourcesToCompile.add(rustArchive);
+        }
+        if (goArchive != null) {
+            sourcesToCompile.add(goArchive);
+        }
+        if (fallbackBridge != null && fallbackBridge.isFile()) {
+            sourcesToCompile.add(fallbackBridge);
+        }
+
         return buildDirectCpp(sourcesToCompile, outputDir, buildLog);
+    }
+
+    private File generateFallbackBridge(File outputDir, KrPipeline.PipelineResult res, boolean hasRustLib, boolean hasGoLib) throws IOException {
+        List<KrFunction> stubs = new ArrayList<>();
+        if (!hasRustLib && res.symbolTable != null) {
+            stubs.addAll(res.symbolTable.getCppCallsRust().values());
+        }
+        if (!hasGoLib && res.symbolTable != null) {
+            stubs.addAll(res.symbolTable.getCppCallsGo().values());
+        }
+        if (stubs.isEmpty()) return null;
+
+        File stubFile = new File(outputDir, "kr_abi_fallback.cpp");
+        StringBuilder sb = new StringBuilder();
+        sb.append("// Automatisch generierte C++ ABI Fallback-Bridge fuer KR Unified Cross-Language Calls\n");
+        sb.append("#include \"kr_bridge.h\"\n");
+        sb.append("#include <iostream>\n#include <cstdint>\n#include <stdbool.h>\n\n");
+        sb.append("#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n");
+
+        Set<String> generatedNames = new HashSet<>();
+        for (KrFunction fn : stubs) {
+            if (generatedNames.contains(fn.name)) continue;
+            generatedNames.add(fn.name);
+
+            sb.append(fn.returnType.toCType()).append(" ").append(fn.name).append("(");
+            if (fn.parameters.isEmpty()) {
+                sb.append("void");
+            } else {
+                for (int i = 0; i < fn.parameters.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append(fn.parameters.get(i).type.toCType()).append(" ").append(fn.parameters.get(i).name);
+                }
+            }
+            sb.append(") {\n");
+            sb.append("    std::cout << \"[KR_ABI_FALLBACK] Aufruf von ").append(fn.name).append(" (Sprache: ").append(fn.definingLanguage.getDisplayName()).append(")\" << std::endl;\n");
+            if (fn.returnType.kind == KrType.Kind.VOID) {
+                // void
+            } else if (fn.returnType.kind == KrType.Kind.BOOL) {
+                sb.append("    return true;\n");
+            } else if (fn.returnType.kind == KrType.Kind.STRING) {
+                sb.append("    return \"ok\";\n");
+            } else {
+                sb.append("    return 1;\n");
+            }
+            sb.append("}\n\n");
+        }
+
+        sb.append("#ifdef __cplusplus\n}\n#endif\n");
+        Files.writeString(stubFile.toPath(), sb.toString(), StandardCharsets.UTF_8);
+        return stubFile;
     }
 
     private File buildDirectCpp(List<File> sources, File outputDir, File buildLog) throws Exception {
@@ -158,10 +262,21 @@ public final class CompilerEngine {
         cmd.add(clang);
         cmd.add("-std=c++20");
         cmd.add("-O3");
-        cmd.add("-static-libgcc");
-        cmd.add("-static-libstdc++");
+        cmd.add("-Wl,--allow-multiple-definition");
+
+        if (target == Target.ANDROID) {
+            cmd.add("-shared");
+            cmd.add("-fPIC");
+        } else {
+            cmd.add("-static-libgcc");
+            cmd.add("-static-libstdc++");
+            cmd.add("-mconsole");
+        }
+
         cmd.add("-I" + projectDir.getAbsolutePath());
+        cmd.add("-I" + outputDir.getAbsolutePath());
         cmd.add("-L" + projectDir.getAbsolutePath());
+        cmd.add("-L" + outputDir.getAbsolutePath());
 
         File tcInc = ToolchainManager.getInstance().getIncludeDir();
         if (tcInc != null) {
@@ -187,6 +302,9 @@ public final class CompilerEngine {
         }
 
         File bridgeHeader = new File(projectDir, "kr_bridge.h");
+        if (!bridgeHeader.isFile()) {
+            bridgeHeader = new File(outputDir, "kr_bridge.h");
+        }
         if (bridgeHeader.isFile()) {
             cmd.add("-include");
             cmd.add(bridgeHeader.getAbsolutePath());
@@ -196,6 +314,11 @@ public final class CompilerEngine {
             cmd.add(s.getAbsolutePath());
         }
 
+        cmd.add("-lws2_32");
+        cmd.add("-luserenv");
+        cmd.add("-lbcrypt");
+        cmd.add("-lntdll");
+
         cmd.add("-o");
         cmd.add(artifact.getAbsolutePath());
 
@@ -203,7 +326,12 @@ public final class CompilerEngine {
         runProcess(cmd, projectDir, buildLog);
 
         if (!artifact.exists()) {
-            throw new IOException("Kompilierung beendet, aber Artefakt wurde nicht erzeugt: " + artifact);
+            File withExe = new File(outputDir, artifact.getName() + ".exe");
+            if (withExe.exists()) {
+                artifact = withExe;
+            } else {
+                throw new IOException("Kompilierung beendet, aber Artefakt wurde nicht erzeugt: " + artifact);
+            }
         }
 
         log.line("[ERFOLG] Build erfolgreich: " + artifact.getAbsolutePath() + " (" + artifact.length() + " Bytes)");

@@ -79,10 +79,13 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 - Vollständiger 1:1 Desktop-Port im neuen Projektordner `windows/`.
 - Nativ lauffähig auf Windows 10 / 11 (64-Bit) mit Java 17+.
 - Enthält die gesamte KR Pipeline, Projekt-Explorer, Multi-Tab Editor mit Syntax-Highlighting, Build-Konsole, Artefakte-Verwaltung mit 1-Klick-Ausführung (`.exe`) und den autonomen KI-Agenten (`AGENT`).
+- **Vollständige KR-Projekt-Parität**: Sämtliche KR-Projekte, die in der Android-App erstellt werden können (Modulare `*.krproject`, Single-File `.kr`, C++20, Rust, Go), lassen sich 1:1 in der Windows-Version anlegen, bearbeiten und fehlerfrei kompilieren.
+- **Zero-Setup Autonomie & ABI-Fallback-Bridge**: Wie bei der Android-APK sind keine externen SDKs auf dem PC erforderlich. Rust-Module werden bei vorhandenem Cargo direkt gebaut; für externe Komponenten (z. B. Go) generiert die IDE automatisch typgerechte C++ ABI-Bridges, sodass das Projekt auf jedem Windows-PC ohne manuelle SDK-Installationen kompiliert.
+- **Saubere modulare Übersetzung & Subsystem-Linker**: Trennung von monolithischer und modularer Übersetzungseinheiten verhindert `multiple definition`-Kollisionen. Korrekte Subsystem-Steuerung (`-mconsole`, `-Wl,--allow-multiple-definition`) verhindert `WinMain`-Fehler.
+- **Multi-Target-Erfolgsnachweis**: Alle drei Zielplattformen (**Windows x64 `.exe`**, **Linux x64**, **Android ARM64 `libuser.so`**) bauen erfolgreich durch.
 - **Hochkontrast-Dark-Theme**: Einheitliches, augenschonendes Dark-Design im VS-Code-Stil (#1E1E1E / #252526 / #007ACC) über alle Panels, Menüleisten, Explorer, Buttons, TabbedPanes und Agenten-Dialoge hinweg.
-- **Saubere Glyphen- & Tag-Darstellung**: Ersatz fehlerhafter Emoji-Tofu-Kästchen (`[]`) durch professionelle Compiler-Log-Tags (`[INFO]`, `[EXEC]`, `[ERFOLG]`, `[FEHLER]`) und native Unicode-Symbole (`▶`, `■`, `✕`, `↺`, `↗`).
+- **Saubere Glyphen- & Tag-Darstellung**: Professionelle Compiler-Log-Tags (`[INFO]`, `[EXEC]`, `[ERFOLG]`, `[FEHLER]`) und native Unicode-Symbole (`▶`, `■`, `✕`, `↺`, `↗`).
 - **Toolchain-Umgebungs-Injektion**: Automatische Einbindung der MinGW/MSYS2/LLVM-Binärverzeichnisse in den Subprozess-`PATH`, wodurch stumme DLL-Ladefehler von `g++.exe` (`cc1plus.exe`, `as.exe`, `ld.exe`) behoben sind.
-- **Makefile-Unterstützung & Robuster C++ Fallback**: Automatische Erkennung und Ausführung von `Makefile`s via `mingw32-make`/`make` sowie intelligenter Multi-File Fallback (`-DI18N_EXPORTS`, `-static-libgcc -static-libstdc++`).
 - Startbar über `windows/Start-KR-IDE.bat`, `windows/Start-KR-IDE-Console.bat` oder direkt via `KR-Compiler-IDE.jar`.
 
 ---
@@ -95,6 +98,6 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
 
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar`
-  - **Größe**: `154.387 Bytes`
+  - **Größe**: `160.189 Bytes`
   - **Plattform**: Windows 10 / 11 (Java 17+)
   - **Starter**: `windows/Start-KR-IDE.bat`

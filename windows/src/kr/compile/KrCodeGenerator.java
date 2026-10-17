@@ -80,7 +80,7 @@ public final class KrCodeGenerator {
         // 2. Generate C++ sources (modular + fallback main)
         File cppSource = null;
         List<File> cppSources = new ArrayList<>();
-        if (hasCpp || (hasRust && hasGo)) {
+        if (hasCpp || hasRust || hasGo) {
             cppSource = new File(buildDir, "kr_cpp.cpp");
             cppSources = generateCppSources(cppSource, hasCpp);
         }
@@ -155,9 +155,17 @@ public final class KrCodeGenerator {
             }
         }
 
-        // If no explicit main exists in C++ or Rust or Go, generate a standard launcher
+        // If main is in Rust or Go, create standard C/C++ main entry point calling KrLanguageMain
         KrFunction main = symbolTable.getMainFunction();
-        if (main == null && hasCppSegments) {
+        if (main != null && (main.definingLanguage == KrLanguage.RUST || main.definingLanguage == KrLanguage.GO)) {
+            sb.append("\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n");
+            sb.append("int KrLanguageMain(void);\n");
+            sb.append("#ifdef __cplusplus\n}\n#endif\n\n");
+            sb.append("int main(int argc, char** argv) {\n");
+            sb.append("    (void)argc; (void)argv;\n");
+            sb.append("    return KrLanguageMain();\n");
+            sb.append("}\n");
+        } else if (main == null) {
             sb.append("\nint main(int argc, char** argv) {\n");
             sb.append("    (void)argc; (void)argv;\n");
             sb.append("    std::cout << \"KR Unified Language Programm gestartet.\" << std::endl;\n");
@@ -177,6 +185,7 @@ public final class KrCodeGenerator {
         }
 
         if (fileMap.size() > 1) {
+            generated.clear(); // Verwende modulare TUs statt monolithischem kr_cpp.cpp
             File modulesDir = new File(buildDir, "modules");
             if (!modulesDir.isDirectory()) modulesDir.mkdirs();
             for (Map.Entry<String, List<KrSegment>> entry : fileMap.entrySet()) {
@@ -191,6 +200,32 @@ public final class KrCodeGenerator {
                     mb.append(s.source).append("\n");
                 }
                 writeText(modFile, mb.toString());
+                generated.add(modFile);
+            }
+
+            if (main == null || main.definingLanguage == KrLanguage.RUST || main.definingLanguage == KrLanguage.GO) {
+                File runnerFile = new File(modulesDir, "kr_runner.cpp");
+                StringBuilder rb = new StringBuilder();
+                rb.append("// KR Unified Entry Runner\n");
+                rb.append("#include \"../kr_bridge.h\"\n");
+                rb.append("#include <iostream>\n\n");
+                if (main != null && (main.definingLanguage == KrLanguage.RUST || main.definingLanguage == KrLanguage.GO)) {
+                    rb.append("#ifdef __cplusplus\nextern \"C\" {\n#endif\n");
+                    rb.append("int KrLanguageMain(void);\n");
+                    rb.append("#ifdef __cplusplus\n}\n#endif\n\n");
+                    rb.append("int main(int argc, char** argv) {\n");
+                    rb.append("    (void)argc; (void)argv;\n");
+                    rb.append("    return KrLanguageMain();\n");
+                    rb.append("}\n");
+                } else {
+                    rb.append("int main(int argc, char** argv) {\n");
+                    rb.append("    (void)argc; (void)argv;\n");
+                    rb.append("    std::cout << \"KR Unified Language Programm gestartet.\" << std::endl;\n");
+                    rb.append("    return 0;\n");
+                    rb.append("}\n");
+                }
+                writeText(runnerFile, rb.toString());
+                generated.add(runnerFile);
             }
         }
 
@@ -204,7 +239,7 @@ public final class KrCodeGenerator {
         }
 
         // Cargo.toml
-        String cargoToml = "[package]\nname = \"kr_rust_module\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n"
+        String cargoToml = "[package]\nname = \"kr_rust_module\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n"
                 + "[lib]\nname = \"kr_rust\"\npath = \"src/lib.rs\"\ncrate-type = [\"staticlib\"]\n\n"
                 + "[profile.release]\nopt-level = 2\nlto = true\npanic = \"abort\"\n";
         writeText(new File(crateDir, "Cargo.toml"), cargoToml);
@@ -263,10 +298,10 @@ public final class KrCodeGenerator {
                     if (symbolTable.isExported(fn.name)) {
                         if (!segCode.contains("extern \"C\" fn " + fn.name) && !segCode.contains("extern \"C\"\nfn " + fn.name)) {
                             segCode = segCode.replaceAll("(?m)^([ \t]*)(?:pub[ \t]+)?fn[ \t]+" + fn.name + "\\b",
-                                    "$1#[unsafe(no_mangle)]\n$1pub extern \"C\" fn " + fn.name);
+                                    "$1#[no_mangle]\n$1pub extern \"C\" fn " + fn.name);
                         } else if (!segCode.contains("no_mangle")) {
                             segCode = segCode.replaceAll("(?m)^([ \t]*)(?:pub[ \t]+)?extern[ \t]+\"C\"[ \t]+fn[ \t]+" + fn.name + "\\b",
-                                    "$1#[unsafe(no_mangle)]\n$1pub extern \"C\" fn " + fn.name);
+                                    "$1#[no_mangle]\n$1pub extern \"C\" fn " + fn.name);
                         }
                     }
                 }
@@ -276,7 +311,7 @@ public final class KrCodeGenerator {
 
         KrFunction main = symbolTable.getMainFunction();
         if (main != null && main.definingLanguage == KrLanguage.RUST) {
-            sb.append("\n#[unsafe(no_mangle)]\npub extern \"C\" fn KrLanguageMain() -> i32 {\n    main();\n    0\n}\n");
+            sb.append("\n#[no_mangle]\npub extern \"C\" fn KrLanguageMain() -> i32 {\n    main();\n    0\n}\n");
         }
 
         writeText(new File(srcDir, "lib.rs"), sb.toString());

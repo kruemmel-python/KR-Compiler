@@ -100,6 +100,18 @@ public final class KrProjectConfig {
                 String key = line.substring(0, eq).trim().toLowerCase(Locale.ROOT);
                 String val = line.substring(eq + 1).trim();
 
+                // Multiline array support
+                if (val.startsWith("[") && !val.contains("]")) {
+                    StringBuilder arrayVal = new StringBuilder(val);
+                    while ((line = reader.readLine()) != null) {
+                        String trimmed = line.trim();
+                        if (trimmed.startsWith("#") || trimmed.startsWith(";")) continue;
+                        arrayVal.append(" ").append(trimmed);
+                        if (trimmed.contains("]")) break;
+                    }
+                    val = arrayVal.toString();
+                }
+
                 // Strip quotes if present
                 if (val.startsWith("\"") && val.endsWith("\"") && val.length() >= 2) {
                     val = val.substring(1, val.length() - 1);
@@ -115,7 +127,7 @@ public final class KrProjectConfig {
                         isGui = val.equalsIgnoreCase("gui") || val.equalsIgnoreCase("sdl3") || val.equalsIgnoreCase("window");
                     }
                 } else if (currentSection.equals("modules") || currentSection.equals("module")) {
-                    if (key.equals("paths") || key.equals("path") || key.equals("modules")) {
+                    if (key.equals("paths") || key.equals("path") || key.equals("modules") || key.equals("sources") || key.equals("scan_directories") || key.equals("directories") || key.equals("folders")) {
                         parseArrayValues(val, modulePaths);
                     }
                 } else if (currentSection.equals("dependencies") || currentSection.equals("vcpkg")) {
