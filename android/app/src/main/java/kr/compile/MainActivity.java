@@ -78,6 +78,7 @@ public final class MainActivity extends Activity implements
     private Button tabFiles;
     private Button tabBuild;
     private Button tabArtifacts;
+    private Button krAgentButton;
 
     // Open Document Tabs Strip
     private HorizontalScrollView docTabStripScroll;
@@ -191,7 +192,7 @@ public final class MainActivity extends Activity implements
 
         // 2. Navigation Tabs (CODE | DATEIEN | BUILD | ARTEFAKTE)
         navTabBar = createNavTabBar();
-        Button krAgentButton = new Button(this);
+        krAgentButton = new Button(this);
         krAgentButton.setText("AGENT");
         krAgentButton.setAllCaps(false);
         krAgentButton.setOnClickListener(v -> KrAgentDialog.show(this));
@@ -244,6 +245,37 @@ public final class MainActivity extends Activity implements
         // Check wide layout
         adaptLayout(getResources().getConfiguration());
         switchView(ViewMode.CODE);
+
+        KrAgentCore agentCore = KrAgentDialog.getAgent(this);
+        agentCore.setStatusListener((statusText, isRunning) -> {
+            runOnUiThread(() -> {
+                if (krAgentButton != null) {
+                    if (isRunning) {
+                        krAgentButton.setText("🤖 AGENT (aktiv)");
+                        krAgentButton.setTextColor(Color.parseColor("#4CAF50"));
+                    } else {
+                        krAgentButton.setText("AGENT");
+                        krAgentButton.setTextColor(Color.WHITE);
+                    }
+                }
+                if (statusIndicator != null && isRunning) {
+                    statusIndicator.setText("🤖 Agent: " + statusText);
+                }
+            });
+        });
+        agentCore.setApproval((title, detail, callback) -> {
+            if (isFinishing() || isDestroyed()) {
+                callback.accept(false);
+                return;
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle(title)
+                    .setMessage(detail)
+                    .setCancelable(false)
+                    .setNegativeButton("Ablehnen", (d, w) -> callback.accept(false))
+                    .setPositiveButton("Genehmigen", (d, w) -> callback.accept(true))
+                    .show();
+        });
     }
 
     private LinearLayout createTopBar() {

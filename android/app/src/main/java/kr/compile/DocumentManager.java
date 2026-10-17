@@ -56,6 +56,15 @@ public final class DocumentManager {
         return null;
     }
 
+    public void reloadIfOpen(String relativePath, String newContent) {
+        if (relativePath == null || newContent == null) return;
+        DocumentModel doc = findByRelativePath(relativePath);
+        if (doc != null) {
+            doc.markSaved(newContent);
+            notifyModified(doc);
+        }
+    }
+
     public DocumentModel openDocument(String relativePath, String content, Uri safUri, File localFile) {
         DocumentModel existing = findByRelativePath(relativePath);
         if (existing != null) {

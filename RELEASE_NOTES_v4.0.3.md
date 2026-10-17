@@ -25,6 +25,8 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Unantastbarer Compilerkern**: Der interne Compiler (`CompilerEngine`, `KrPipeline`, Toolchains, Sysroots) kann vom Agenten weder eingesehen noch verändert werden.
   - **Revisionssicheres Audit-Log**: Sämtliche Aktionen werden lückenlos mit Zeitstempeln im Journal `kr_agent_audit.jsonl` festgehalten.
   - **Sichere Token-Handhabung**: API-Schlüssel werden nach dem Start sofort aus dem Textfeld entfernt und verbleiben ausschließlich flüchtig im Speicher.
+  - **Volle Unterstützung für SAF- und Dateimanager-Projekte**: Der Agent analysiert und editiert nun sowohl frisch erstellte als auch über den Android-Dateiexplorer geöffnete externe Projektordner (Storage Access Framework).
+  - **Persistenter Logverlauf & Live-Feedback**: Der Agentenfortschritt wird kontinuierlich angezeigt (ProgressBar, Status-Banner, AGENT-Button-Indikator). Beim Schließen des Dialogs läuft der Agent im Hintergrund weiter, ohne dass das Logfenster zurückgesetzt wird.
   - **Sofortiger Abbruch**: Laufende Agentenprozesse und Builds können jederzeit über **`STOPP`** beendet werden.
 
 ---
@@ -70,6 +72,6 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 ## Prüfsumme
 
 - **Datei**: `KR-Compiler-Android-IDE-v4.0.3.apk`
-- **Größe**: `744.016.332 Bytes`
-- **SHA-256**: `82841D86BE43A3DE0DFFEEC3F9D33BED55ABE1F0209DB1FCFF7D35B348C24125`
+- **Größe**: `744.022.196 Bytes`
+- **SHA-256**: `1ad2b512a49b90782099d039814216e4f50506f70f763a91b4ef7732b791433b`
 - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)

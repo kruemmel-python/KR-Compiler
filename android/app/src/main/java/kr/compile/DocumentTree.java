@@ -93,6 +93,41 @@ final class DocumentTree {
         return null;
     }
 
+    static void writeSafFile(Context context, Uri tree, String relativePath, String content) throws IOException {
+        if (tree == null || relativePath == null || relativePath.isBlank()) return;
+        String rootId = DocumentsContract.getTreeDocumentId(tree);
+        Uri currentParent = DocumentsContract.buildDocumentUriUsingTree(tree, rootId);
+        String normalized = relativePath.replace('\\', '/');
+        if (normalized.startsWith("/")) normalized = normalized.substring(1);
+        String[] segments = normalized.split("/");
+        for (int i = 0; i < segments.length; i++) {
+            String seg = segments[i].trim();
+            if (seg.isEmpty() || seg.equals(".")) continue;
+            boolean isLast = (i == segments.length - 1);
+            if (isLast) {
+                Uri doc = findChild(context, tree, currentParent, seg);
+                if (doc != null) {
+                    try {
+                        DocumentsContract.deleteDocument(context.getContentResolver(), doc);
+                    } catch (Exception ignored) {}
+                }
+                doc = DocumentsContract.createDocument(context.getContentResolver(), currentParent, mime(seg), seg);
+                if (doc == null) throw new IOException("SAF-Datei konnte nicht erstellt werden: " + seg);
+                try (OutputStream out = context.getContentResolver().openOutputStream(doc, "wt")) {
+                    if (out == null) throw new IOException("SAF-Datei nicht schreibbar: " + seg);
+                    out.write(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            } else {
+                Uri dir = findChild(context, tree, currentParent, seg);
+                if (dir == null) {
+                    dir = DocumentsContract.createDocument(context.getContentResolver(), currentParent, DocumentsContract.Document.MIME_TYPE_DIR, seg);
+                }
+                if (dir == null) throw new IOException("SAF-Ordner konnte nicht erstellt werden: " + seg);
+                currentParent = dir;
+            }
+        }
+    }
+
     private static String safeName(String name) throws IOException {
         if (name == null || name.equals(".") || name.equals("..") || name.contains("/") || name.contains("\\"))
             throw new IOException("Ungültiger Dateiname im Projekt.");
@@ -101,7 +136,12 @@ final class DocumentTree {
     private static String mime(String name) {
         if (name.endsWith(".apk")) return "application/vnd.android.package-archive";
         if (name.endsWith(".json")) return "application/json";
-        if (name.endsWith(".txt") || name.endsWith(".log")) return "text/plain";
+        if (name.endsWith(".txt") || name.endsWith(".log") || name.endsWith(".kr") || name.endsWith(".cpp")
+                || name.endsWith(".h") || name.endsWith(".hpp") || name.endsWith(".c") || name.endsWith(".rs")
+                || name.endsWith(".go") || name.endsWith(".md") || name.endsWith(".toml") || name.endsWith(".krproject")
+                || name.endsWith(".cmake") || name.equals("CMakeLists.txt")) {
+            return "text/plain";
+        }
         return "application/octet-stream";
     }
     private static void transfer(InputStream in, OutputStream out) throws IOException {
