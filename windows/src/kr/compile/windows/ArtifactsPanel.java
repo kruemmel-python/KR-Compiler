@@ -31,21 +31,21 @@ public final class ArtifactsPanel extends JPanel {
         toolbar.setBackground(DarkTheme.BG_TOOLBAR);
         toolbar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, DarkTheme.BORDER_DARK));
 
-        btnRun = DarkTheme.createStyledButton("▶️ Ausführen", DarkTheme.ACCENT_GREEN, Color.WHITE);
+        btnRun = DarkTheme.createStyledButton("▶ Ausführen", DarkTheme.ACCENT_GREEN, Color.WHITE);
         btnRun.setEnabled(false);
         btnRun.addActionListener(e -> runSelectedArtifact());
         toolbar.add(btnRun);
 
-        btnOpenExplorer = DarkTheme.createStyledButton("📂 Im Explorer", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
+        btnOpenExplorer = DarkTheme.createStyledButton("Im Explorer", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnOpenExplorer.setEnabled(false);
         btnOpenExplorer.addActionListener(e -> openSelectedInExplorer());
         toolbar.add(btnOpenExplorer);
 
-        btnViewLog = DarkTheme.createStyledButton("📄 Log öffnen", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
+        btnViewLog = DarkTheme.createStyledButton("Log öffnen", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnViewLog.addActionListener(e -> openBuildLog());
         toolbar.add(btnViewLog);
 
-        JButton btnRefresh = DarkTheme.createStyledButton("↻ Aktualisieren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
+        JButton btnRefresh = DarkTheme.createStyledButton("Aktualisieren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnRefresh.addActionListener(e -> refreshArtifacts());
         toolbar.add(btnRefresh);
 

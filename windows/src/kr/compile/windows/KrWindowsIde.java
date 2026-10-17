@@ -65,7 +65,7 @@ public final class KrWindowsIde extends JFrame {
         btnNavFiles = createNavButton("DATEIEN", () -> showView("FILES"));
         btnNavBuild = createNavButton("BUILD", () -> showView("BUILD"));
         btnNavArtifacts = createNavButton("ARTEFAKTE", () -> showView("ARTIFACTS"));
-        btnNavAgent = createNavButton("🤖 AGENT", () -> agentDialog.setVisible(true));
+        btnNavAgent = createNavButton("AGENT", () -> agentDialog.setVisible(true));
 
         navBar.add(btnNavCode);
         navBar.add(btnNavFiles);
@@ -146,13 +146,13 @@ public final class KrWindowsIde extends JFrame {
 
         agentCore.setStatusListener((statusText, isRunning) -> {
             if (isRunning) {
-                btnNavAgent.setText("🤖 AGENT (aktiv)");
+                btnNavAgent.setText("AGENT (aktiv)");
                 btnNavAgent.setBackground(DarkTheme.ACCENT_GREEN);
                 btnNavAgent.setForeground(Color.WHITE);
-                statusAgent.setText("🤖 Agent: " + statusText);
+                statusAgent.setText("Agent: " + statusText);
                 statusAgent.setForeground(DarkTheme.ACCENT_GREEN);
             } else {
-                btnNavAgent.setText("🤖 AGENT");
+                btnNavAgent.setText("AGENT");
                 btnNavAgent.setBackground(DarkTheme.BG_BUTTON);
                 btnNavAgent.setForeground(DarkTheme.FG_PRIMARY);
                 statusAgent.setText("Agent: " + statusText);

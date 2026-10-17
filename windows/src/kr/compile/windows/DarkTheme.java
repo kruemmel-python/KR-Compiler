@@ -161,7 +161,7 @@ public final class DarkTheme {
         btn.setUI(new BasicButtonUI());
         btn.setBackground(BG_BUTTON);
         btn.setForeground(FG_PRIMARY);
-        btn.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 12));
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btn.setToolTipText(tooltip);
         btn.setFocusPainted(false);
         btn.setPreferredSize(new Dimension(28, 26));

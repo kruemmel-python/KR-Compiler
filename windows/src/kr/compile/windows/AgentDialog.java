@@ -149,7 +149,7 @@ public final class AgentDialog extends JDialog {
         logTitle.setForeground(DarkTheme.FG_PRIMARY);
         logToolbar.add(logTitle);
 
-        JButton btnCopy = DarkTheme.createStyledButton("📋 Kopieren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
+        JButton btnCopy = DarkTheme.createStyledButton("Kopieren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnCopy.addActionListener(e -> {
             String text = core.getLogHistory();
             if (text.isEmpty()) text = txtLog.getText();
@@ -159,7 +159,7 @@ public final class AgentDialog extends JDialog {
         });
         logToolbar.add(btnCopy);
 
-        JButton btnExport = DarkTheme.createStyledButton("💾 Export", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
+        JButton btnExport = DarkTheme.createStyledButton("Export", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnExport.addActionListener(e -> {
             try {
                 String path = core.exportLogToProject();
@@ -170,7 +170,7 @@ public final class AgentDialog extends JDialog {
         });
         logToolbar.add(btnExport);
 
-        JButton btnClear = DarkTheme.createStyledButton("🗑️ Leeren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
+        JButton btnClear = DarkTheme.createStyledButton("Leeren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnClear.addActionListener(e -> {
             core.clearLogHistory();
             txtLog.setText("Protokoll geleert.\n");

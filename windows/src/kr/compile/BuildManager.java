@@ -71,13 +71,13 @@ public final class BuildManager {
                 File artifact = activeEngine.build();
                 success = true;
                 resultMessage = "Build erfolgreich: " + artifact.getName();
-                logger.line("✅ " + resultMessage);
+                logger.line("[ERFOLG] " + resultMessage);
             } catch (InterruptedException e) {
                 resultMessage = "Build vom Benutzer abgebrochen.";
-                logDirect("⚠️ " + resultMessage);
+                logDirect("[ABGEBROCHEN] " + resultMessage);
             } catch (Exception e) {
                 resultMessage = "Fehler: " + e.getMessage();
-                logDirect("❌ " + resultMessage);
+                logDirect("[FEHLER] " + resultMessage);
             } finally {
                 building = false;
                 activeEngine = null;

@@ -37,11 +37,11 @@ public final class ProjectExplorerPanel extends JPanel implements ProjectManager
 
         toolbar.add(Box.createHorizontalStrut(8));
 
-        JButton btnRefresh = DarkTheme.createIconButton("↻", "Projektstruktur aktualisieren");
+        JButton btnRefresh = DarkTheme.createIconButton("↺", "Projektstruktur aktualisieren");
         btnRefresh.addActionListener(e -> ProjectManager.getInstance().refreshTree());
         toolbar.add(btnRefresh);
 
-        JButton btnOpenExp = DarkTheme.createIconButton("📂", "Im Windows Explorer öffnen");
+        JButton btnOpenExp = DarkTheme.createIconButton("↗", "Im Windows Explorer öffnen");
         btnOpenExp.addActionListener(e -> {
             File p = ProjectManager.getInstance().getActiveProjectDir();
             if (p != null) {

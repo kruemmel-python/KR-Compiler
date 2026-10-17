@@ -80,6 +80,9 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 - Nativ lauffähig auf Windows 10 / 11 (64-Bit) mit Java 17+.
 - Enthält die gesamte KR Pipeline, Projekt-Explorer, Multi-Tab Editor mit Syntax-Highlighting, Build-Konsole, Artefakte-Verwaltung mit 1-Klick-Ausführung (`.exe`) und den autonomen KI-Agenten (`AGENT`).
 - **Hochkontrast-Dark-Theme**: Einheitliches, augenschonendes Dark-Design im VS-Code-Stil (#1E1E1E / #252526 / #007ACC) über alle Panels, Menüleisten, Explorer, Buttons, TabbedPanes und Agenten-Dialoge hinweg.
+- **Saubere Glyphen- & Tag-Darstellung**: Ersatz fehlerhafter Emoji-Tofu-Kästchen (`[]`) durch professionelle Compiler-Log-Tags (`[INFO]`, `[EXEC]`, `[ERFOLG]`, `[FEHLER]`) und native Unicode-Symbole (`▶`, `■`, `✕`, `↺`, `↗`).
+- **Toolchain-Umgebungs-Injektion**: Automatische Einbindung der MinGW/MSYS2/LLVM-Binärverzeichnisse in den Subprozess-`PATH`, wodurch stumme DLL-Ladefehler von `g++.exe` (`cc1plus.exe`, `as.exe`, `ld.exe`) behoben sind.
+- **Makefile-Unterstützung & Robuster C++ Fallback**: Automatische Erkennung und Ausführung von `Makefile`s via `mingw32-make`/`make` sowie intelligenter Multi-File Fallback (`-DI18N_EXPORTS`, `-static-libgcc -static-libstdc++`).
 - Startbar über `windows/Start-KR-IDE.bat`, `windows/Start-KR-IDE-Console.bat` oder direkt via `KR-Compiler-IDE.jar`.
 
 ---
@@ -92,6 +95,6 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
 
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar`
-  - **Größe**: `153.318 Bytes`
+  - **Größe**: `154.387 Bytes`
   - **Plattform**: Windows 10 / 11 (Java 17+)
   - **Starter**: `windows/Start-KR-IDE.bat`

@@ -56,46 +56,52 @@ public final class CompilerEngine {
         File buildLog = new File(outputDir, "build.log");
         Files.write(buildLog.toPath(), ("=== KR Compiler Build Log: " + new Date() + " ===\n").getBytes(StandardCharsets.UTF_8));
 
-        log.line("🔧 Starte Build für Zielplattform: " + target.getDisplayName());
-        log.line("📂 Projektordner: " + projectDir.getAbsolutePath());
+        log.line("[INFO] Starte Build für Zielplattform: " + target.getDisplayName());
+        log.line("[PROJEKT] Projektordner: " + projectDir.getAbsolutePath());
 
         // 1. KR Unified Language Prüfung
         List<File> krFiles = KrPipeline.findKrFiles(projectDir);
         if (!krFiles.isEmpty()) {
-            log.line("⚡ KR Unified Language Projekt erkannt (" + krFiles.size() + " .kr-Datei(en)).");
+            log.line("[INFO] KR Unified Language Projekt erkannt (" + krFiles.size() + " .kr-Datei(en)).");
             return buildKrUnified(krFiles, outputDir, buildLog);
         }
 
         // 2. Rust Projekt
         if (new File(projectDir, "Cargo.toml").isFile()) {
-            log.line("🦀 Rust-Projekt erkannt (Cargo.toml).");
+            log.line("[INFO] Rust-Projekt erkannt (Cargo.toml).");
             return buildRust(outputDir, buildLog);
         }
 
         // 3. Go Projekt
         if (new File(projectDir, "go.mod").isFile() || hasGoFiles(projectDir)) {
-            log.line("🐹 Go-Projekt erkannt.");
+            log.line("[INFO] Go-Projekt erkannt.");
             return buildGo(outputDir, buildLog);
         }
 
         // 4. CMake Projekt
         if (new File(projectDir, "CMakeLists.txt").isFile()) {
-            log.line("🔨 CMake-Projekt erkannt (CMakeLists.txt).");
+            log.line("[INFO] CMake-Projekt erkannt (CMakeLists.txt).");
             return buildCMake(outputDir, buildLog);
         }
 
-        // 5. Direkte C/C++ Dateien
+        // 5. Makefile Projekt
+        if (new File(projectDir, "Makefile").isFile() || new File(projectDir, "makefile").isFile()) {
+            log.line("[INFO] Makefile-Projekt erkannt.");
+            return buildMakefile(outputDir, buildLog);
+        }
+
+        // 6. Direkte C/C++ Dateien
         List<File> cppFiles = findCppFiles(projectDir);
         if (!cppFiles.isEmpty()) {
-            log.line("⚙️ " + cppFiles.size() + " C/C++-Quelldatei(en) gefunden. Direkter Compilerlauf.");
+            log.line("[INFO] " + cppFiles.size() + " C/C++-Quelldatei(en) gefunden. Direkter Compilerlauf.");
             return buildDirectCpp(cppFiles, outputDir, buildLog);
         }
 
-        throw new IOException("Keine unterstützten Quell- oder Projektdateien (.kr, Cargo.toml, go.mod, CMakeLists.txt, .cpp) gefunden.");
+        throw new IOException("Keine unterstützten Quell- oder Projektdateien (.kr, Cargo.toml, go.mod, CMakeLists.txt, Makefile, .cpp) gefunden.");
     }
 
     private File buildKrUnified(List<File> krFiles, File outputDir, File buildLog) throws Exception {
-        log.line("🔄 Führe KR Multi-File Pipeline & Code-Generator aus …");
+        log.line("[INFO] Führe KR Multi-File Pipeline & Code-Generator aus …");
         KrPipeline.PipelineResult res = KrPipeline.process(projectDir, outputDir, false);
 
         for (KrDiagnostic diag : res.diagnostics) {
@@ -107,7 +113,7 @@ public final class CompilerEngine {
         }
 
         int count = res.codeResult != null ? res.codeResult.cppSources.size() : 0;
-        log.line("✅ Code-Generierung abgeschlossen: " + count + " Translation Unit(s) erstellt.");
+        log.line("[INFO] Code-Generierung abgeschlossen: " + count + " Translation Unit(s) erstellt.");
 
         // Wenn modularer C++ Output erzeugt wurde:
         File cmakeLists = new File(projectDir, "CMakeLists.txt");
@@ -145,7 +151,24 @@ public final class CompilerEngine {
         cmd.add(clang);
         cmd.add("-std=c++20");
         cmd.add("-O3");
+        cmd.add("-static-libgcc");
+        cmd.add("-static-libstdc++");
         cmd.add("-I" + projectDir.getAbsolutePath());
+        cmd.add("-L" + projectDir.getAbsolutePath());
+
+        // Gängige Include-Verzeichnisse automatisch einbinden
+        for (String sub : new String[]{"include", "inc", "src", "locale", "samples"}) {
+            File subDir = new File(projectDir, sub);
+            if (subDir.isDirectory()) {
+                cmd.add("-I" + subDir.getAbsolutePath());
+            }
+        }
+
+        // Erkennung von DLL-Export-Projekten (wie Mycelia i18n_api)
+        File i18nHeader = new File(projectDir, "i18n_api.h");
+        if (i18nHeader.isFile()) {
+            cmd.add("-DI18N_EXPORTS");
+        }
 
         File bridgeHeader = new File(projectDir, "kr_bridge.h");
         if (bridgeHeader.isFile()) {
@@ -160,14 +183,14 @@ public final class CompilerEngine {
         cmd.add("-o");
         cmd.add(artifact.getAbsolutePath());
 
-        log.line("🚀 Führe Compiler aus: " + clang + " -> " + artifact.getName());
+        log.line("[EXEC] Führe Compiler aus: " + clang + " -> " + artifact.getName());
         runProcess(cmd, projectDir, buildLog);
 
         if (!artifact.exists()) {
             throw new IOException("Kompilierung beendet, aber Artefakt wurde nicht erzeugt: " + artifact);
         }
 
-        log.line("🎉 Build erfolgreich: " + artifact.getAbsolutePath() + " (" + artifact.length() + " Bytes)");
+        log.line("[ERFOLG] Build erfolgreich: " + artifact.getAbsolutePath() + " (" + artifact.length() + " Bytes)");
         return artifact;
     }
 
@@ -179,16 +202,41 @@ public final class CompilerEngine {
         cmakeBuildDir.mkdirs();
 
         List<String> configCmd = Arrays.asList(cmake, "-S", projectDir.getAbsolutePath(), "-B", cmakeBuildDir.getAbsolutePath());
-        log.line("⚙️ Konfiguriere CMake-Projekt …");
+        log.line("[INFO] Konfiguriere CMake-Projekt …");
         runProcess(configCmd, projectDir, buildLog);
 
         List<String> buildCmd = Arrays.asList(cmake, "--build", cmakeBuildDir.getAbsolutePath(), "--config", "Release");
-        log.line("🔨 Kompiliere CMake-Projekt …");
+        log.line("[INFO] Kompiliere CMake-Projekt …");
         runProcess(buildCmd, projectDir, buildLog);
 
         File targetExe = new File(outputDir, "programm.exe");
         File found = findFirstExecutable(cmakeBuildDir);
         if (found != null) {
+            Files.copy(found.toPath(), targetExe.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            return targetExe;
+        }
+        return targetExe;
+    }
+
+    private File buildMakefile(File outputDir, File buildLog) throws Exception {
+        String make = findMakeExecutable();
+        if (make == null) {
+            log.line("[INFO] Kein make/mingw32-make gefunden. Starte direkten C/C++ Compilerlauf...");
+            return buildDirectCpp(findCppFiles(projectDir), outputDir, buildLog);
+        }
+
+        log.line("[INFO] Makefile-Build mit: " + make);
+        List<String> cmd = Arrays.asList(make);
+        try {
+            runProcess(cmd, projectDir, buildLog);
+        } catch (Exception ex) {
+            log.line("[WARNUNG] Makefile-Lauf mit Fehler (" + ex.getMessage() + "). Starte automatischen Fallback auf direkten C/C++ Build...");
+            return buildDirectCpp(findCppFiles(projectDir), outputDir, buildLog);
+        }
+
+        File targetExe = new File(outputDir, "programm.exe");
+        File found = findFirstExecutable(projectDir);
+        if (found != null && !found.equals(targetExe)) {
             Files.copy(found.toPath(), targetExe.toPath(), StandardCopyOption.REPLACE_EXISTING);
             return targetExe;
         }
@@ -202,7 +250,7 @@ public final class CompilerEngine {
 
         File artifact = new File(outputDir, "programm.exe");
         List<String> cmd = Arrays.asList(cargo, "build", "--release");
-        log.line("🦀 Starte Cargo Release-Build …");
+        log.line("[INFO] Starte Cargo Release-Build …");
         runProcess(cmd, projectDir, buildLog);
 
         File targetRelease = new File(new File(projectDir, "target"), "release");
@@ -219,7 +267,7 @@ public final class CompilerEngine {
 
         File artifact = new File(outputDir, "programm.exe");
         List<String> cmd = Arrays.asList(go, "build", "-o", artifact.getAbsolutePath(), ".");
-        log.line("🐹 Starte Go Build …");
+        log.line("[INFO] Starte Go Build …");
         runProcess(cmd, projectDir, buildLog);
         return artifact;
     }
@@ -228,6 +276,32 @@ public final class CompilerEngine {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(cwd);
         pb.redirectErrorStream(true);
+
+        // Toolchain-Pfade (z.B. MSYS2/MinGW, LLVM) zu PATH hinzufügen
+        Map<String, String> env = pb.environment();
+        String currentPath = env.getOrDefault("PATH", "");
+        StringBuilder pathBuilder = new StringBuilder();
+        if (!cmd.isEmpty()) {
+            File exeFile = new File(cmd.get(0));
+            File parentDir = exeFile.getParentFile();
+            if (parentDir != null && parentDir.isDirectory()) {
+                pathBuilder.append(parentDir.getAbsolutePath()).append(File.pathSeparator);
+            }
+        }
+        String[] toolDirs = {
+                "C:\\msys64\\mingw64\\bin",
+                "C:\\msys64\\ucrt64\\bin",
+                "C:\\msys64\\usr\\bin",
+                "C:\\Program Files\\LLVM\\bin"
+        };
+        for (String td : toolDirs) {
+            File f = new File(td);
+            if (f.isDirectory()) {
+                pathBuilder.append(f.getAbsolutePath()).append(File.pathSeparator);
+            }
+        }
+        pathBuilder.append(currentPath);
+        env.put("PATH", pathBuilder.toString());
 
         activeProcess = pb.start();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(activeProcess.getInputStream(), StandardCharsets.UTF_8));
@@ -247,8 +321,26 @@ public final class CompilerEngine {
         activeProcess = null;
 
         if (exitCode != 0) {
-            throw new IOException("Prozess beendet mit Fehlercode " + exitCode + ".\nSiehe KR_BUILD/build.log für Details.");
+            throw new IOException("Prozess beendet mit Fehlercode " + exitCode + ". Siehe KR_BUILD/build.log für Details.");
         }
+    }
+
+    private static String findMakeExecutable() {
+        String exe = findExecutable("mingw32-make");
+        if (exe != null) return exe;
+        exe = findExecutable("make");
+        if (exe != null) return exe;
+
+        String[] wellKnown = {
+                "C:\\msys64\\mingw64\\bin\\mingw32-make.exe",
+                "C:\\msys64\\ucrt64\\bin\\mingw32-make.exe",
+                "C:\\msys64\\usr\\bin\\make.exe"
+        };
+        for (String p : wellKnown) {
+            File f = new File(p);
+            if (f.isFile() && f.canExecute()) return f.getAbsolutePath();
+        }
+        return null;
     }
 
     private static String findClangExecutable() {

@@ -59,7 +59,7 @@ public final class BuildConsolePanel extends JPanel implements BuildManager.List
         chkOnline.addActionListener(e -> BuildManager.getInstance().setOnlineDependencies(chkOnline.isSelected()));
         toolbar.add(chkOnline);
 
-        btnBuild = DarkTheme.createStyledButton("🔨 Kompilieren", DarkTheme.ACCENT_GREEN, Color.WHITE);
+        btnBuild = DarkTheme.createStyledButton("▶ Kompilieren", DarkTheme.ACCENT_GREEN, Color.WHITE);
         btnBuild.addActionListener(e -> {
             File p = ProjectManager.getInstance().getActiveProjectDir();
             if (p == null) {
@@ -71,12 +71,12 @@ public final class BuildConsolePanel extends JPanel implements BuildManager.List
         });
         toolbar.add(btnBuild);
 
-        btnStop = DarkTheme.createStyledButton("⏹️ Stopp", DarkTheme.ACCENT_RED, Color.WHITE);
+        btnStop = DarkTheme.createStyledButton("■ Stopp", DarkTheme.ACCENT_RED, Color.WHITE);
         btnStop.setEnabled(false);
         btnStop.addActionListener(e -> BuildManager.getInstance().cancelBuild());
         toolbar.add(btnStop);
 
-        btnClear = DarkTheme.createStyledButton("🗑️ Leeren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
+        btnClear = DarkTheme.createStyledButton("✕ Leeren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnClear.addActionListener(e -> {
             console.setText("");
             BuildManager.getInstance().clearLog();
@@ -122,7 +122,7 @@ public final class BuildConsolePanel extends JPanel implements BuildManager.List
     @Override
     public void onBuildFinished(boolean ok, String result) {
         SwingUtilities.invokeLater(() -> {
-            statusLabel.setText(ok ? "✅ " + result : "❌ " + result);
+            statusLabel.setText((ok ? "[OK] " : "[FEHLER] ") + result);
             statusLabel.setForeground(ok ? DarkTheme.ACCENT_GREEN : DarkTheme.ACCENT_RED);
             btnBuild.setEnabled(true);
             btnStop.setEnabled(false);
