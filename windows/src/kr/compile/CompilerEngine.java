@@ -59,6 +59,10 @@ public final class CompilerEngine {
         log.line("[INFO] Starte Build für Zielplattform: " + target.getDisplayName());
         log.line("[PROJEKT] Projektordner: " + projectDir.getAbsolutePath());
 
+        if (ToolchainManager.getInstance().isEmbeddedToolchainPresent()) {
+            log.line("[TOOLCHAIN] Integrierte Windows-Toolchain geladen: " + ToolchainManager.getInstance().getToolchainDir().getAbsolutePath());
+        }
+
         // 1. KR Unified Language Prüfung
         List<File> krFiles = KrPipeline.findKrFiles(projectDir);
         if (!krFiles.isEmpty()) {
@@ -139,9 +143,12 @@ public final class CompilerEngine {
     }
 
     private File buildDirectCpp(List<File> sources, File outputDir, File buildLog) throws Exception {
-        String clang = findClangExecutable();
+        String clang = ToolchainManager.getInstance().getCompilerExecutable();
         if (clang == null) {
-            throw new IOException("Kein C++-Compiler gefunden (clang++ oder g++ auf PATH oder in Program Files/LLVM).");
+            clang = findClangExecutable();
+        }
+        if (clang == null) {
+            throw new IOException("Keine C/C++ Compiler-Toolchain gefunden. Bitte stellen Sie sicher, dass der Ordner 'toolchain' im IDE-Verzeichnis vorhanden ist.");
         }
 
         String exeName = target == Target.WINDOWS ? "programm.exe" : (target == Target.LINUX ? "programm" : "libuser.so");
@@ -155,6 +162,15 @@ public final class CompilerEngine {
         cmd.add("-static-libstdc++");
         cmd.add("-I" + projectDir.getAbsolutePath());
         cmd.add("-L" + projectDir.getAbsolutePath());
+
+        File tcInc = ToolchainManager.getInstance().getIncludeDir();
+        if (tcInc != null) {
+            cmd.add("-I" + tcInc.getAbsolutePath());
+        }
+        File tcLib = ToolchainManager.getInstance().getLibDir();
+        if (tcLib != null) {
+            cmd.add("-L" + tcLib.getAbsolutePath());
+        }
 
         // Gängige Include-Verzeichnisse automatisch einbinden
         for (String sub : new String[]{"include", "inc", "src", "locale", "samples"}) {
@@ -219,7 +235,10 @@ public final class CompilerEngine {
     }
 
     private File buildMakefile(File outputDir, File buildLog) throws Exception {
-        String make = findMakeExecutable();
+        String make = ToolchainManager.getInstance().getMakeExecutable();
+        if (make == null) {
+            make = findMakeExecutable();
+        }
         if (make == null) {
             log.line("[INFO] Kein make/mingw32-make gefunden. Starte direkten C/C++ Compilerlauf...");
             return buildDirectCpp(findCppFiles(projectDir), outputDir, buildLog);
@@ -277,8 +296,11 @@ public final class CompilerEngine {
         pb.directory(cwd);
         pb.redirectErrorStream(true);
 
-        // Toolchain-Pfade (z.B. MSYS2/MinGW, LLVM) zu PATH hinzufügen
         Map<String, String> env = pb.environment();
+        // 1. Toolchain-Pfade (integrierte portable Toolchain) primär injizieren
+        ToolchainManager.getInstance().injectEnvironment(env);
+
+        // 2. Pfad des gestarteten Executables und Fallback-Systempfade ergänzen
         String currentPath = env.getOrDefault("PATH", "");
         StringBuilder pathBuilder = new StringBuilder();
         if (!cmd.isEmpty()) {

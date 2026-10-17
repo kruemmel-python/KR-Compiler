@@ -1,9 +1,13 @@
 @echo off
-title KR Compiler IDE (Konsole)
+title KR Compiler IDE - Windows Desktop Edition (Console Log)
 cd /d "%~dp0"
-java -jar "%~dp0dist\KR-Compiler-IDE.jar"
-if %ERRORLEVEL% NEQ 0 (
-    echo.
-    echo Prozess beendet mit Fehlercode %ERRORLEVEL%.
-    pause
+if not exist "%~dp0toolchain\kr-toolchain.stamp" (
+    echo [INFO] Pruefe integrierte Compiler-Toolchain...
+    if exist "%~dp0download-toolchain.ps1" (
+        powershell -ExecutionPolicy Bypass -File "%~dp0download-toolchain.ps1"
+    )
 )
+
+if exist "%~dp0toolchain\bin" set "PATH=%~dp0toolchain\bin;%PATH%"
+java -jar "%~dp0dist\KR-Compiler-IDE.jar"
+pause

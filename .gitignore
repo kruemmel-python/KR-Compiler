@@ -42,3 +42,5 @@ desktop.ini
 setup.log
 *.zip
 windows/bin/
+windows/toolchain/
+windows/toolchain.zip

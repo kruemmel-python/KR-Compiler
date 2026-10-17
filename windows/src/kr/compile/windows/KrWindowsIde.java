@@ -103,7 +103,8 @@ public final class KrWindowsIde extends JFrame {
         statusProject = new JLabel("Projekt: Kein Projekt");
         statusProject.setForeground(DarkTheme.FG_PRIMARY);
 
-        statusTarget = new JLabel("Ziel: Windows x64");
+        boolean hasTc = kr.compile.ToolchainManager.getInstance().isEmbeddedToolchainPresent();
+        statusTarget = new JLabel("Ziel: Windows x64 (" + (hasTc ? "Integrierte Toolchain" : "System") + ")");
         statusTarget.setForeground(DarkTheme.FG_SECONDARY);
 
         statusAgent = new JLabel("Agent: Bereit");
@@ -379,10 +380,15 @@ public final class KrWindowsIde extends JFrame {
     }
 
     private void showAboutDialog() {
+        boolean hasTc = kr.compile.ToolchainManager.getInstance().isEmbeddedToolchainPresent();
+        String tcStatus = hasTc ? "Aktiv (" + kr.compile.ToolchainManager.getInstance().getToolchainDir().getName() + ")" : "Host-System";
+
         String info = "KR Compiler IDE – Windows Desktop Edition\n"
                 + "Version: 4.0.3\n\n"
                 + "Entwickler: Ralf Krümmel\n\n"
+                + "Compiler-Status: " + tcStatus + "\n\n"
                 + "Funktionsumfang:\n"
+                + "• Vollständig integrierte, portable C/C++20 Toolchain (ohne externe SDK-Installation)\n"
                 + "• KR Unified Language (.kr) mit vollem Multi-File Support (*.krproject)\n"
                 + "• C++20, Rust und Go Übersetzung direkt auf Windows\n"
                 + "• Multi-Target Builds: Windows x64 (.exe), Linux x64, Android ARM64\n"
