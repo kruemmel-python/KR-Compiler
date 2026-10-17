@@ -20,22 +20,31 @@ public final class BuildConsolePanel extends JPanel implements BuildManager.List
 
     public BuildConsolePanel() {
         super(new BorderLayout());
-        setBackground(new Color(30, 30, 30));
+        setBackground(DarkTheme.BG_PANEL);
 
         console = new JTextArea();
         console.setEditable(false);
-        console.setBackground(new Color(20, 20, 20));
-        console.setForeground(new Color(220, 220, 220));
-        console.setFont(new Font("Consolas", Font.PLAIN, 13));
-        console.setMargin(new Insets(8, 8, 8, 8));
+        console.setBackground(DarkTheme.BG_INPUT);
+        console.setForeground(DarkTheme.FG_PRIMARY);
+        console.setCaretColor(Color.WHITE);
+        console.setFont(DarkTheme.FONT_CODE);
+        console.setMargin(new Insets(8, 10, 8, 10));
 
         // Toolbar oben
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
-        toolbar.setBackground(new Color(45, 45, 48));
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        toolbar.setBackground(DarkTheme.BG_TOOLBAR);
+        toolbar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, DarkTheme.BORDER_DARK));
 
-        toolbar.add(new JLabel("Zielplattform:"));
+        JLabel lblTarget = new JLabel("Zielplattform:");
+        lblTarget.setForeground(DarkTheme.FG_PRIMARY);
+        lblTarget.setFont(DarkTheme.FONT_BOLD);
+        toolbar.add(lblTarget);
+
         targetCombo = new JComboBox<>(CompilerEngine.Target.values());
         targetCombo.setSelectedItem(CompilerEngine.Target.WINDOWS);
+        targetCombo.setBackground(DarkTheme.BG_BUTTON);
+        targetCombo.setForeground(DarkTheme.FG_PRIMARY);
+        targetCombo.setFont(DarkTheme.FONT_REGULAR);
         targetCombo.addActionListener(e -> {
             CompilerEngine.Target t = (CompilerEngine.Target) targetCombo.getSelectedItem();
             BuildManager.getInstance().setCurrentTarget(t);
@@ -43,14 +52,14 @@ public final class BuildConsolePanel extends JPanel implements BuildManager.List
         toolbar.add(targetCombo);
 
         chkOnline = new JCheckBox("Online-Pakete (vcpkg)");
-        chkOnline.setBackground(new Color(45, 45, 48));
-        chkOnline.setForeground(Color.LIGHT_GRAY);
+        chkOnline.setBackground(DarkTheme.BG_TOOLBAR);
+        chkOnline.setForeground(DarkTheme.FG_PRIMARY);
+        chkOnline.setFont(DarkTheme.FONT_REGULAR);
+        chkOnline.setFocusPainted(false);
         chkOnline.addActionListener(e -> BuildManager.getInstance().setOnlineDependencies(chkOnline.isSelected()));
         toolbar.add(chkOnline);
 
-        btnBuild = new JButton("🔨 Kompilieren");
-        btnBuild.setBackground(new Color(46, 125, 50));
-        btnBuild.setForeground(Color.WHITE);
+        btnBuild = DarkTheme.createStyledButton("🔨 Kompilieren", DarkTheme.ACCENT_GREEN, Color.WHITE);
         btnBuild.addActionListener(e -> {
             File p = ProjectManager.getInstance().getActiveProjectDir();
             if (p == null) {
@@ -62,12 +71,12 @@ public final class BuildConsolePanel extends JPanel implements BuildManager.List
         });
         toolbar.add(btnBuild);
 
-        btnStop = new JButton("⏹️ Stopp");
+        btnStop = DarkTheme.createStyledButton("⏹️ Stopp", DarkTheme.ACCENT_RED, Color.WHITE);
         btnStop.setEnabled(false);
         btnStop.addActionListener(e -> BuildManager.getInstance().cancelBuild());
         toolbar.add(btnStop);
 
-        btnClear = new JButton("🗑️ Leeren");
+        btnClear = DarkTheme.createStyledButton("🗑️ Leeren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnClear.addActionListener(e -> {
             console.setText("");
             BuildManager.getInstance().clearLog();
@@ -78,12 +87,14 @@ public final class BuildConsolePanel extends JPanel implements BuildManager.List
 
         JScrollPane scroll = new JScrollPane(console);
         scroll.setBorder(null);
+        scroll.getViewport().setBackground(DarkTheme.BG_INPUT);
         add(scroll, BorderLayout.CENTER);
 
         statusLabel = new JLabel("Bereit");
-        statusLabel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
-        statusLabel.setForeground(new Color(76, 175, 80));
-        statusLabel.setBackground(new Color(25, 25, 25));
+        statusLabel.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
+        statusLabel.setFont(DarkTheme.FONT_BOLD);
+        statusLabel.setForeground(DarkTheme.ACCENT_GREEN);
+        statusLabel.setBackground(DarkTheme.BG_DARKEST);
         statusLabel.setOpaque(true);
         add(statusLabel, BorderLayout.SOUTH);
 
@@ -112,7 +123,7 @@ public final class BuildConsolePanel extends JPanel implements BuildManager.List
     public void onBuildFinished(boolean ok, String result) {
         SwingUtilities.invokeLater(() -> {
             statusLabel.setText(ok ? "✅ " + result : "❌ " + result);
-            statusLabel.setForeground(ok ? new Color(76, 175, 80) : new Color(244, 67, 54));
+            statusLabel.setForeground(ok ? DarkTheme.ACCENT_GREEN : DarkTheme.ACCENT_RED);
             btnBuild.setEnabled(true);
             btnStop.setEnabled(false);
             targetCombo.setEnabled(true);

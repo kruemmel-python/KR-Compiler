@@ -11,7 +11,6 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Comparator;
 
@@ -24,24 +23,25 @@ public final class ProjectExplorerPanel extends JPanel implements ProjectManager
 
     public ProjectExplorerPanel() {
         super(new BorderLayout());
-        setBackground(new Color(37, 37, 38));
+        setBackground(DarkTheme.BG_PANEL);
 
         // Toolbar oben
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
-        toolbar.setBackground(new Color(45, 45, 48));
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+        toolbar.setBackground(DarkTheme.BG_TOOLBAR);
+        toolbar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, DarkTheme.BORDER_DARK));
 
         headerLabel = new JLabel("DATEIEN");
-        headerLabel.setForeground(Color.LIGHT_GRAY);
-        headerLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        headerLabel.setForeground(DarkTheme.FG_PRIMARY);
+        headerLabel.setFont(DarkTheme.FONT_BOLD);
         toolbar.add(headerLabel);
 
-        JButton btnRefresh = new JButton("↻");
-        btnRefresh.setToolTipText("Projektstruktur aktualisieren");
+        toolbar.add(Box.createHorizontalStrut(8));
+
+        JButton btnRefresh = DarkTheme.createIconButton("↻", "Projektstruktur aktualisieren");
         btnRefresh.addActionListener(e -> ProjectManager.getInstance().refreshTree());
         toolbar.add(btnRefresh);
 
-        JButton btnOpenExp = new JButton("📂");
-        btnOpenExp.setToolTipText("Im Windows Explorer öffnen");
+        JButton btnOpenExp = DarkTheme.createIconButton("📂", "Im Windows Explorer öffnen");
         btnOpenExp.addActionListener(e -> {
             File p = ProjectManager.getInstance().getActiveProjectDir();
             if (p != null) {
@@ -59,14 +59,18 @@ public final class ProjectExplorerPanel extends JPanel implements ProjectManager
         rootNode = new DefaultMutableTreeNode("Kein Projekt");
         treeModel = new DefaultTreeModel(rootNode);
         tree = new JTree(treeModel);
-        tree.setBackground(new Color(30, 30, 30));
-        tree.setForeground(new Color(220, 220, 220));
+        tree.setBackground(DarkTheme.BG_PANEL);
+        tree.setForeground(DarkTheme.FG_PRIMARY);
+        tree.setFont(DarkTheme.FONT_REGULAR);
+        tree.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
         DefaultTreeCellRenderer renderer = new DefaultTreeCellRenderer();
-        renderer.setBackgroundNonSelectionColor(new Color(30, 30, 30));
-        renderer.setTextNonSelectionColor(new Color(220, 220, 220));
+        renderer.setBackgroundNonSelectionColor(DarkTheme.BG_PANEL);
+        renderer.setTextNonSelectionColor(DarkTheme.FG_PRIMARY);
         renderer.setTextSelectionColor(Color.WHITE);
-        renderer.setBackgroundSelectionColor(new Color(9, 71, 113));
+        renderer.setBackgroundSelectionColor(DarkTheme.BG_SELECT);
+        renderer.setBorderSelectionColor(DarkTheme.ACCENT_BLUE);
+        renderer.setFont(DarkTheme.FONT_REGULAR);
         tree.setCellRenderer(renderer);
 
         tree.addMouseListener(new MouseAdapter() {
@@ -92,6 +96,8 @@ public final class ProjectExplorerPanel extends JPanel implements ProjectManager
 
         JScrollPane scroll = new JScrollPane(tree);
         scroll.setBorder(null);
+        scroll.getViewport().setBackground(DarkTheme.BG_PANEL);
+        scroll.setBackground(DarkTheme.BG_PANEL);
         add(scroll, BorderLayout.CENTER);
 
         ProjectManager.getInstance().addListener(this);
@@ -105,10 +111,12 @@ public final class ProjectExplorerPanel extends JPanel implements ProjectManager
 
     private void showContextMenu(int x, int y, FileItem item) {
         JPopupMenu menu = new JPopupMenu();
+        menu.setBackground(DarkTheme.BG_TOOLBAR);
+        menu.setBorder(BorderFactory.createLineBorder(DarkTheme.BORDER_DARK));
+
         File targetDir = item.file.isDirectory() ? item.file : item.file.getParentFile();
 
-        JMenuItem mNewFile = new JMenuItem("Neue Datei …");
-        mNewFile.addActionListener(e -> {
+        JMenuItem mNewFile = createMenuItem("Neue Datei …", () -> {
             String name = JOptionPane.showInputDialog(this, "Dateiname:", "Neue Datei", JOptionPane.PLAIN_MESSAGE);
             if (name != null && !name.trim().isEmpty()) {
                 File nf = new File(targetDir, name.trim());
@@ -124,8 +132,7 @@ public final class ProjectExplorerPanel extends JPanel implements ProjectManager
         });
         menu.add(mNewFile);
 
-        JMenuItem mNewDir = new JMenuItem("Neuer Ordner …");
-        mNewDir.addActionListener(e -> {
+        JMenuItem mNewDir = createMenuItem("Neuer Ordner …", () -> {
             String name = JOptionPane.showInputDialog(this, "Ordnername:", "Neuer Ordner", JOptionPane.PLAIN_MESSAGE);
             if (name != null && !name.trim().isEmpty()) {
                 File nd = new File(targetDir, name.trim());
@@ -136,8 +143,7 @@ public final class ProjectExplorerPanel extends JPanel implements ProjectManager
 
         menu.addSeparator();
 
-        JMenuItem mRename = new JMenuItem("Umbenennen …");
-        mRename.addActionListener(e -> {
+        JMenuItem mRename = createMenuItem("Umbenennen …", () -> {
             String name = JOptionPane.showInputDialog(this, "Neuer Name:", item.file.getName());
             if (name != null && !name.trim().isEmpty()) {
                 File dest = new File(item.file.getParentFile(), name.trim());
@@ -146,8 +152,7 @@ public final class ProjectExplorerPanel extends JPanel implements ProjectManager
         });
         menu.add(mRename);
 
-        JMenuItem mDelete = new JMenuItem("Löschen");
-        mDelete.addActionListener(e -> {
+        JMenuItem mDelete = createMenuItem("Löschen", () -> {
             int c = JOptionPane.showConfirmDialog(this, "Möchten Sie '" + item.file.getName() + "' wirklich löschen?", "Löschen", JOptionPane.YES_NO_OPTION);
             if (c == JOptionPane.YES_OPTION) {
                 deleteRecursive(item.file);
@@ -158,8 +163,7 @@ public final class ProjectExplorerPanel extends JPanel implements ProjectManager
 
         menu.addSeparator();
 
-        JMenuItem mExp = new JMenuItem("Im Windows Explorer zeigen");
-        mExp.addActionListener(e -> {
+        JMenuItem mExp = createMenuItem("Im Windows Explorer zeigen", () -> {
             try {
                 ArtifactsManager.getInstance().openInExplorer(item.file);
             } catch (IOException ex) {
@@ -169,6 +173,16 @@ public final class ProjectExplorerPanel extends JPanel implements ProjectManager
         menu.add(mExp);
 
         menu.show(tree, x, y);
+    }
+
+    private JMenuItem createMenuItem(String title, Runnable action) {
+        JMenuItem item = new JMenuItem(title);
+        item.setUI(new javax.swing.plaf.basic.BasicMenuItemUI());
+        item.setBackground(DarkTheme.BG_TOOLBAR);
+        item.setForeground(DarkTheme.FG_PRIMARY);
+        item.setFont(DarkTheme.FONT_REGULAR);
+        item.addActionListener(e -> action.run());
+        return item;
     }
 
     private void deleteRecursive(File f) {

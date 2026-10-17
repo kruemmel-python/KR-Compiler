@@ -37,9 +37,7 @@ public final class KrWindowsIde extends JFrame {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            try {
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception ignored) {}
+            DarkTheme.installDefaults();
             new KrWindowsIde().setVisible(true);
         });
     }
@@ -50,6 +48,7 @@ public final class KrWindowsIde extends JFrame {
         setSize(1280, 800);
         setMinimumSize(new Dimension(900, 600));
         setLocationRelativeTo(null);
+        getContentPane().setBackground(DarkTheme.BG_DARKEST);
 
         agentCore = new KrAgentCore();
         agentDialog = AgentDialog.getInstance(this, agentCore);
@@ -58,8 +57,9 @@ public final class KrWindowsIde extends JFrame {
         setupMenuBar();
 
         // Oberer Navigationsbereich (1 zu 1 wie Mobile IDE: CODE | DATEIEN | BUILD | ARTEFAKTE | AGENT)
-        JPanel navBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
-        navBar.setBackground(new Color(30, 30, 30));
+        JPanel navBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        navBar.setBackground(DarkTheme.BG_TOOLBAR);
+        navBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, DarkTheme.BORDER_DARK));
 
         btnNavCode = createNavButton("CODE", () -> showView("CODE"));
         btnNavFiles = createNavButton("DATEIEN", () -> showView("FILES"));
@@ -77,39 +77,40 @@ public final class KrWindowsIde extends JFrame {
 
         // Hauptbereich mit SplitPane: Links Projekt-Explorer, Rechts Arbeitsansichten
         explorerPanel = new ProjectExplorerPanel();
-        editorPanel = new CodeEditorPanel();
+        editorPanel = new CodeEditorPanel(this::chooseProjectFolder, this::showNewProjectDialog, () -> agentDialog.setVisible(true));
         buildPanel = new BuildConsolePanel();
         artifactsPanel = new ArtifactsPanel();
 
         cardLayout = new CardLayout();
         mainCardPanel = new JPanel(cardLayout);
+        mainCardPanel.setBackground(DarkTheme.BG_EDITOR);
         mainCardPanel.add(editorPanel, "CODE");
         mainCardPanel.add(buildPanel, "BUILD");
         mainCardPanel.add(artifactsPanel, "ARTIFACTS");
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, explorerPanel, mainCardPanel);
         splitPane.setDividerLocation(260);
-        splitPane.setDividerSize(5);
+        splitPane.setDividerSize(4);
         splitPane.setBorder(null);
 
         getContentPane().add(splitPane, BorderLayout.CENTER);
 
         // Statusleiste unten
         JPanel statusBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 4));
-        statusBar.setBackground(new Color(25, 25, 25));
-        statusBar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(45, 45, 48)));
+        statusBar.setBackground(DarkTheme.BG_DARKEST);
+        statusBar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, DarkTheme.BORDER_DARK));
 
         statusProject = new JLabel("Projekt: Kein Projekt");
-        statusProject.setForeground(new Color(200, 200, 200));
+        statusProject.setForeground(DarkTheme.FG_PRIMARY);
 
         statusTarget = new JLabel("Ziel: Windows x64");
-        statusTarget.setForeground(new Color(200, 200, 200));
+        statusTarget.setForeground(DarkTheme.FG_SECONDARY);
 
         statusAgent = new JLabel("Agent: Bereit");
-        statusAgent.setForeground(new Color(76, 175, 80));
+        statusAgent.setForeground(DarkTheme.ACCENT_GREEN);
 
         JLabel infoVersion = new JLabel("v4.0.3 Windows Edition | Entwickler: Ralf Krümmel");
-        infoVersion.setForeground(new Color(130, 130, 130));
+        infoVersion.setForeground(DarkTheme.FG_MUTED);
 
         statusBar.add(statusProject);
         statusBar.add(statusTarget);
@@ -146,14 +147,16 @@ public final class KrWindowsIde extends JFrame {
         agentCore.setStatusListener((statusText, isRunning) -> {
             if (isRunning) {
                 btnNavAgent.setText("🤖 AGENT (aktiv)");
-                btnNavAgent.setBackground(new Color(46, 125, 50));
+                btnNavAgent.setBackground(DarkTheme.ACCENT_GREEN);
+                btnNavAgent.setForeground(Color.WHITE);
                 statusAgent.setText("🤖 Agent: " + statusText);
-                statusAgent.setForeground(new Color(76, 175, 80));
+                statusAgent.setForeground(DarkTheme.ACCENT_GREEN);
             } else {
                 btnNavAgent.setText("🤖 AGENT");
-                btnNavAgent.setBackground(new Color(45, 45, 48));
+                btnNavAgent.setBackground(DarkTheme.BG_BUTTON);
+                btnNavAgent.setForeground(DarkTheme.FG_PRIMARY);
                 statusAgent.setText("Agent: " + statusText);
-                statusAgent.setForeground(Color.LIGHT_GRAY);
+                statusAgent.setForeground(DarkTheme.FG_SECONDARY);
             }
         });
 
@@ -161,12 +164,12 @@ public final class KrWindowsIde extends JFrame {
     }
 
     private JButton createNavButton(String text, Runnable action) {
-        JButton b = new JButton(text);
-        b.setFocusPainted(false);
-        b.setBackground(new Color(45, 45, 48));
-        b.setForeground(Color.WHITE);
-        b.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        b.setBorder(BorderFactory.createEmptyBorder(6, 14, 6, 14));
+        JButton b = DarkTheme.createStyledButton(text, DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
+        b.setFont(DarkTheme.FONT_BOLD);
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(DarkTheme.BORDER_DARK, 1),
+                BorderFactory.createEmptyBorder(6, 16, 6, 16)
+        ));
         b.addActionListener(e -> action.run());
         return b;
     }
@@ -184,21 +187,21 @@ public final class KrWindowsIde extends JFrame {
     }
 
     private void updateNavSelection(String active) {
-        Color sel = new Color(9, 71, 113);
-        Color unsel = new Color(45, 45, 48);
-
-        btnNavCode.setBackground("CODE".equals(active) ? sel : unsel);
-        btnNavBuild.setBackground("BUILD".equals(active) ? sel : unsel);
-        btnNavArtifacts.setBackground("ARTIFACTS".equals(active) ? sel : unsel);
+        btnNavCode.setBackground("CODE".equals(active) ? DarkTheme.ACCENT_BLUE : DarkTheme.BG_BUTTON);
+        btnNavCode.setForeground("CODE".equals(active) ? Color.WHITE : DarkTheme.FG_PRIMARY);
+        btnNavBuild.setBackground("BUILD".equals(active) ? DarkTheme.ACCENT_BLUE : DarkTheme.BG_BUTTON);
+        btnNavBuild.setForeground("BUILD".equals(active) ? Color.WHITE : DarkTheme.FG_PRIMARY);
+        btnNavArtifacts.setBackground("ARTIFACTS".equals(active) ? DarkTheme.ACCENT_BLUE : DarkTheme.BG_BUTTON);
+        btnNavArtifacts.setForeground("ARTIFACTS".equals(active) ? Color.WHITE : DarkTheme.FG_PRIMARY);
     }
 
     private void setupMenuBar() {
         JMenuBar mb = new JMenuBar();
-        mb.setBackground(new Color(30, 30, 30));
+        mb.setBackground(DarkTheme.BG_TOOLBAR);
+        mb.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, DarkTheme.BORDER_DARK));
 
         // Menü: Projekt
         JMenu mProject = new JMenu("Projekt");
-        mProject.setForeground(Color.LIGHT_GRAY);
 
         JMenuItem mNew = new JMenuItem("Neues Projekt erstellen …");
         mNew.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK));
@@ -244,11 +247,11 @@ public final class KrWindowsIde extends JFrame {
         mExit.addActionListener(e -> System.exit(0));
         mProject.add(mExit);
 
+        styleMenu(mProject);
         mb.add(mProject);
 
         // Menü: Build
         JMenu mBuild = new JMenu("Build");
-        mBuild.setForeground(Color.LIGHT_GRAY);
 
         JMenuItem mRunBuild = new JMenuItem("Projekt kompilieren");
         mRunBuild.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0));
@@ -267,30 +270,45 @@ public final class KrWindowsIde extends JFrame {
         mStopBuild.addActionListener(e -> BuildManager.getInstance().cancelBuild());
         mBuild.add(mStopBuild);
 
+        styleMenu(mBuild);
         mb.add(mBuild);
 
         // Menü: Agent
         JMenu mAgent = new JMenu("Agent");
-        mAgent.setForeground(Color.LIGHT_GRAY);
 
         JMenuItem mOpenAgent = new JMenuItem("Autonomen KI-Agenten öffnen");
         mOpenAgent.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.CTRL_DOWN_MASK));
         mOpenAgent.addActionListener(e -> agentDialog.setVisible(true));
         mAgent.add(mOpenAgent);
 
+        styleMenu(mAgent);
         mb.add(mAgent);
 
         // Menü: Hilfe
         JMenu mHelp = new JMenu("Hilfe");
-        mHelp.setForeground(Color.LIGHT_GRAY);
 
         JMenuItem mAbout = new JMenuItem("Über KR IDE");
         mAbout.addActionListener(e -> showAboutDialog());
         mHelp.add(mAbout);
 
+        styleMenu(mHelp);
         mb.add(mHelp);
 
         setJMenuBar(mb);
+    }
+
+    private void styleMenu(JMenu menu) {
+        menu.setForeground(DarkTheme.FG_PRIMARY);
+        menu.setBackground(DarkTheme.BG_TOOLBAR);
+        menu.setFont(DarkTheme.FONT_REGULAR);
+        for (int i = 0; i < menu.getItemCount(); i++) {
+            JMenuItem item = menu.getItem(i);
+            if (item != null) {
+                item.setBackground(DarkTheme.BG_TOOLBAR);
+                item.setForeground(DarkTheme.FG_PRIMARY);
+                item.setFont(DarkTheme.FONT_REGULAR);
+            }
+        }
     }
 
     private void chooseProjectFolder() {

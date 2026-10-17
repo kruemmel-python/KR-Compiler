@@ -24,29 +24,28 @@ public final class ArtifactsPanel extends JPanel {
 
     public ArtifactsPanel() {
         super(new BorderLayout());
-        setBackground(new Color(30, 30, 30));
+        setBackground(DarkTheme.BG_PANEL);
 
         // Toolbar oben
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
-        toolbar.setBackground(new Color(45, 45, 48));
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        toolbar.setBackground(DarkTheme.BG_TOOLBAR);
+        toolbar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, DarkTheme.BORDER_DARK));
 
-        btnRun = new JButton("▶️ Ausführen");
-        btnRun.setBackground(new Color(46, 125, 50));
-        btnRun.setForeground(Color.WHITE);
+        btnRun = DarkTheme.createStyledButton("▶️ Ausführen", DarkTheme.ACCENT_GREEN, Color.WHITE);
         btnRun.setEnabled(false);
         btnRun.addActionListener(e -> runSelectedArtifact());
         toolbar.add(btnRun);
 
-        btnOpenExplorer = new JButton("📂 Im Explorer anzeigen");
+        btnOpenExplorer = DarkTheme.createStyledButton("📂 Im Explorer", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnOpenExplorer.setEnabled(false);
         btnOpenExplorer.addActionListener(e -> openSelectedInExplorer());
         toolbar.add(btnOpenExplorer);
 
-        btnViewLog = new JButton("📄 Log im Editor öffnen");
+        btnViewLog = DarkTheme.createStyledButton("📄 Log öffnen", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnViewLog.addActionListener(e -> openBuildLog());
         toolbar.add(btnViewLog);
 
-        JButton btnRefresh = new JButton("↻ Aktualisieren");
+        JButton btnRefresh = DarkTheme.createStyledButton("↻ Aktualisieren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnRefresh.addActionListener(e -> refreshArtifacts());
         toolbar.add(btnRefresh);
 
@@ -58,12 +57,20 @@ public final class ArtifactsPanel extends JPanel {
         };
 
         table = new JTable(tableModel);
-        table.setBackground(new Color(25, 25, 25));
-        table.setForeground(new Color(220, 220, 220));
-        table.setGridColor(new Color(50, 50, 50));
-        table.setRowHeight(24);
+        table.setBackground(DarkTheme.BG_INPUT);
+        table.setForeground(DarkTheme.FG_PRIMARY);
+        table.setSelectionBackground(DarkTheme.BG_SELECT);
+        table.setSelectionForeground(Color.WHITE);
+        table.setGridColor(DarkTheme.BORDER_DARK);
+        table.setFont(DarkTheme.FONT_REGULAR);
+        table.setRowHeight(26);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getSelectionModel().addListSelectionListener(e -> updateButtonStates());
+
+        table.getTableHeader().setBackground(DarkTheme.BG_TOOLBAR);
+        table.getTableHeader().setForeground(DarkTheme.FG_PRIMARY);
+        table.getTableHeader().setFont(DarkTheme.FONT_BOLD);
+        table.getTableHeader().setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, DarkTheme.BORDER_DARK));
 
         table.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
@@ -76,6 +83,7 @@ public final class ArtifactsPanel extends JPanel {
 
         JScrollPane scroll = new JScrollPane(table);
         scroll.setBorder(null);
+        scroll.getViewport().setBackground(DarkTheme.BG_INPUT);
         add(scroll, BorderLayout.CENTER);
 
         ProjectManager.getInstance().addListener(new ProjectManager.Listener() {

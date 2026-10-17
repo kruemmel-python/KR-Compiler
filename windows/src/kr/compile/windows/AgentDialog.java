@@ -36,25 +36,31 @@ public final class AgentDialog extends JDialog {
 
         setSize(850, 750);
         setLocationRelativeTo(parent);
-        getContentPane().setBackground(new Color(30, 30, 30));
-        setLayout(new BorderLayout(8, 8));
+        getContentPane().setBackground(DarkTheme.BG_PANEL);
+        setLayout(new BorderLayout(0, 0));
 
         // 1. Oben: Konfiguration & Auftrag
         JPanel topPanel = new JPanel(new GridBagLayout());
-        topPanel.setBackground(new Color(37, 37, 38));
-        topPanel.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
+        topPanel.setBackground(DarkTheme.BG_PANEL);
+        topPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, DarkTheme.BORDER_DARK),
+                BorderFactory.createEmptyBorder(12, 14, 12, 14)
+        ));
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.insets = new Insets(5, 5, 5, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // Status Row
         gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 1;
-        topPanel.add(new JLabel("Status:"), gbc);
+        JLabel lblStatusTag = new JLabel("Status:");
+        lblStatusTag.setFont(DarkTheme.FONT_BOLD);
+        lblStatusTag.setForeground(DarkTheme.FG_PRIMARY);
+        topPanel.add(lblStatusTag, gbc);
 
         gbc.gridx = 1; gbc.gridy = 0; gbc.gridwidth = 2;
         lblStatus = new JLabel(core.isRunning() ? "Aktiv: " + core.getCurrentStatus() : "Bereit");
-        lblStatus.setForeground(new Color(76, 175, 80));
-        lblStatus.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblStatus.setForeground(DarkTheme.ACCENT_GREEN);
+        lblStatus.setFont(DarkTheme.FONT_BOLD);
         topPanel.add(lblStatus, gbc);
 
         gbc.gridx = 3; gbc.gridy = 0; gbc.gridwidth = 1;
@@ -65,59 +71,85 @@ public final class AgentDialog extends JDialog {
 
         // Endpoint
         gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 1;
-        topPanel.add(new JLabel("HTTPS-Endpunkt:"), gbc);
+        JLabel lblEp = new JLabel("HTTPS-Endpunkt:");
+        lblEp.setForeground(DarkTheme.FG_PRIMARY);
+        topPanel.add(lblEp, gbc);
         gbc.gridx = 1; gbc.gridy = 1; gbc.gridwidth = 3;
         txtEndpoint = new JTextField("https://api.openai.com/v1/chat/completions");
+        txtEndpoint.setBackground(DarkTheme.BG_INPUT);
+        txtEndpoint.setForeground(DarkTheme.FG_PRIMARY);
+        txtEndpoint.setCaretColor(Color.WHITE);
         topPanel.add(txtEndpoint, gbc);
 
         // Model
         gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 1;
-        topPanel.add(new JLabel("Modell:"), gbc);
+        JLabel lblMod = new JLabel("Modell:");
+        lblMod.setForeground(DarkTheme.FG_PRIMARY);
+        topPanel.add(lblMod, gbc);
         gbc.gridx = 1; gbc.gridy = 2; gbc.gridwidth = 3;
         txtModel = new JTextField("gpt-4o");
+        txtModel.setBackground(DarkTheme.BG_INPUT);
+        txtModel.setForeground(DarkTheme.FG_PRIMARY);
+        txtModel.setCaretColor(Color.WHITE);
         topPanel.add(txtModel, gbc);
 
         // Token
         gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 1;
-        topPanel.add(new JLabel("API-Key (nur RAM):"), gbc);
+        JLabel lblTok = new JLabel("API-Key (nur RAM):");
+        lblTok.setForeground(DarkTheme.FG_PRIMARY);
+        topPanel.add(lblTok, gbc);
         gbc.gridx = 1; gbc.gridy = 3; gbc.gridwidth = 3;
         txtToken = new JPasswordField(sessionToken);
+        txtToken.setBackground(DarkTheme.BG_INPUT);
+        txtToken.setForeground(DarkTheme.FG_PRIMARY);
+        txtToken.setCaretColor(Color.WHITE);
         topPanel.add(txtToken, gbc);
 
         // Task
         gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 1;
-        topPanel.add(new JLabel("Auftrag:"), gbc);
+        JLabel lblTsk = new JLabel("Auftrag:");
+        lblTsk.setForeground(DarkTheme.FG_PRIMARY);
+        topPanel.add(lblTsk, gbc);
         gbc.gridx = 1; gbc.gridy = 4; gbc.gridwidth = 3;
         txtTask = new JTextArea(3, 40);
         txtTask.setLineWrap(true);
         txtTask.setWrapStyleWord(true);
+        txtTask.setBackground(DarkTheme.BG_INPUT);
+        txtTask.setForeground(DarkTheme.FG_PRIMARY);
+        txtTask.setCaretColor(Color.WHITE);
+        txtTask.setFont(DarkTheme.FONT_REGULAR);
         txtTask.setText(core.getLastTask().isEmpty() ? "Analysiere das geladene Projekt, behebe eventuelle Fehler und führe den Build aus." : core.getLastTask());
-        topPanel.add(new JScrollPane(txtTask), gbc);
+        JScrollPane taskScroll = new JScrollPane(txtTask);
+        taskScroll.setBorder(BorderFactory.createLineBorder(DarkTheme.BORDER_DARK));
+        topPanel.add(taskScroll, gbc);
 
         add(topPanel, BorderLayout.NORTH);
 
         // 2. Mitte: Protokoll-Werkzeugleiste & Textfenster
         JPanel centerPanel = new JPanel(new BorderLayout());
-        centerPanel.setBackground(new Color(30, 30, 30));
+        centerPanel.setBackground(DarkTheme.BG_PANEL);
 
         txtLog = new JTextArea();
         txtLog.setEditable(false);
-        txtLog.setBackground(new Color(20, 20, 20));
-        txtLog.setForeground(new Color(220, 220, 220));
-        txtLog.setFont(new Font("Consolas", Font.PLAIN, 12));
-        txtLog.setMargin(new Insets(8, 8, 8, 8));
+        txtLog.setBackground(DarkTheme.BG_INPUT);
+        txtLog.setForeground(DarkTheme.FG_PRIMARY);
+        txtLog.setCaretColor(Color.WHITE);
+        txtLog.setFont(DarkTheme.FONT_CODE);
+        txtLog.setMargin(new Insets(8, 10, 8, 10));
 
         String history = core.getLogHistory();
         txtLog.setText(history.isEmpty() ? "Bereit. Bitte ein Projekt öffnen und Auftrag starten.\n" : history);
 
-        JPanel logToolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        logToolbar.setBackground(new Color(45, 45, 48));
+        JPanel logToolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+        logToolbar.setBackground(DarkTheme.BG_TOOLBAR);
+        logToolbar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, DarkTheme.BORDER_DARK));
 
         JLabel logTitle = new JLabel("Agenten-Protokoll:");
-        logTitle.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        logTitle.setFont(DarkTheme.FONT_BOLD);
+        logTitle.setForeground(DarkTheme.FG_PRIMARY);
         logToolbar.add(logTitle);
 
-        JButton btnCopy = new JButton("📋 Kopieren");
+        JButton btnCopy = DarkTheme.createStyledButton("📋 Kopieren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnCopy.addActionListener(e -> {
             String text = core.getLogHistory();
             if (text.isEmpty()) text = txtLog.getText();
@@ -127,7 +159,7 @@ public final class AgentDialog extends JDialog {
         });
         logToolbar.add(btnCopy);
 
-        JButton btnExport = new JButton("💾 Export");
+        JButton btnExport = DarkTheme.createStyledButton("💾 Export", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnExport.addActionListener(e -> {
             try {
                 String path = core.exportLogToProject();
@@ -138,7 +170,7 @@ public final class AgentDialog extends JDialog {
         });
         logToolbar.add(btnExport);
 
-        JButton btnClear = new JButton("🗑️ Leeren");
+        JButton btnClear = DarkTheme.createStyledButton("🗑️ Leeren", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnClear.addActionListener(e -> {
             core.clearLogHistory();
             txtLog.setText("Protokoll geleert.\n");
@@ -149,26 +181,23 @@ public final class AgentDialog extends JDialog {
 
         JScrollPane logScroll = new JScrollPane(txtLog);
         logScroll.setBorder(null);
+        logScroll.getViewport().setBackground(DarkTheme.BG_INPUT);
         centerPanel.add(logScroll, BorderLayout.CENTER);
 
         add(centerPanel, BorderLayout.CENTER);
 
         // 3. Unten: Start / Stopp / Schließen Buttons
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
-        bottomPanel.setBackground(new Color(37, 37, 38));
+        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 8));
+        bottomPanel.setBackground(DarkTheme.BG_TOOLBAR);
+        bottomPanel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, DarkTheme.BORDER_DARK));
 
-        btnStart = new JButton("START");
-        btnStart.setBackground(new Color(46, 125, 50));
-        btnStart.setForeground(Color.WHITE);
-        btnStart.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btnStart = DarkTheme.createStyledButton("START", DarkTheme.ACCENT_GREEN, Color.WHITE);
         btnStart.setEnabled(!core.isRunning());
 
-        btnStop = new JButton("STOPP");
-        btnStop.setBackground(new Color(198, 40, 40));
-        btnStop.setForeground(Color.WHITE);
+        btnStop = DarkTheme.createStyledButton("STOPP", DarkTheme.ACCENT_RED, Color.WHITE);
         btnStop.setEnabled(core.isRunning());
 
-        JButton btnClose = new JButton("Schließen");
+        JButton btnClose = DarkTheme.createStyledButton("Schließen", DarkTheme.BG_BUTTON, DarkTheme.FG_PRIMARY);
         btnClose.addActionListener(e -> setVisible(false));
 
         bottomPanel.add(btnStart);

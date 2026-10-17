@@ -79,6 +79,7 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 - Vollständiger 1:1 Desktop-Port im neuen Projektordner `windows/`.
 - Nativ lauffähig auf Windows 10 / 11 (64-Bit) mit Java 17+.
 - Enthält die gesamte KR Pipeline, Projekt-Explorer, Multi-Tab Editor mit Syntax-Highlighting, Build-Konsole, Artefakte-Verwaltung mit 1-Klick-Ausführung (`.exe`) und den autonomen KI-Agenten (`AGENT`).
+- **Hochkontrast-Dark-Theme**: Einheitliches, augenschonendes Dark-Design im VS-Code-Stil (#1E1E1E / #252526 / #007ACC) über alle Panels, Menüleisten, Explorer, Buttons, TabbedPanes und Agenten-Dialoge hinweg.
 - Startbar über `windows/Start-KR-IDE.bat`, `windows/Start-KR-IDE-Console.bat` oder direkt via `KR-Compiler-IDE.jar`.
 
 ---
@@ -91,6 +92,6 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
 
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar`
-  - **Größe**: `144.737 Bytes`
+  - **Größe**: `153.318 Bytes`
   - **Plattform**: Windows 10 / 11 (Java 17+)
   - **Starter**: `windows/Start-KR-IDE.bat`
