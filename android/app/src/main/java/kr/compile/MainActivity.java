@@ -191,6 +191,11 @@ public final class MainActivity extends Activity implements
 
         // 2. Navigation Tabs (CODE | DATEIEN | BUILD | ARTEFAKTE)
         navTabBar = createNavTabBar();
+        Button krAgentButton = new Button(this);
+        krAgentButton.setText("AGENT");
+        krAgentButton.setAllCaps(false);
+        krAgentButton.setOnClickListener(v -> KrAgentDialog.show(this));
+        navTabBar.addView(krAgentButton);
         headerContainer.addView(navTabBar);
         rootContainer.addView(headerContainer);
 
@@ -252,7 +257,7 @@ public final class MainActivity extends Activity implements
         titleLayout.setOrientation(LinearLayout.VERTICAL);
 
         titleLabel = new TextView(this);
-        titleLabel.setText("KR IDE v4.0.1");
+        titleLabel.setText("KR IDE v" + getAppVersionName());
         titleLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f);
         titleLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         titleLayout.addView(titleLabel);
@@ -787,7 +792,7 @@ public final class MainActivity extends Activity implements
 
         if (DocumentManager.getInstance().getOpenDocuments().isEmpty()) {
             DocumentModel starter = DocumentManager.getInstance().openDocument("main.cpp",
-                    "#include <iostream>\n\nint main() {\n    std::cout << \"KR IDE v4.0.1 C++/Rust/Go ready!\" << std::endl;\n    return 0;\n}\n",
+                    "#include <iostream>\n\nint main() {\n    std::cout << \"KR IDE v" + getAppVersionName() + " C++/Rust/Go ready!\" << std::endl;\n    return 0;\n}\n",
                     null, null);
             codeEditor.setDocument(starter);
             refreshDocTabs();
@@ -1385,7 +1390,7 @@ public final class MainActivity extends Activity implements
                 "Neuer Ordner…",
                 "Zuletzt geöffnete Projekte…",
                 "Einstellungen…",
-                "Über KR IDE v4.0.1"
+                "Über KR IDE"
         };
         new AlertDialog.Builder(this)
                 .setTitle("Menü")
@@ -1708,17 +1713,28 @@ public final class MainActivity extends Activity implements
         b.show();
     }
 
+    public String getAppVersionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "4.0.3";
+        }
+    }
+
     private void showAboutDialog() {
+        String ver = getAppVersionName();
         new AlertDialog.Builder(this)
-                .setTitle("KR Compiler Android IDE v4.0.1")
-                .setMessage("Adaptive, produktive C++20-Entwicklungsumgebung für Android.\n\n" +
-                        "• Clang/LLVM 21.1.8 C++20 Toolchain\n" +
+                .setTitle("KR IDE v" + ver)
+                .setMessage("Entwickler: Ralf Krümmel\n\n" +
+                        "Adaptive, hochproduktive Entwicklungsumgebung für Android.\n\n" +
+                        "• KR Unified Language (.kr) mit C++20, Rust & Go Sprachfusion\n" +
+                        "• Modulare Großprojekte (*.krproject) & Hierarchische Multi-File-Architektur\n" +
+                        "• Clang/LLVM 21.1.8 C++20 Toolchain & LLD Linker\n" +
+                        "• Cargo/rustc & Go-Toolchains\n" +
                         "• Targets: Android ARM64, Windows x64, Linux x64\n" +
-                        "• CMake & Ninja Integration\n" +
-                        "• VCPKG-Manifeste und GUI-Projekte mit SDL3/Dear ImGui\n" +
-                        "• Mobile C++ Symbol-Tastatur\n" +
-                        "• Automatisches Hoch-/Querformat\n" +
-                        "• Fehlernavigation & Runner-APK-Installation\n" +
+                        "• CMake & Ninja Integration, VCPKG-Paketverwaltung\n" +
+                        "• GUI-Projekte mit SDL3/Dear ImGui & OpenCL 3.0\n" +
+                        "• Mobile Symbol-Tastatur & automatische Fehlernavigation\n" +
                         "• Entwickelt für Smartphones und Tablets")
                 .setPositiveButton("Schließen", null)
                 .show();
