@@ -296,6 +296,7 @@ public final class CompilerEngine {
         if (target == Target.ANDROID) {
             cmd.add("-shared");
             cmd.add("-fPIC");
+            cmd.add("-Wl,--export-dynamic");
         } else {
             cmd.add("-static-libgcc");
             cmd.add("-static-libstdc++");
@@ -686,21 +687,46 @@ public final class CompilerEngine {
         return null;
     }
 
-    private static File findTargetArtifact(File dir, String targetName) {
+    private static void deleteDirectory(File dir) {
+        if (dir == null || !dir.exists()) return;
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.isDirectory()) deleteDirectory(f);
+                else f.delete();
+            }
+        }
+        dir.delete();
+    }
+
+    private static File findTargetArtifact(File dir, String targetName, Target target) {
         if (dir == null || !dir.isDirectory() || targetName == null) return null;
         File[] files = dir.listFiles();
         if (files == null) return null;
         String tLow = targetName.toLowerCase(Locale.ROOT);
+        if (target == Target.ANDROID) {
+            for (File f : files) {
+                if (f.isFile()) {
+                    String n = f.getName().toLowerCase(Locale.ROOT);
+                    if (n.equals("lib" + tLow + ".so") || n.equals(tLow + ".so")) {
+                        return f;
+                    }
+                } else if (f.isDirectory() && !f.getName().startsWith(".")) {
+                    File sub = findTargetArtifact(f, targetName, target);
+                    if (sub != null && sub.getName().toLowerCase(Locale.ROOT).endsWith(".so")) return sub;
+                }
+            }
+        }
         for (File f : files) {
             if (f.isFile()) {
                 String n = f.getName().toLowerCase(Locale.ROOT);
-                if (n.equals(tLow) || n.equals(tLow + ".exe") || n.equals(tLow + ".so")
-                        || n.equals("lib" + tLow + ".so") || n.equals("lib" + tLow + ".dll")
-                        || n.equals(tLow + ".dll")) {
+                if (n.equals("lib" + tLow + ".so") || n.equals(tLow + ".so")
+                        || n.equals(tLow + ".exe") || n.equals(tLow + ".dll")
+                        || n.equals("lib" + tLow + ".dll") || n.equals(tLow)) {
                     return f;
                 }
             } else if (f.isDirectory() && !f.getName().startsWith(".")) {
-                File sub = findTargetArtifact(f, targetName);
+                File sub = findTargetArtifact(f, targetName, target);
                 if (sub != null) return sub;
             }
         }
@@ -758,6 +784,7 @@ public final class CompilerEngine {
             List<File> cppFiles = findCppFiles(projectDir);
 
             File cmakeBuildDir = new File(outputDir, "cmake_build_android");
+            deleteDirectory(cmakeBuildDir);
             cmakeBuildDir.mkdirs();
 
             String cmake = findCMakeExecutable();
@@ -785,16 +812,46 @@ public final class CompilerEngine {
                         configCmd.add("-DCMAKE_MAKE_PROGRAM=" + make.replace('\\', '/'));
                     }
 
+                    File projectInclude = new File(cmakeBuildDir, "kr-android-project.cmake");
+                    File execTargetList = new File(cmakeBuildDir, "kr-android-exec-targets.txt");
+                    String hookContent = "set_property(GLOBAL PROPERTY KR_EXEC_TARGETS \"\")\n"
+                            + "function(add_executable target)\n"
+                            + "  set(_kr_args ${ARGN})\n"
+                            + "  list(FIND _kr_args \"IMPORTED\" _kr_imported)\n"
+                            + "  list(FIND _kr_args \"ALIAS\" _kr_alias)\n"
+                            + "  if(NOT _kr_imported EQUAL -1 OR NOT _kr_alias EQUAL -1)\n"
+                            + "    _add_executable(${target} ${ARGN})\n"
+                            + "    return()\n"
+                            + "  endif()\n"
+                            + "  list(REMOVE_ITEM _kr_args WIN32 MACOSX_BUNDLE EXCLUDE_FROM_ALL)\n"
+                            + "  add_library(${target} SHARED ${_kr_args})\n"
+                            + "  set_target_properties(${target} PROPERTIES PREFIX \"lib\")\n"
+                            + "  target_link_options(${target} PRIVATE -Wl,--export-dynamic)\n"
+                            + "  set_property(GLOBAL APPEND PROPERTY KR_EXEC_TARGETS \"${target}\")\n"
+                            + "endfunction()\n"
+                            + "cmake_language(DEFER CALL kr_write_android_targets)\n"
+                            + "function(kr_write_android_targets)\n"
+                            + "  get_property(_targets GLOBAL PROPERTY KR_EXEC_TARGETS)\n"
+                            + "  if(_targets)\n"
+                            + "    string(REPLACE \";\" \"\\n\" _tlines \"${_targets}\")\n"
+                            + "    file(WRITE \"" + execTargetList.getAbsolutePath().replace('\\', '/') + "\" \"${_tlines}\\n\")\n"
+                            + "  endif()\n"
+                            + "endfunction()\n";
+                    Files.writeString(projectInclude.toPath(), hookContent, StandardCharsets.UTF_8);
+
                     configCmd.add("-DCMAKE_TOOLCHAIN_FILE=" + ndkTc.getAbsolutePath().replace('\\', '/'));
                     configCmd.add("-DANDROID_ABI=arm64-v8a");
                     configCmd.add("-DANDROID_PLATFORM=android-26");
                     configCmd.add("-DCMAKE_BUILD_TYPE=Release");
                     configCmd.add("-DCMAKE_COMPILE_WARNING_AS_ERROR=OFF");
+                    configCmd.add("-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=" + projectInclude.getAbsolutePath().replace('\\', '/'));
 
+                    String ldFlags = "-Wl,--export-dynamic";
                     File tcDir = ToolchainManager.getInstance().getToolchainDir();
                     File tcAndroid = tcDir != null ? new File(tcDir, "android") : null;
                     if (tcAndroid != null && tcAndroid.isDirectory()) {
                         String tcAndroidPath = tcAndroid.getAbsolutePath().replace('\\', '/');
+                        ldFlags = "-L" + tcAndroidPath + " -Wl,--export-dynamic";
                         File openclSo = new File(tcAndroid, "libOpenCL.so");
                         if (openclSo.isFile()) {
                             configCmd.add("-DOpenCL_LIBRARY=" + openclSo.getAbsolutePath().replace('\\', '/'));
@@ -808,9 +865,9 @@ public final class CompilerEngine {
                                 configCmd.add("-DOpenCL_INCLUDE_DIR=" + incCl.getParentFile().getAbsolutePath().replace('\\', '/'));
                             }
                         }
-                        configCmd.add("-DCMAKE_SHARED_LINKER_FLAGS=-L" + tcAndroidPath);
-                        configCmd.add("-DCMAKE_EXE_LINKER_FLAGS=-L" + tcAndroidPath);
                     }
+                    configCmd.add("-DCMAKE_SHARED_LINKER_FLAGS=" + ldFlags);
+                    configCmd.add("-DCMAKE_EXE_LINKER_FLAGS=" + ldFlags);
 
                     configCmd.add("-DCMAKE_HAVE_LIBC_PTHREAD=1");
                     configCmd.add("-DCMAKE_THREAD_LIBS_INIT=");
@@ -829,6 +886,17 @@ public final class CompilerEngine {
                             }
                         } catch (Exception ignored) {}
                     }
+                    if (wantedTarget == null && execTargetList.isFile()) {
+                        try {
+                            List<String> lines = Files.readAllLines(execTargetList.toPath(), StandardCharsets.UTF_8);
+                            for (String l : lines) {
+                                if (!l.trim().isEmpty()) {
+                                    wantedTarget = l.trim();
+                                    break;
+                                }
+                            }
+                        } catch (Exception ignored) {}
+                    }
 
                     List<String> buildCmd = new ArrayList<>();
                     buildCmd.add(cmake);
@@ -837,7 +905,7 @@ public final class CompilerEngine {
                     buildCmd.add("--config");
                     buildCmd.add("Release");
                     if (wantedTarget != null) {
-                        log.line("[INFO] Ziel aus kr-android-target.txt ausgewählt: " + wantedTarget);
+                        log.line("[INFO] Ziel für Android ARM64 ausgewählt: " + wantedTarget);
                     }
                     runProcess(buildCmd, projectDir, buildLog);
                 } catch (Exception ex) {
@@ -855,12 +923,25 @@ public final class CompilerEngine {
                     }
                 } catch (Exception ignored) {}
             }
+            File execTargetList = new File(cmakeBuildDir, "kr-android-exec-targets.txt");
+            if (wantedTarget == null && execTargetList.isFile()) {
+                try {
+                    List<String> lines = Files.readAllLines(execTargetList.toPath(), StandardCharsets.UTF_8);
+                    for (String l : lines) {
+                        if (!l.trim().isEmpty()) {
+                            wantedTarget = l.trim();
+                            log.line("[INFO] Primäres Android-Ziel aus CMake add_executable ausgewählt: " + wantedTarget);
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
 
             File primaryArtifact = null;
             if (wantedTarget != null) {
-                primaryArtifact = findTargetArtifact(cmakeBuildDir, wantedTarget);
-                if (primaryArtifact == null) primaryArtifact = findTargetArtifact(outputDir, wantedTarget);
-                if (primaryArtifact == null) primaryArtifact = findTargetArtifact(new File(projectDir, "bin"), wantedTarget);
+                primaryArtifact = findTargetArtifact(cmakeBuildDir, wantedTarget, target);
+                if (primaryArtifact == null) primaryArtifact = findTargetArtifact(outputDir, wantedTarget, target);
+                if (primaryArtifact == null) primaryArtifact = findTargetArtifact(new File(projectDir, "bin"), wantedTarget, target);
             }
             if (primaryArtifact == null) {
                 primaryArtifact = findFirstSharedLibrary(cmakeBuildDir);
