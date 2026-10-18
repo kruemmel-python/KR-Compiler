@@ -4,12 +4,13 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
+import java.util.zip.*;
 
 public final class CompilerEngine {
     public enum Target {
         WINDOWS("Windows x64 (.exe)"),
         LINUX("Linux x64 (ELF)"),
-        ANDROID("Android ARM64 (.so)");
+        ANDROID("Android ARM64 (.apk)");
 
         private final String displayName;
         Target(String displayName) { this.displayName = displayName; }
@@ -122,13 +123,24 @@ public final class CompilerEngine {
         // Rust-Kompilierung wenn im KR-Projekt verwendet
         File rustArchive = null;
         if (res.codeResult != null && res.codeResult.hasRust && res.codeResult.rustDir != null) {
-            String cargo = findExecutable("cargo");
+            String cargo = ToolchainManager.getInstance().getCargoExecutable();
+            if (cargo == null) cargo = findExecutable("cargo");
             if (cargo != null) {
                 log.line("[INFO] Kompiliere Rust-Modul mit Cargo …");
-                List<String> cargoCmd = Arrays.asList(cargo, "build", "--release");
+                List<String> cargoCmd;
+                if (target == Target.ANDROID) {
+                    cargoCmd = Arrays.asList(cargo, "build", "--target", "aarch64-linux-android", "--release");
+                } else {
+                    cargoCmd = Arrays.asList(cargo, "build", "--release");
+                }
                 try {
                     runProcess(cargoCmd, res.codeResult.rustDir, buildLog);
-                    File a = new File(new File(res.codeResult.rustDir, "target/release"), "libkr_rust.a");
+                    File a = target == Target.ANDROID
+                            ? new File(new File(res.codeResult.rustDir, "target/aarch64-linux-android/release"), "libkr_rust.a")
+                            : new File(new File(res.codeResult.rustDir, "target/release"), "libkr_rust.a");
+                    if (!a.isFile()) {
+                        a = new File(new File(res.codeResult.rustDir, "target/release"), "libkr_rust.a");
+                    }
                     if (a.isFile()) {
                         rustArchive = a;
                         log.line("[INFO] Rust-Statische Bibliothek erfolgreich erzeugt: " + a.getName() + " (" + a.length() + " Bytes)");
@@ -148,13 +160,20 @@ public final class CompilerEngine {
             if (go == null) go = findExecutable("go");
             if (go != null) {
                 log.line("[INFO] Kompiliere Go-Modul mit Go …");
-                List<String> goCmd = Arrays.asList(go, "build", "-buildmode=c-archive", "-o", "libkr_go.a", ".");
+                List<String> goCmd;
+                if (target == Target.ANDROID) {
+                    goCmd = Arrays.asList(go, "build", "-buildmode=c-shared", "-o", "libkr_go.so", ".");
+                } else {
+                    goCmd = Arrays.asList(go, "build", "-buildmode=c-archive", "-o", "libkr_go.a", ".");
+                }
                 try {
                     runProcess(goCmd, res.codeResult.goDir, buildLog);
-                    File a = new File(res.codeResult.goDir, "libkr_go.a");
+                    File a = target == Target.ANDROID
+                            ? new File(res.codeResult.goDir, "libkr_go.so")
+                            : new File(res.codeResult.goDir, "libkr_go.a");
                     if (a.isFile()) {
                         goArchive = a;
-                        log.line("[INFO] Go-Statische Bibliothek erfolgreich erzeugt: " + a.getName() + " (" + a.length() + " Bytes)");
+                        log.line("[INFO] Go-Bibliothek erfolgreich erzeugt: " + a.getName() + " (" + a.length() + " Bytes)");
                     }
                 } catch (Exception ex) {
                     log.line("[WARNUNG] Go-Build fehlgeschlagen: " + ex.getMessage() + ". Verwende integrierte Fallback-Bridge.");
@@ -248,7 +267,13 @@ public final class CompilerEngine {
     }
 
     private File buildDirectCpp(List<File> sources, File outputDir, File buildLog) throws Exception {
-        String clang = ToolchainManager.getInstance().getCompilerExecutable();
+        String clang = null;
+        if (target == Target.ANDROID) {
+            clang = ToolchainManager.getInstance().getAndroidCompilerExecutable();
+        }
+        if (clang == null) {
+            clang = ToolchainManager.getInstance().getCompilerExecutable();
+        }
         if (clang == null) {
             clang = findClangExecutable();
         }
@@ -279,13 +304,27 @@ public final class CompilerEngine {
         cmd.add("-L" + projectDir.getAbsolutePath());
         cmd.add("-L" + outputDir.getAbsolutePath());
 
-        File tcInc = ToolchainManager.getInstance().getIncludeDir();
-        if (tcInc != null) {
-            cmd.add("-I" + tcInc.getAbsolutePath());
-        }
-        File tcLib = ToolchainManager.getInstance().getLibDir();
-        if (tcLib != null) {
-            cmd.add("-L" + tcLib.getAbsolutePath());
+        File tc = ToolchainManager.getInstance().getToolchainDir();
+        if (tc != null) {
+            File tpInc = new File(new File(tc, "include"), "third_party");
+            if (tpInc.isDirectory()) {
+                cmd.add("-I" + tpInc.getAbsolutePath());
+            }
+            if (target != Target.ANDROID) {
+                File tcInc = ToolchainManager.getInstance().getIncludeDir();
+                if (tcInc != null) {
+                    cmd.add("-I" + tcInc.getAbsolutePath());
+                }
+                File tcLib = ToolchainManager.getInstance().getLibDir();
+                if (tcLib != null) {
+                    cmd.add("-L" + tcLib.getAbsolutePath());
+                }
+            } else {
+                File androidDir = new File(tc, "android");
+                if (androidDir.isDirectory()) {
+                    cmd.add("-L" + androidDir.getAbsolutePath());
+                }
+            }
         }
 
         // Gängige Include-Verzeichnisse automatisch einbinden
@@ -343,22 +382,29 @@ public final class CompilerEngine {
         }
         if (needsSdl3) {
             cmd.add("-lSDL3");
-            cmd.add("-lgdi32");
-            cmd.add("-luser32");
-            cmd.add("-limm32");
-            cmd.add("-lole32");
-            cmd.add("-loleaut32");
-            cmd.add("-lshell32");
-            cmd.add("-lsetupapi");
-            cmd.add("-lversion");
-            cmd.add("-lwinmm");
+            if (target != Target.ANDROID) {
+                cmd.add("-lgdi32");
+                cmd.add("-luser32");
+                cmd.add("-limm32");
+                cmd.add("-lole32");
+                cmd.add("-loleaut32");
+                cmd.add("-lshell32");
+                cmd.add("-lsetupapi");
+                cmd.add("-lversion");
+                cmd.add("-lwinmm");
+            }
         }
 
-        cmd.add("-lws2_32");
-        cmd.add("-luserenv");
-        cmd.add("-lbcrypt");
-        cmd.add("-lntdll");
-        cmd.add("-lwinmm");
+        if (target == Target.ANDROID) {
+            cmd.add("-llog");
+            cmd.add("-landroid");
+        } else {
+            cmd.add("-lws2_32");
+            cmd.add("-luserenv");
+            cmd.add("-lbcrypt");
+            cmd.add("-lntdll");
+            cmd.add("-lwinmm");
+        }
 
         cmd.add("-o");
         cmd.add(artifact.getAbsolutePath());
@@ -366,7 +412,18 @@ public final class CompilerEngine {
         log.line("[EXEC] Führe Compiler aus: " + clang + " -> " + artifact.getName());
         runProcess(cmd, projectDir, buildLog);
 
-        if (!artifact.exists()) {
+        if (target == Target.LINUX) {
+            File linuxBin = new File(outputDir, "programm");
+            File exeFile = new File(outputDir, "programm.exe");
+            if (exeFile.exists()) {
+                Files.copy(exeFile.toPath(), linuxBin.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+            if (linuxBin.exists()) {
+                artifact = linuxBin;
+            } else {
+                throw new IOException("Kompilierung beendet, aber Artefakt wurde nicht erzeugt: " + artifact);
+            }
+        } else if (!artifact.exists()) {
             File withExe = new File(outputDir, artifact.getName() + ".exe");
             if (withExe.exists()) {
                 artifact = withExe;
@@ -384,8 +441,7 @@ public final class CompilerEngine {
             }
         }
 
-        // Wenn Windows-Executable (.exe) erzeugt wurde, erstelle zusätzlich start_<name>.bat für bequemen Doppel-Klick mit Pause
-        if (artifact.getName().toLowerCase(Locale.ROOT).endsWith(".exe")) {
+        if (target == Target.WINDOWS && artifact.getName().toLowerCase(Locale.ROOT).endsWith(".exe")) {
             String base = artifact.getName().substring(0, artifact.getName().length() - 4);
             File runBat = new File(outputDir, "start_" + base + ".bat");
             String batContent = "@echo off\r\n"
@@ -408,8 +464,164 @@ public final class CompilerEngine {
             } catch (Exception ignored) {}
         }
 
+        if (target == Target.ANDROID) {
+            return packageAndroidApk(outputDir, artifact, projectDir, needsSdl3, buildLog);
+        }
+
         log.line("[ERFOLG] Build erfolgreich: " + artifact.getAbsolutePath() + " (" + artifact.length() + " Bytes)");
         return artifact;
+    }
+
+    private File packageAndroidApk(File outputDir, File userSo, File projectDir, boolean isGui, File buildLog) throws Exception {
+        log.line("[INFO] Erstelle Android ARM64 Runner APK …");
+        File toolchainDir = ToolchainManager.getInstance().getToolchainDir();
+        File androidDir = new File(toolchainDir, "android");
+        File templateApk = new File(androidDir, "runner-template.apk");
+        if (!templateApk.isFile()) {
+            throw new IOException("Android Runner-Template nicht gefunden: " + templateApk);
+        }
+        File cppRuntime = new File(androidDir, "libc++_shared.so");
+        File certFile = new File(androidDir, "kr-runner-cert.der");
+        File keyFile = new File(androidDir, "kr-runner-key.pk8");
+
+        File apkArtifact = new File(outputDir, "programm-android-arm64.apk");
+        File unsignedApk = new File(outputDir, "kr-runner-unsigned.apk");
+        File projectZip = new File(outputDir, "kr-runner-project-data.zip");
+
+        // 1. Projektdaten packen
+        try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(projectZip)))) {
+            addProjectFiles(projectDir, projectDir, zos, new byte[64 * 1024]);
+        }
+
+        // 2. Unsigned APK aus Template zusammenbauen
+        try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(templateApk)));
+             ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(unsignedApk)))) {
+            byte[] buf = new byte[64 * 1024];
+            Set<String> written = new HashSet<>();
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                String name = entry.getName().replace('\\', '/');
+                if (name.isEmpty() || entry.isDirectory() || name.startsWith("META-INF/")
+                        || name.equals("lib/arm64-v8a/libuser.so")
+                        || name.equals("lib/arm64-v8a/libc++_shared.so")
+                        || name.equals("lib/arm64-v8a/libsqlite3.so")
+                        || name.equals("lib/arm64-v8a/libSDL3.so")
+                        || name.equals("lib/arm64-v8a/libkr_go.so")
+                        || name.equals("assets/kr-project-data.zip")
+                        || name.equals("assets/kr-gui-runner")) {
+                    continue;
+                }
+                if (written.add(name)) {
+                    ZipEntry copy = new ZipEntry(name);
+                    copy.setTime(0);
+                    zos.putNextEntry(copy);
+                    int n;
+                    while ((n = zis.read(buf)) >= 0) zos.write(buf, 0, n);
+                    zos.closeEntry();
+                }
+            }
+            if (userSo.isFile()) {
+                addZipFile(zos, written, "lib/arm64-v8a/libuser.so", userSo, buf);
+            }
+            if (cppRuntime.isFile()) {
+                addZipFile(zos, written, "lib/arm64-v8a/libc++_shared.so", cppRuntime, buf);
+            }
+            File sqliteSo = new File(androidDir, "libsqlite3.so");
+            if (sqliteSo.isFile()) {
+                addZipFile(zos, written, "lib/arm64-v8a/libsqlite3.so", sqliteSo, buf);
+            }
+            File sdl3So = new File(androidDir, "libSDL3.so");
+            if (sdl3So.isFile()) {
+                addZipFile(zos, written, "lib/arm64-v8a/libSDL3.so", sdl3So, buf);
+            }
+            File goSo = new File(outputDir, "libkr_go.so");
+            if (!goSo.isFile()) {
+                goSo = new File(new File(projectDir, "KR_BUILD/go_module"), "libkr_go.so");
+            }
+            if (goSo.isFile()) {
+                addZipFile(zos, written, "lib/arm64-v8a/libkr_go.so", goSo, buf);
+            }
+            if (projectZip.isFile()) {
+                addZipFile(zos, written, "assets/kr-project-data.zip", projectZip, buf);
+            }
+            if (isGui) {
+                ZipEntry guiEntry = new ZipEntry("assets/kr-gui-runner");
+                guiEntry.setTime(0);
+                zos.putNextEntry(guiEntry);
+                zos.write("SDL3\n".getBytes(StandardCharsets.UTF_8));
+                zos.closeEntry();
+            }
+        }
+
+        // 3. APK signieren
+        String apksigner = findApksigner();
+        if (apksigner != null && keyFile.isFile() && certFile.isFile()) {
+            log.line("[INFO] Signiere Android APK mit apksigner …");
+            List<String> signCmd = Arrays.asList(
+                    apksigner, "sign",
+                    "--key", keyFile.getAbsolutePath(),
+                    "--cert", certFile.getAbsolutePath(),
+                    "--out", apkArtifact.getAbsolutePath(),
+                    unsignedApk.getAbsolutePath()
+            );
+            runProcess(signCmd, outputDir, buildLog);
+        } else {
+            Files.copy(unsignedApk.toPath(), apkArtifact.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        try { unsignedApk.delete(); } catch (Exception ignored) {}
+        try { projectZip.delete(); } catch (Exception ignored) {}
+
+        log.line("[ERFOLG] Android ARM64 Runner APK erfolgreich erstellt: " + apkArtifact.getAbsolutePath() + " (" + apkArtifact.length() + " Bytes)");
+        return apkArtifact;
+    }
+
+    private static void addProjectFiles(File root, File current, ZipOutputStream out, byte[] buf) throws IOException {
+        File[] files = current.listFiles();
+        if (files == null) return;
+        Arrays.sort(files, Comparator.comparing(File::getName));
+        for (File f : files) {
+            if (f.getName().equals("KR_BUILD") || f.getName().startsWith(".") || f.getName().equals("target")) continue;
+            String relative = root.toPath().relativize(f.toPath()).toString().replace('\\', '/');
+            if (f.isDirectory()) {
+                addProjectFiles(root, f, out, buf);
+            } else if (f.isFile()) {
+                ZipEntry entry = new ZipEntry(relative);
+                entry.setTime(0);
+                out.putNextEntry(entry);
+                try (InputStream in = new BufferedInputStream(new FileInputStream(f))) {
+                    int n;
+                    while ((n = in.read(buf)) >= 0) out.write(buf, 0, n);
+                }
+                out.closeEntry();
+            }
+        }
+    }
+
+    private static void addZipFile(ZipOutputStream out, Set<String> written, String path, File file, byte[] buf) throws IOException {
+        if (!written.add(path)) return;
+        ZipEntry entry = new ZipEntry(path);
+        entry.setTime(0);
+        out.putNextEntry(entry);
+        try (InputStream in = new BufferedInputStream(new FileInputStream(file))) {
+            int n;
+            while ((n = in.read(buf)) >= 0) out.write(buf, 0, n);
+        }
+        out.closeEntry();
+    }
+
+    private static String findApksigner() {
+        String[] wellKnown = {
+                "C:\\Users\\ralfk\\AppData\\Local\\Android\\Sdk\\build-tools\\35.0.0\\apksigner.bat",
+                "C:\\Users\\ralfk\\AppData\\Local\\Android\\Sdk\\build-tools\\36.0.0\\apksigner.bat",
+                "C:\\Users\\ralfk\\AppData\\Local\\Android\\Sdk\\build-tools\\34.0.0\\apksigner.bat",
+                "C:\\Users\\ralfk\\AppData\\Local\\Android\\Sdk\\build-tools\\30.0.3\\apksigner.bat"
+        };
+        for (String p : wellKnown) {
+            File f = new File(p);
+            if (f.isFile()) return f.getAbsolutePath();
+        }
+        return null;
     }
 
     private File buildCMake(File outputDir, File buildLog) throws Exception {
@@ -465,7 +677,9 @@ public final class CompilerEngine {
     }
 
     private File buildRust(File outputDir, File buildLog) throws Exception {
-        String cargo = findExecutable("cargo");
+        String cargo = ToolchainManager.getInstance().getCargoExecutable();
+        if (cargo == null) cargo = findExecutable("cargo");
+        if (cargo == null) cargo = ToolchainManager.getInstance().getRustcExecutable();
         if (cargo == null) cargo = findExecutable("rustc");
         if (cargo == null) throw new IOException("Rust (cargo/rustc) wurde auf dem System nicht gefunden.");
 
@@ -526,6 +740,15 @@ public final class CompilerEngine {
         }
         pathBuilder.append(currentPath);
         env.put("PATH", pathBuilder.toString());
+
+        if (target == Target.ANDROID) {
+            env.put("GOOS", "android");
+            env.put("GOARCH", "arm64");
+            String androidCc = ToolchainManager.getInstance().getAndroidCCompilerExecutable();
+            if (androidCc != null) {
+                env.put("CC", androidCc);
+            }
+        }
 
         activeProcess = pb.start();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(activeProcess.getInputStream(), StandardCharsets.UTF_8));

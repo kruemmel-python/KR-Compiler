@@ -1,7 +1,7 @@
 package kr.compile;
 
 import java.io.File;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Verwaltet die integrierte, portable Compiler-Toolchain für Windows.
@@ -92,6 +92,72 @@ public final class ToolchainManager {
         return null;
     }
 
+    public String getAndroidCompilerExecutable() {
+        String[] ndkRoots = {
+                System.getenv("ANDROID_NDK_HOME"),
+                System.getenv("NDK_HOME"),
+                System.getenv("ANDROID_NDK_ROOT"),
+                System.getProperty("user.home") + "\\AppData\\Local\\Android\\Sdk\\ndk",
+                "C:\\Users\\ralfk\\AppData\\Local\\Android\\Sdk\\ndk",
+                "C:\\Android\\Sdk\\ndk"
+        };
+        for (String root : ndkRoots) {
+            if (root == null) continue;
+            File r = new File(root);
+            if (r.isDirectory()) {
+                File[] versions = r.listFiles(File::isDirectory);
+                if (versions != null) {
+                    Arrays.sort(versions, (a, b) -> b.getName().compareTo(a.getName()));
+                    for (File v : versions) {
+                        File bin = new File(v, "toolchains/llvm/prebuilt/windows-x86_64/bin");
+                        if (bin.isDirectory()) {
+                            for (int api = 35; api >= 21; api--) {
+                                File cmd = new File(bin, "aarch64-linux-android" + api + "-clang++.cmd");
+                                if (cmd.isFile()) return cmd.getAbsolutePath();
+                                File exe = new File(bin, "aarch64-linux-android" + api + "-clang++.exe");
+                                if (exe.isFile()) return exe.getAbsolutePath();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public String getAndroidCCompilerExecutable() {
+        String[] ndkRoots = {
+                System.getenv("ANDROID_NDK_HOME"),
+                System.getenv("NDK_HOME"),
+                System.getenv("ANDROID_NDK_ROOT"),
+                System.getProperty("user.home") + "\\AppData\\Local\\Android\\Sdk\\ndk",
+                "C:\\Users\\ralfk\\AppData\\Local\\Android\\Sdk\\ndk",
+                "C:\\Android\\Sdk\\ndk"
+        };
+        for (String root : ndkRoots) {
+            if (root == null) continue;
+            File r = new File(root);
+            if (r.isDirectory()) {
+                File[] versions = r.listFiles(File::isDirectory);
+                if (versions != null) {
+                    Arrays.sort(versions, (a, b) -> b.getName().compareTo(a.getName()));
+                    for (File v : versions) {
+                        File bin = new File(v, "toolchains/llvm/prebuilt/windows-x86_64/bin");
+                        if (bin.isDirectory()) {
+                            for (int api = 35; api >= 21; api--) {
+                                File cmd = new File(bin, "aarch64-linux-android" + api + "-clang.cmd");
+                                if (cmd.isFile()) return cmd.getAbsolutePath();
+                                File exe = new File(bin, "aarch64-linux-android" + api + "-clang.exe");
+                                if (exe.isFile()) return exe.getAbsolutePath();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public String getMakeExecutable() {
         if (isValidToolchain(toolchainDir)) {
             File bin = new File(toolchainDir, "bin");
@@ -150,13 +216,51 @@ public final class ToolchainManager {
         return null;
     }
 
+    public String getCargoExecutable() {
+        if (toolchainDir != null && toolchainDir.isDirectory()) {
+            File rBin = new File(toolchainDir, "rust/bin/cargo.exe");
+            if (rBin.isFile()) return rBin.getAbsolutePath();
+            File binCargo = new File(toolchainDir, "bin/cargo.exe");
+            if (binCargo.isFile()) return binCargo.getAbsolutePath();
+        }
+        String[] wellKnown = {
+                "C:\\Users\\ralfk\\.rustup\\toolchains\\stable-x86_64-pc-windows-gnu\\bin\\cargo.exe",
+                "C:\\msys64\\mingw64\\bin\\cargo.exe"
+        };
+        for (String p : wellKnown) {
+            File f = new File(p);
+            if (f.isFile() && f.canExecute()) return f.getAbsolutePath();
+        }
+        return null;
+    }
+
+    public String getRustcExecutable() {
+        if (toolchainDir != null && toolchainDir.isDirectory()) {
+            File rBin = new File(toolchainDir, "rust/bin/rustc.exe");
+            if (rBin.isFile()) return rBin.getAbsolutePath();
+            File binRustc = new File(toolchainDir, "bin/rustc.exe");
+            if (binRustc.isFile()) return binRustc.getAbsolutePath();
+        }
+        String[] wellKnown = {
+                "C:\\Users\\ralfk\\.rustup\\toolchains\\stable-x86_64-pc-windows-gnu\\bin\\rustc.exe",
+                "C:\\msys64\\mingw64\\bin\\rustc.exe"
+        };
+        for (String p : wellKnown) {
+            File f = new File(p);
+            if (f.isFile() && f.canExecute()) return f.getAbsolutePath();
+        }
+        return null;
+    }
+
     public void injectEnvironment(Map<String, String> env) {
         if (toolchainDir != null && toolchainDir.isDirectory()) {
             File bin = new File(toolchainDir, "bin");
             File goBin = new File(toolchainDir, "go/bin");
+            File rustBin = new File(toolchainDir, "rust/bin");
             StringBuilder extra = new StringBuilder();
             if (bin.isDirectory()) extra.append(bin.getAbsolutePath()).append(File.pathSeparator);
             if (goBin.isDirectory()) extra.append(goBin.getAbsolutePath()).append(File.pathSeparator);
+            if (rustBin.isDirectory()) extra.append(rustBin.getAbsolutePath()).append(File.pathSeparator);
 
             String existing = env.getOrDefault("PATH", "");
             env.put("PATH", extra.toString() + existing);
