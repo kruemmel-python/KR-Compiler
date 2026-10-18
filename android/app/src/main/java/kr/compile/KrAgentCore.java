@@ -53,6 +53,9 @@ public final class KrAgentCore {
         public int maxSteps() { return maxSteps; }
     }
 
+    public static final int CONNECT_TIMEOUT_MS = 60_000;
+    public static final int READ_TIMEOUT_MS = 600_000; // 10 Minuten (600s) für lokale LLMs (LM Studio, Ollama)
+
     private final Context context;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -217,14 +220,15 @@ public final class KrAgentCore {
             } catch (java.net.SocketTimeoutException te) {
                 String teMsg = te.getMessage() != null ? te.getMessage().toLowerCase(Locale.ROOT) : "";
                 if (teMsg.contains("connect")) {
-                    emit("❌ Timeout beim Verbindungsaufbau zu " + settings.endpoint() + " (nach 60s).\n"
+                    emit("❌ Timeout beim Verbindungsaufbau zu " + settings.endpoint() + " (nach " + (CONNECT_TIMEOUT_MS / 1000) + "s).\n"
                             + "👉 Mögliche Ursachen:\n"
                             + "  1. Ist der Server online und die URL/Port korrekt?\n"
                             + "  2. Bei lokalem PC-Server (Ollama/LM Studio): Nutzen Sie die WLAN-IP Ihres PCs (z. B. http://192.168.x.x:11434) oder 'adb reverse tcp:11434 tcp:11434'.\n"
                             + "  3. Prüfen Sie die Firewall auf dem Rechner.");
                 } else {
-                    emit("❌ Timeout beim Warten auf die Modellantwort von " + settings.endpoint() + " (nach 300s).\n"
-                            + "👉 Das Modell (" + settings.model() + ") hat die maximale Antwortzeit überschritten.");
+                    emit("❌ Timeout beim Warten auf die Modellantwort von " + settings.endpoint() + " (nach " + (READ_TIMEOUT_MS / 60000) + " Minuten / " + (READ_TIMEOUT_MS / 1000) + "s).\n"
+                            + "👉 Das Modell (" + settings.model() + ") hat die maximale Antwortzeit überschritten.\n"
+                            + "👉 Tipp: Bei lokalen Modellen (LM Studio / Ollama) kann die Inferenz komplexer Prompts mehrere Minuten dauern.");
                 }
             } catch (java.net.ConnectException ce) {
                 emit("❌ Verbindungsaufbau verweigert (" + settings.endpoint() + "): " + ce.getMessage() + "\n"
@@ -311,6 +315,7 @@ public final class KrAgentCore {
             updateStatus("Schritt " + (step + 1) + ": Modell denkt nach (" + settings.model() + ") …");
             emit("🤖 [Schritt " + (step + 1) + "/" + budget + "] Sende Anfrage an KI-Modell (" + settings.model() + ") …");
 
+            compactHistory(history);
             JSONObject action = askModel(settings, history);
             String kind = action.optString("action", "done").trim().toLowerCase(Locale.ROOT);
             String path = action.optString("path", "").trim();
@@ -388,10 +393,26 @@ public final class KrAgentCore {
             emit("📄 Ergebnis: " + (output.length() > 1500 ? output.substring(0, 1500) + " … [gekürzt]" : output));
             history.put(new JSONObject().put("role", "assistant").put("content", action.toString()));
             history.put(new JSONObject().put("role", "user").put("content",
-                    "Werkzeugergebnis:\n" + truncate(output, 8000) + "\n\nFahre mit der nächsten logischen Aktion fort."));
+                    "Werkzeugergebnis:\n" + truncate(output, 5000) + "\n\nFahre mit der nächsten logischen Aktion fort."));
         }
 
         emit("⚠️ Maximale Schrittzahl (" + budget + ") erreicht oder abgebrochen.");
+    }
+
+    private static void compactHistory(JSONArray history) {
+        // Belasse die ersten 2 Nachrichten (System + Initial User) und die letzten 4 Nachrichten intakt.
+        // Kürze ältere Zwischenergebnisse, um lokale LLMs (LM Studio) nicht mit riesigen KV-Caches zu überlasten.
+        int len = history.length();
+        if (len <= 6) return;
+        for (int i = 2; i < len - 4; i++) {
+            JSONObject msg = history.optJSONObject(i);
+            if (msg != null && "user".equals(msg.optString("role"))) {
+                String c = msg.optString("content", "");
+                if (c.startsWith("Werkzeugergebnis:\n") && c.length() > 1000) {
+                    msg.put("content", c.substring(0, 1000) + "\n[…älteres Ergebnis für Kontext gekürzt…]");
+                }
+            }
+        }
     }
 
     private JSONObject askModel(Settings s, JSONArray messages) throws Exception {
@@ -399,8 +420,8 @@ public final class KrAgentCore {
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setRequestMethod("POST");
         c.setDoOutput(true);
-        c.setConnectTimeout(60000);
-        c.setReadTimeout(300000);
+        c.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        c.setReadTimeout(READ_TIMEOUT_MS);
         c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         if (!s.token().isEmpty()) {
             c.setRequestProperty("Authorization", "Bearer " + s.token());
