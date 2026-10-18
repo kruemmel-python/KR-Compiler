@@ -492,7 +492,7 @@ public final class CompilerEngine {
             return packageAndroidApk(outputDir, artifact, Collections.emptyList(), projectDir, needsSdl3, buildLog);
         }
 
-        log.line("[ERFOLG] Build erfolgreich: " + artifact.getAbsolutePath() + " (" + artifact.length() + " Bytes)");
+        log.line("[INFO] Erzeugt: " + artifact.getName() + " (" + artifact.length() + " Bytes)");
         return artifact;
     }
 
@@ -814,7 +814,11 @@ public final class CompilerEngine {
 
                     File projectInclude = new File(cmakeBuildDir, "kr-android-project.cmake");
                     File execTargetList = new File(cmakeBuildDir, "kr-android-exec-targets.txt");
-                    String hookContent = "set_property(GLOBAL PROPERTY KR_EXEC_TARGETS \"\")\n"
+                    String hookContent = "set(CMAKE_HAVE_LIBC_PTHREAD 1 CACHE INTERNAL \"\" FORCE)\n"
+                            + "set(CMAKE_THREAD_LIBS_INIT \"\" CACHE STRING \"\" FORCE)\n"
+                            + "set(CMAKE_USE_PTHREADS_INIT 1 CACHE INTERNAL \"\" FORCE)\n"
+                            + "set(Threads_FOUND TRUE CACHE BOOL \"\" FORCE)\n"
+                            + "set_property(GLOBAL PROPERTY KR_EXEC_TARGETS \"\")\n"
                             + "function(add_executable target)\n"
                             + "  set(_kr_args ${ARGN})\n"
                             + "  list(FIND _kr_args \"IMPORTED\" _kr_imported)\n"
@@ -839,6 +843,7 @@ public final class CompilerEngine {
                             + "endfunction()\n";
                     Files.writeString(projectInclude.toPath(), hookContent, StandardCharsets.UTF_8);
 
+                    configCmd.add("--no-warn-unused-cli");
                     configCmd.add("-DCMAKE_TOOLCHAIN_FILE=" + ndkTc.getAbsolutePath().replace('\\', '/'));
                     configCmd.add("-DANDROID_ABI=arm64-v8a");
                     configCmd.add("-DANDROID_PLATFORM=android-26");
@@ -868,11 +873,6 @@ public final class CompilerEngine {
                     }
                     configCmd.add("-DCMAKE_SHARED_LINKER_FLAGS=" + ldFlags);
                     configCmd.add("-DCMAKE_EXE_LINKER_FLAGS=" + ldFlags);
-
-                    configCmd.add("-DCMAKE_HAVE_LIBC_PTHREAD=1");
-                    configCmd.add("-DCMAKE_THREAD_LIBS_INIT=");
-                    configCmd.add("-DCMAKE_USE_PTHREADS_INIT=1");
-                    configCmd.add("-DThreads_FOUND=TRUE");
 
                     runProcess(configCmd, projectDir, buildLog);
 
@@ -1007,6 +1007,7 @@ public final class CompilerEngine {
                 configCmd.add("-DCMAKE_MAKE_PROGRAM=" + make.replace('\\', '/'));
             }
 
+            configCmd.add("--no-warn-unused-cli");
             configCmd.add("-DCMAKE_SYSTEM_NAME=Linux");
             configCmd.add("-DCMAKE_BUILD_TYPE=Release");
             configCmd.add("-DCMAKE_COMPILE_WARNING_AS_ERROR=OFF");
@@ -1025,7 +1026,6 @@ public final class CompilerEngine {
             if (found != null && !found.equals(targetElf)) {
                 Files.copy(found.toPath(), targetElf.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
-            log.line("[ERFOLG] Build erfolgreich: " + targetElf.getName());
             return targetElf;
         } else {
             // Windows x64
@@ -1080,6 +1080,7 @@ public final class CompilerEngine {
                 }
             }
 
+            configCmd.add("--no-warn-unused-cli");
             configCmd.add("-DCMAKE_BUILD_TYPE=Release");
             configCmd.add("-DCMAKE_EXPORT_COMPILE_COMMANDS=ON");
             configCmd.add("-DCMAKE_COMPILE_WARNING_AS_ERROR=OFF");
@@ -1129,7 +1130,6 @@ public final class CompilerEngine {
                     Files.writeString(runBat.toPath(), batContent, StandardCharsets.UTF_8);
                 } catch (Exception ignored) {}
             }
-            log.line("[ERFOLG] Build erfolgreich: " + targetExe.getName());
             return targetExe;
         }
     }
