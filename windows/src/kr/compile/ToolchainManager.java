@@ -158,6 +158,41 @@ public final class ToolchainManager {
         return null;
     }
 
+    public File getNdkDir() {
+        String[] ndkRoots = {
+                System.getenv("ANDROID_NDK_HOME"),
+                System.getenv("NDK_HOME"),
+                System.getenv("ANDROID_NDK_ROOT"),
+                System.getProperty("user.home") + "\\AppData\\Local\\Android\\Sdk\\ndk",
+                "C:\\Users\\ralfk\\AppData\\Local\\Android\\Sdk\\ndk",
+                "C:\\Android\\Sdk\\ndk"
+        };
+        for (String root : ndkRoots) {
+            if (root == null) continue;
+            File r = new File(root);
+            if (r.isDirectory()) {
+                File[] versions = r.listFiles(File::isDirectory);
+                if (versions != null && versions.length > 0) {
+                    Arrays.sort(versions, (a, b) -> b.getName().compareTo(a.getName()));
+                    for (File v : versions) {
+                        File tc = new File(v, "build/cmake/android.toolchain.cmake");
+                        if (tc.isFile()) return v;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public File getAndroidCMakeToolchainFile() {
+        File ndk = getNdkDir();
+        if (ndk != null) {
+            File tc = new File(ndk, "build/cmake/android.toolchain.cmake");
+            if (tc.isFile()) return tc;
+        }
+        return null;
+    }
+
     public String getMakeExecutable() {
         if (isValidToolchain(toolchainDir)) {
             File bin = new File(toolchainDir, "bin");
@@ -165,6 +200,36 @@ public final class ToolchainManager {
             if (make.isFile()) return make.getAbsolutePath();
             make = new File(bin, "make.exe");
             if (make.isFile()) return make.getAbsolutePath();
+        }
+        return null;
+    }
+
+    public String getNinjaExecutable() {
+        if (isValidToolchain(toolchainDir)) {
+            File bin = new File(toolchainDir, "bin");
+            File ninja = new File(bin, "ninja.exe");
+            if (ninja.isFile()) return ninja.getAbsolutePath();
+        }
+        String[] sdkRoots = {
+                System.getenv("ANDROID_HOME"),
+                System.getenv("ANDROID_SDK_ROOT"),
+                System.getProperty("user.home") + "\\AppData\\Local\\Android\\Sdk",
+                "C:\\Users\\ralfk\\AppData\\Local\\Android\\Sdk",
+                "C:\\Android\\Sdk"
+        };
+        for (String root : sdkRoots) {
+            if (root == null) continue;
+            File cmakeDir = new File(root, "cmake");
+            if (cmakeDir.isDirectory()) {
+                File[] versions = cmakeDir.listFiles(File::isDirectory);
+                if (versions != null) {
+                    Arrays.sort(versions, (a, b) -> b.getName().compareTo(a.getName()));
+                    for (File v : versions) {
+                        File ninja = new File(v, "bin/ninja.exe");
+                        if (ninja.isFile()) return ninja.getAbsolutePath();
+                    }
+                }
+            }
         }
         return null;
     }

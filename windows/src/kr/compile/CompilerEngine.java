@@ -291,6 +291,7 @@ public final class CompilerEngine {
         cmd.add("-std=c++20");
         cmd.add("-O3");
         cmd.add("-Wl,--allow-multiple-definition");
+        cmd.add("-Wno-deprecated");
 
         if (target == Target.ANDROID) {
             cmd.add("-shared");
@@ -330,7 +331,7 @@ public final class CompilerEngine {
         }
 
         // Gängige Include-Verzeichnisse automatisch einbinden
-        for (String sub : new String[]{"include", "inc", "src", "locale", "samples"}) {
+        for (String sub : new String[]{"include", "inc", "src", "locale", "samples", "CL"}) {
             File subDir = new File(projectDir, sub);
             if (subDir.isDirectory()) {
                 cmd.add("-I" + subDir.getAbsolutePath());
@@ -356,7 +357,8 @@ public final class CompilerEngine {
             cmd.add(s.getAbsolutePath());
         }
 
-        // Automatische Erkennung und Verlinkung von SDL3 und SQLite3
+        // Automatische Erkennung und Verlinkung von OpenCL, SDL3 und SQLite3
+        boolean needsOpenCl = false;
         boolean needsSdl3 = false;
         boolean needsSqlite3 = false;
         for (File s : sources) {
@@ -364,6 +366,9 @@ public final class CompilerEngine {
             if (name.endsWith(".cpp") || name.endsWith(".c")) {
                 try {
                     String content = Files.readString(s.toPath(), StandardCharsets.UTF_8);
+                    if (content.contains("CL/cl.h") || content.contains("CL/opencl.h") || content.contains("clGetPlatformIDs") || content.contains("clCreateContext")) {
+                        needsOpenCl = true;
+                    }
                     if (content.contains("SDL3/SDL.h") || content.contains("SDL_Init")) needsSdl3 = true;
                     if (content.contains("sqlite3.h") || content.contains("sqlite3_open")) needsSqlite3 = true;
                 } catch (Exception ignored) {}
@@ -374,8 +379,24 @@ public final class CompilerEngine {
             KrProjectConfig pcfg = KrProjectConfig.parse(pf, projectDir.getName(), false);
             for (String dep : pcfg.vcpkgDependencies) {
                 String d = dep.toLowerCase(Locale.ROOT);
+                if (d.contains("opencl")) needsOpenCl = true;
                 if (d.contains("sdl3") || d.contains("sdl")) needsSdl3 = true;
                 if (d.contains("sqlite")) needsSqlite3 = true;
+            }
+        }
+
+        if (needsOpenCl) {
+            cmd.add("-DCL_TARGET_OPENCL_VERSION=300");
+            cmd.add("-DCL_USE_DEPRECATED_OPENCL_1_2_APIS");
+            if (target == Target.ANDROID) {
+                cmd.add("-lOpenCL");
+            } else if (target == Target.WINDOWS) {
+                File clDir = new File(projectDir, "CL");
+                File libDllA = new File(clDir, "libOpenCL.dll.a");
+                if (libDllA.isFile()) {
+                    cmd.add("-L" + clDir.getAbsolutePath());
+                    cmd.add("-lOpenCL");
+                }
             }
         }
 
@@ -467,7 +488,7 @@ public final class CompilerEngine {
         }
 
         if (target == Target.ANDROID) {
-            return packageAndroidApk(outputDir, artifact, projectDir, needsSdl3, buildLog);
+            return packageAndroidApk(outputDir, artifact, Collections.emptyList(), projectDir, needsSdl3, buildLog);
         }
 
         log.line("[ERFOLG] Build erfolgreich: " + artifact.getAbsolutePath() + " (" + artifact.length() + " Bytes)");
@@ -475,6 +496,10 @@ public final class CompilerEngine {
     }
 
     private File packageAndroidApk(File outputDir, File userSo, File projectDir, boolean isGui, File buildLog) throws Exception {
+        return packageAndroidApk(outputDir, userSo, Collections.emptyList(), projectDir, isGui, buildLog);
+    }
+
+    private File packageAndroidApk(File outputDir, File userSo, List<File> extraLibraries, File projectDir, boolean isGui, File buildLog) throws Exception {
         log.line("[INFO] Erstelle Android ARM64 Runner APK …");
         File toolchainDir = ToolchainManager.getInstance().getToolchainDir();
         File androidDir = new File(toolchainDir, "android");
@@ -522,8 +547,15 @@ public final class CompilerEngine {
                     zos.closeEntry();
                 }
             }
-            if (userSo.isFile()) {
+            if (userSo != null && userSo.isFile()) {
                 addZipFile(zos, written, "lib/arm64-v8a/libuser.so", userSo, buf);
+            }
+            if (extraLibraries != null) {
+                for (File extra : extraLibraries) {
+                    if (extra != null && extra.isFile() && !extra.getName().equalsIgnoreCase("libOpenCL.so")) {
+                        addZipFile(zos, written, "lib/arm64-v8a/" + extra.getName(), extra, buf);
+                    }
+                }
             }
             if (cppRuntime.isFile()) {
                 addZipFile(zos, written, "lib/arm64-v8a/libc++_shared.so", cppRuntime, buf);
@@ -626,31 +658,407 @@ public final class CompilerEngine {
         return null;
     }
 
+    private boolean isGuiProject() {
+        if (new File(projectDir, "kr-gui-target.txt").isFile()) return true;
+        File vcpkg = new File(projectDir, "vcpkg.json");
+        if (vcpkg.isFile()) {
+            try {
+                String c = Files.readString(vcpkg.toPath(), StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
+                if (c.contains("sdl3") || c.contains("sdl")) return true;
+            } catch (Exception ignored) {}
+        }
+        return false;
+    }
+
+    private static File findFirstSharedLibrary(File dir) {
+        if (dir == null || !dir.isDirectory()) return null;
+        File[] files = dir.listFiles();
+        if (files == null) return null;
+        for (File f : files) {
+            if (f.isFile() && f.getName().toLowerCase(Locale.ROOT).endsWith(".so")) {
+                return f;
+            }
+            if (f.isDirectory() && !f.getName().startsWith(".")) {
+                File sub = findFirstSharedLibrary(f);
+                if (sub != null) return sub;
+            }
+        }
+        return null;
+    }
+
+    private static File findTargetArtifact(File dir, String targetName) {
+        if (dir == null || !dir.isDirectory() || targetName == null) return null;
+        File[] files = dir.listFiles();
+        if (files == null) return null;
+        String tLow = targetName.toLowerCase(Locale.ROOT);
+        for (File f : files) {
+            if (f.isFile()) {
+                String n = f.getName().toLowerCase(Locale.ROOT);
+                if (n.equals(tLow) || n.equals(tLow + ".exe") || n.equals(tLow + ".so")
+                        || n.equals("lib" + tLow + ".so") || n.equals("lib" + tLow + ".dll")
+                        || n.equals(tLow + ".dll")) {
+                    return f;
+                }
+            } else if (f.isDirectory() && !f.getName().startsWith(".")) {
+                File sub = findTargetArtifact(f, targetName);
+                if (sub != null) return sub;
+            }
+        }
+        return null;
+    }
+
+    private static void collectSharedLibraries(File dir, List<File> list, File exclude) {
+        if (dir == null || !dir.isDirectory()) return;
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            if (f.isFile()) {
+                String n = f.getName().toLowerCase(Locale.ROOT);
+                if (n.endsWith(".so") && !n.equalsIgnoreCase("libuser.so") && !n.equalsIgnoreCase("libOpenCL.so")) {
+                    if (exclude == null || !f.equals(exclude)) {
+                        boolean exists = false;
+                        for (File already : list) {
+                            if (already.getName().equalsIgnoreCase(f.getName())) { exists = true; break; }
+                        }
+                        if (!exists) list.add(f);
+                    }
+                }
+            } else if (f.isDirectory() && !f.getName().startsWith(".")) {
+                collectSharedLibraries(f, list, exclude);
+            }
+        }
+    }
+
+    private static void copyAllCMakeArtifacts(File dir, File destinationDir) {
+        if (dir == null || !dir.isDirectory()) return;
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            if (f.isFile()) {
+                String lower = f.getName().toLowerCase(Locale.ROOT);
+                if (lower.endsWith(".exe") || lower.endsWith(".dll") || lower.endsWith(".dll.a") || lower.endsWith(".so")) {
+                    try {
+                        File dest = new File(destinationDir, f.getName());
+                        if (!f.getCanonicalPath().equalsIgnoreCase(dest.getCanonicalPath())) {
+                            Files.copy(f.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            dest.setExecutable(true, false);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } else if (f.isDirectory() && !f.getName().startsWith(".")) {
+                copyAllCMakeArtifacts(f, destinationDir);
+            }
+        }
+    }
+
     private File buildCMake(File outputDir, File buildLog) throws Exception {
-        String cmake = findExecutable("cmake");
-        if (cmake == null) throw new IOException("cmake.exe nicht gefunden.");
+        if (target == Target.ANDROID) {
+            log.line("[INFO] Starte Android ARM64 CMake-Build …");
+            File ndkTc = ToolchainManager.getInstance().getAndroidCMakeToolchainFile();
+            List<File> cppFiles = findCppFiles(projectDir);
 
-        File cmakeBuildDir = new File(outputDir, "cmake_build");
-        cmakeBuildDir.mkdirs();
+            File cmakeBuildDir = new File(outputDir, "cmake_build_android");
+            cmakeBuildDir.mkdirs();
 
-        List<String> configCmd = Arrays.asList(cmake, "-S", projectDir.getAbsolutePath(), "-B", cmakeBuildDir.getAbsolutePath());
-        log.line("[INFO] Konfiguriere CMake-Projekt …");
-        runProcess(configCmd, projectDir, buildLog);
+            String cmake = findCMakeExecutable();
+            if (cmake != null && ndkTc != null) {
+                try {
+                    List<String> configCmd = new ArrayList<>();
+                    configCmd.add(cmake);
+                    configCmd.add("-S");
+                    configCmd.add(projectDir.getAbsolutePath());
+                    configCmd.add("-B");
+                    configCmd.add(cmakeBuildDir.getAbsolutePath());
 
-        List<String> buildCmd = Arrays.asList(cmake, "--build", cmakeBuildDir.getAbsolutePath(), "--config", "Release");
-        log.line("[INFO] Kompiliere CMake-Projekt …");
-        runProcess(buildCmd, projectDir, buildLog);
+                    String ninja = ToolchainManager.getInstance().getNinjaExecutable();
+                    if (ninja == null) ninja = findExecutable("ninja");
+                    String make = ToolchainManager.getInstance().getMakeExecutable();
+                    if (make == null) make = findMakeExecutable();
 
-        File targetExe = new File(outputDir, "programm.exe");
-        File found = findFirstExecutable(cmakeBuildDir);
-        if (found != null) {
-            Files.copy(found.toPath(), targetExe.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    if (ninja != null) {
+                        configCmd.add("-G");
+                        configCmd.add("Ninja");
+                        configCmd.add("-DCMAKE_MAKE_PROGRAM=" + ninja.replace('\\', '/'));
+                    } else if (make != null) {
+                        configCmd.add("-G");
+                        configCmd.add("MinGW Makefiles");
+                        configCmd.add("-DCMAKE_MAKE_PROGRAM=" + make.replace('\\', '/'));
+                    }
+
+                    configCmd.add("-DCMAKE_TOOLCHAIN_FILE=" + ndkTc.getAbsolutePath().replace('\\', '/'));
+                    configCmd.add("-DANDROID_ABI=arm64-v8a");
+                    configCmd.add("-DANDROID_PLATFORM=android-26");
+                    configCmd.add("-DCMAKE_BUILD_TYPE=Release");
+                    configCmd.add("-DCMAKE_COMPILE_WARNING_AS_ERROR=OFF");
+
+                    File tcDir = ToolchainManager.getInstance().getToolchainDir();
+                    File tcAndroid = tcDir != null ? new File(tcDir, "android") : null;
+                    if (tcAndroid != null && tcAndroid.isDirectory()) {
+                        String tcAndroidPath = tcAndroid.getAbsolutePath().replace('\\', '/');
+                        File openclSo = new File(tcAndroid, "libOpenCL.so");
+                        if (openclSo.isFile()) {
+                            configCmd.add("-DOpenCL_LIBRARY=" + openclSo.getAbsolutePath().replace('\\', '/'));
+                        }
+                        File projectCl = new File(projectDir, "CL");
+                        if (projectCl.isDirectory()) {
+                            configCmd.add("-DOpenCL_INCLUDE_DIR=" + projectCl.getAbsolutePath().replace('\\', '/'));
+                        } else {
+                            File incCl = new File(projectDir, "include/CL");
+                            if (incCl.isDirectory()) {
+                                configCmd.add("-DOpenCL_INCLUDE_DIR=" + incCl.getParentFile().getAbsolutePath().replace('\\', '/'));
+                            }
+                        }
+                        configCmd.add("-DCMAKE_SHARED_LINKER_FLAGS=-L" + tcAndroidPath);
+                        configCmd.add("-DCMAKE_EXE_LINKER_FLAGS=-L" + tcAndroidPath);
+                    }
+
+                    configCmd.add("-DCMAKE_HAVE_LIBC_PTHREAD=1");
+                    configCmd.add("-DCMAKE_THREAD_LIBS_INIT=");
+                    configCmd.add("-DCMAKE_USE_PTHREADS_INIT=1");
+                    configCmd.add("-DThreads_FOUND=TRUE");
+
+                    runProcess(configCmd, projectDir, buildLog);
+
+                    File targetTxt = new File(projectDir, "kr-android-target.txt");
+                    String wantedTarget = null;
+                    if (targetTxt.isFile()) {
+                        try {
+                            List<String> lines = Files.readAllLines(targetTxt.toPath(), StandardCharsets.UTF_8);
+                            if (!lines.isEmpty() && !lines.get(0).trim().isEmpty()) {
+                                wantedTarget = lines.get(0).trim();
+                            }
+                        } catch (Exception ignored) {}
+                    }
+
+                    List<String> buildCmd = new ArrayList<>();
+                    buildCmd.add(cmake);
+                    buildCmd.add("--build");
+                    buildCmd.add(cmakeBuildDir.getAbsolutePath());
+                    buildCmd.add("--config");
+                    buildCmd.add("Release");
+                    if (wantedTarget != null) {
+                        log.line("[INFO] Ziel aus kr-android-target.txt ausgewählt: " + wantedTarget);
+                    }
+                    runProcess(buildCmd, projectDir, buildLog);
+                } catch (Exception ex) {
+                    log.line("[WARNUNG] CMake NDK-Build mit Fehler (" + ex.getMessage() + "). Starte automatischen Fallback auf direkten NDK Clang-Build …");
+                }
+            }
+
+            File targetTxt = new File(projectDir, "kr-android-target.txt");
+            String wantedTarget = null;
+            if (targetTxt.isFile()) {
+                try {
+                    List<String> lines = Files.readAllLines(targetTxt.toPath(), StandardCharsets.UTF_8);
+                    if (!lines.isEmpty() && !lines.get(0).trim().isEmpty()) {
+                        wantedTarget = lines.get(0).trim();
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            File primaryArtifact = null;
+            if (wantedTarget != null) {
+                primaryArtifact = findTargetArtifact(cmakeBuildDir, wantedTarget);
+                if (primaryArtifact == null) primaryArtifact = findTargetArtifact(outputDir, wantedTarget);
+                if (primaryArtifact == null) primaryArtifact = findTargetArtifact(new File(projectDir, "bin"), wantedTarget);
+            }
+            if (primaryArtifact == null) {
+                primaryArtifact = findFirstSharedLibrary(cmakeBuildDir);
+            }
+            if (primaryArtifact == null) {
+                primaryArtifact = findFirstExecutable(cmakeBuildDir);
+            }
+            if (primaryArtifact == null) {
+                primaryArtifact = findFirstSharedLibrary(new File(projectDir, "bin"));
+            }
+            if (primaryArtifact == null) {
+                primaryArtifact = findFirstSharedLibrary(outputDir);
+            }
+
+            File userSo = new File(outputDir, "libuser.so");
+            if (primaryArtifact != null && !primaryArtifact.equals(userSo)) {
+                Files.copy(primaryArtifact.toPath(), userSo.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            List<File> extraLibs = new ArrayList<>();
+            collectSharedLibraries(cmakeBuildDir, extraLibs, primaryArtifact);
+            File projectBin = new File(projectDir, "bin");
+            if (projectBin.isDirectory()) {
+                collectSharedLibraries(projectBin, extraLibs, primaryArtifact);
+            }
+
+            if (!userSo.isFile()) {
+                if (!cppFiles.isEmpty()) {
+                    log.line("[INFO] Kompiliere " + cppFiles.size() + " C/C++-Quelldatei(en) direkt mit Android NDK Clang für ARM64 …");
+                    return buildDirectCpp(cppFiles, outputDir, buildLog);
+                }
+                throw new IOException("Weder CMake noch der direkte Compilerlauf konnten eine Android libuser.so erzeugen.");
+            }
+
+            boolean isGui = isGuiProject();
+            return packageAndroidApk(outputDir, userSo, extraLibs, projectDir, isGui, buildLog);
+        } else if (target == Target.LINUX) {
+            String cmake = findCMakeExecutable();
+            if (cmake == null) throw new IOException("cmake.exe nicht gefunden.");
+
+            File cmakeBuildDir = new File(outputDir, "cmake_build");
+            cmakeBuildDir.mkdirs();
+
+            List<String> configCmd = new ArrayList<>();
+            configCmd.add(cmake);
+            configCmd.add("-S");
+            configCmd.add(projectDir.getAbsolutePath());
+            configCmd.add("-B");
+            configCmd.add(cmakeBuildDir.getAbsolutePath());
+
+            String ninja = ToolchainManager.getInstance().getNinjaExecutable();
+            if (ninja == null) ninja = findExecutable("ninja");
+            String make = ToolchainManager.getInstance().getMakeExecutable();
+            if (make == null) make = findMakeExecutable();
+
+            if (ninja != null) {
+                configCmd.add("-G");
+                configCmd.add("Ninja");
+                configCmd.add("-DCMAKE_MAKE_PROGRAM=" + ninja.replace('\\', '/'));
+            } else if (make != null) {
+                configCmd.add("-G");
+                configCmd.add("MinGW Makefiles");
+                configCmd.add("-DCMAKE_MAKE_PROGRAM=" + make.replace('\\', '/'));
+            }
+
+            configCmd.add("-DCMAKE_SYSTEM_NAME=Linux");
+            configCmd.add("-DCMAKE_BUILD_TYPE=Release");
+            configCmd.add("-DCMAKE_COMPILE_WARNING_AS_ERROR=OFF");
+
+            log.line("[INFO] Konfiguriere CMake-Projekt für Linux x64 …");
+            runProcess(configCmd, projectDir, buildLog);
+
+            List<String> buildCmd = Arrays.asList(cmake, "--build", cmakeBuildDir.getAbsolutePath(), "--config", "Release");
+            log.line("[INFO] Kompiliere CMake-Projekt …");
+            runProcess(buildCmd, projectDir, buildLog);
+
+            File targetElf = new File(outputDir, "programm");
+            File found = findFirstExecutable(cmakeBuildDir);
+            if (found == null) found = findFirstExecutable(new File(projectDir, "bin"));
+            if (found == null) found = findFirstExecutable(outputDir);
+            if (found != null && !found.equals(targetElf)) {
+                Files.copy(found.toPath(), targetElf.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+            log.line("[ERFOLG] Build erfolgreich: " + targetElf.getName());
+            return targetElf;
+        } else {
+            // Windows x64
+            String cmake = findCMakeExecutable();
+            if (cmake == null) throw new IOException("cmake.exe nicht gefunden. Bitte CMake für Windows installieren oder in die Toolchain einbetten.");
+
+            File cmakeBuildDir = new File(outputDir, "cmake_build");
+            cmakeBuildDir.mkdirs();
+
+            List<String> configCmd = new ArrayList<>();
+            configCmd.add(cmake);
+            configCmd.add("-S");
+            configCmd.add(projectDir.getAbsolutePath());
+            configCmd.add("-B");
+            configCmd.add(cmakeBuildDir.getAbsolutePath());
+
+            String ninja = ToolchainManager.getInstance().getNinjaExecutable();
+            if (ninja == null) ninja = findExecutable("ninja");
+            String make = ToolchainManager.getInstance().getMakeExecutable();
+            if (make == null) make = findMakeExecutable();
+
+            if (ninja != null) {
+                configCmd.add("-G");
+                configCmd.add("Ninja");
+                configCmd.add("-DCMAKE_MAKE_PROGRAM=" + ninja.replace('\\', '/'));
+            } else if (make != null) {
+                configCmd.add("-G");
+                configCmd.add("MinGW Makefiles");
+                configCmd.add("-DCMAKE_MAKE_PROGRAM=" + make.replace('\\', '/'));
+            }
+
+            String gcc = ToolchainManager.getInstance().getGccExecutable();
+            if (gcc != null) configCmd.add("-DCMAKE_C_COMPILER=" + gcc.replace('\\', '/'));
+            String gpp = ToolchainManager.getInstance().getCompilerExecutable();
+            if (gpp != null) configCmd.add("-DCMAKE_CXX_COMPILER=" + gpp.replace('\\', '/'));
+
+            File tcDir = ToolchainManager.getInstance().getToolchainDir();
+            File openclLib = null;
+            if (tcDir != null) {
+                File tcLib = new File(tcDir, "lib/libOpenCL.dll.a");
+                if (tcLib.isFile()) openclLib = tcLib;
+            }
+            if (openclLib == null) {
+                File projCl = new File(projectDir, "CL/libOpenCL.dll.a");
+                if (projCl.isFile()) openclLib = projCl;
+            }
+            if (openclLib != null) {
+                configCmd.add("-DOpenCL_LIBRARY=" + openclLib.getAbsolutePath().replace('\\', '/'));
+                File projClDir = new File(projectDir, "CL");
+                if (projClDir.isDirectory()) {
+                    configCmd.add("-DOpenCL_INCLUDE_DIR=" + projClDir.getAbsolutePath().replace('\\', '/'));
+                }
+            }
+
+            configCmd.add("-DCMAKE_BUILD_TYPE=Release");
+            configCmd.add("-DCMAKE_EXPORT_COMPILE_COMMANDS=ON");
+            configCmd.add("-DCMAKE_COMPILE_WARNING_AS_ERROR=OFF");
+
+            log.line("[INFO] Konfiguriere CMake-Projekt …");
+            runProcess(configCmd, projectDir, buildLog);
+
+            List<String> buildCmd = Arrays.asList(cmake, "--build", cmakeBuildDir.getAbsolutePath(), "--config", "Release");
+            log.line("[INFO] Kompiliere CMake-Projekt …");
+            runProcess(buildCmd, projectDir, buildLog);
+
+            copyAllCMakeArtifacts(cmakeBuildDir, outputDir);
+            File projectBin = new File(projectDir, "bin");
+            if (projectBin.isDirectory()) {
+                copyAllCMakeArtifacts(projectBin, outputDir);
+            }
+
+            File targetExe = new File(outputDir, "programm.exe");
+            File found = findFirstExecutable(cmakeBuildDir);
+            if (found == null) {
+                found = findFirstExecutable(projectBin);
+            }
+            if (found == null) {
+                found = findFirstExecutable(outputDir);
+            }
+            if (found != null && !found.equals(targetExe)) {
+                Files.copy(found.toPath(), targetExe.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+            if (targetExe.isFile()) {
+                File runBat = new File(outputDir, "start_programm.bat");
+                String batContent = "@echo off\r\n"
+                        + "chcp 65001 >nul\r\n"
+                        + "title KR Programm - programm.exe\r\n"
+                        + "cd /d \"%~dp0\"\r\n"
+                        + "echo ========================================================\r\n"
+                        + "echo   KR Programm Ausfuehrung: programm.exe\r\n"
+                        + "echo ========================================================\r\n"
+                        + "echo.\r\n"
+                        + "\"%~dp0programm.exe\"\r\n"
+                        + "echo.\r\n"
+                        + "echo --------------------------------------------------------\r\n"
+                        + "echo [BEENDET] Rueckgabewert / Exit Code: %ERRORLEVEL%\r\n"
+                        + "echo.\r\n"
+                        + "echo Druecken Sie eine beliebige Taste, um dieses Fenster zu schliessen...\r\n"
+                        + "pause >nul\r\n";
+                try {
+                    Files.writeString(runBat.toPath(), batContent, StandardCharsets.UTF_8);
+                } catch (Exception ignored) {}
+            }
+            log.line("[ERFOLG] Build erfolgreich: " + targetExe.getName());
             return targetExe;
         }
-        return targetExe;
     }
 
     private File buildMakefile(File outputDir, File buildLog) throws Exception {
+        if (target == Target.ANDROID) {
+            log.line("[INFO] Android-Build für Makefile-Projekt: führe direkten NDK-Compilerlauf für Android ARM64 durch …");
+            return buildDirectCpp(findCppFiles(projectDir), outputDir, buildLog);
+        }
+
         String make = ToolchainManager.getInstance().getMakeExecutable();
         if (make == null) {
             make = findMakeExecutable();
@@ -669,13 +1077,14 @@ public final class CompilerEngine {
             return buildDirectCpp(findCppFiles(projectDir), outputDir, buildLog);
         }
 
-        File targetExe = new File(outputDir, "programm.exe");
+        String targetName = target == Target.WINDOWS ? "programm.exe" : "programm";
+        File targetFile = new File(outputDir, targetName);
         File found = findFirstExecutable(projectDir);
-        if (found != null && !found.equals(targetExe)) {
-            Files.copy(found.toPath(), targetExe.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            return targetExe;
+        if (found != null && !found.equals(targetFile)) {
+            Files.copy(found.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            return targetFile;
         }
-        return targetExe;
+        return targetFile;
     }
 
     private File buildRust(File outputDir, File buildLog) throws Exception {
@@ -685,28 +1094,68 @@ public final class CompilerEngine {
         if (cargo == null) cargo = findExecutable("rustc");
         if (cargo == null) throw new IOException("Rust (cargo/rustc) wurde auf dem System nicht gefunden.");
 
-        File artifact = new File(outputDir, "programm.exe");
-        List<String> cmd = Arrays.asList(cargo, "build", "--release");
-        log.line("[INFO] Starte Cargo Release-Build …");
-        runProcess(cmd, projectDir, buildLog);
+        if (target == Target.ANDROID) {
+            log.line("[INFO] Starte Cargo Android ARM64 Release-Build …");
+            List<String> cmd = Arrays.asList(cargo, "build", "--release", "--target", "aarch64-linux-android");
+            runProcess(cmd, projectDir, buildLog);
 
-        File targetRelease = new File(new File(projectDir, "target"), "release");
-        File found = findFirstExecutable(targetRelease);
-        if (found != null) {
-            Files.copy(found.toPath(), artifact.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            File targetRelease = new File(new File(new File(projectDir, "target"), "aarch64-linux-android"), "release");
+            File foundSo = findFirstSharedLibrary(targetRelease);
+            if (foundSo == null) foundSo = findFirstExecutable(targetRelease);
+
+            File userSo = new File(outputDir, "libuser.so");
+            if (foundSo != null) Files.copy(foundSo.toPath(), userSo.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            return packageAndroidApk(outputDir, userSo, projectDir, false, buildLog);
+        } else if (target == Target.LINUX) {
+            File artifact = new File(outputDir, "programm");
+            List<String> cmd = Arrays.asList(cargo, "build", "--release");
+            log.line("[INFO] Starte Cargo Release-Build (Linux) …");
+            runProcess(cmd, projectDir, buildLog);
+
+            File targetRelease = new File(new File(projectDir, "target"), "release");
+            File found = findFirstExecutable(targetRelease);
+            if (found != null) {
+                Files.copy(found.toPath(), artifact.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+            return artifact;
+        } else {
+            File artifact = new File(outputDir, "programm.exe");
+            List<String> cmd = Arrays.asList(cargo, "build", "--release");
+            log.line("[INFO] Starte Cargo Release-Build …");
+            runProcess(cmd, projectDir, buildLog);
+
+            File targetRelease = new File(new File(projectDir, "target"), "release");
+            File found = findFirstExecutable(targetRelease);
+            if (found != null) {
+                Files.copy(found.toPath(), artifact.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+            return artifact;
         }
-        return artifact;
     }
 
     private File buildGo(File outputDir, File buildLog) throws Exception {
         String go = findExecutable("go");
         if (go == null) throw new IOException("Go Compiler (go.exe) wurde auf dem System nicht gefunden.");
 
-        File artifact = new File(outputDir, "programm.exe");
-        List<String> cmd = Arrays.asList(go, "build", "-o", artifact.getAbsolutePath(), ".");
-        log.line("[INFO] Starte Go Build …");
-        runProcess(cmd, projectDir, buildLog);
-        return artifact;
+        if (target == Target.ANDROID) {
+            File userSo = new File(outputDir, "libuser.so");
+            List<String> cmd = Arrays.asList(go, "build", "-buildmode=c-shared", "-o", userSo.getAbsolutePath(), ".");
+            log.line("[INFO] Starte Go Android ARM64 Build …");
+            runProcess(cmd, projectDir, buildLog);
+            return packageAndroidApk(outputDir, userSo, projectDir, false, buildLog);
+        } else if (target == Target.LINUX) {
+            File artifact = new File(outputDir, "programm");
+            List<String> cmd = Arrays.asList(go, "build", "-o", artifact.getAbsolutePath(), ".");
+            log.line("[INFO] Starte Go Linux Build …");
+            runProcess(cmd, projectDir, buildLog);
+            return artifact;
+        } else {
+            File artifact = new File(outputDir, "programm.exe");
+            List<String> cmd = Arrays.asList(go, "build", "-o", artifact.getAbsolutePath(), ".");
+            log.line("[INFO] Starte Go Build …");
+            runProcess(cmd, projectDir, buildLog);
+            return artifact;
+        }
     }
 
     private void runProcess(List<String> cmd, File cwd, File buildLog) throws Exception {
@@ -774,6 +1223,69 @@ public final class CompilerEngine {
         }
     }
 
+    private static boolean isPosixEmulatorPath(String path) {
+        if (path == null) return false;
+        String lower = path.toLowerCase(Locale.ROOT).replace('/', '\\');
+        return lower.contains("\\msys64\\usr\\bin")
+                || lower.contains("\\msys32\\usr\\bin")
+                || lower.contains("\\msys64\\bin")
+                || lower.contains("\\msys32\\bin")
+                || lower.contains("\\cygwin64\\bin")
+                || lower.contains("\\cygwin\\bin")
+                || lower.endsWith("\\usr\\bin")
+                || lower.contains("\\usr\\bin\\");
+    }
+
+    public static String findCMakeExecutable() {
+        // 1. Primär: Portable integrierte Toolchain
+        File tc = ToolchainManager.getInstance().getToolchainDir();
+        if (tc != null && tc.isDirectory()) {
+            File inBin = new File(new File(tc, "bin"), "cmake.exe");
+            if (inBin.isFile() && inBin.canExecute()) return inBin.getAbsolutePath();
+        }
+
+        // 2. Bekannte native Windows-Pfade (bevorzugt vor beliebigem PATH)
+        String[] wellKnown = {
+                "C:\\Program Files\\CMake\\bin\\cmake.exe",
+                "C:\\Program Files (x86)\\CMake\\bin\\cmake.exe",
+                "C:\\msys64\\mingw64\\bin\\cmake.exe",
+                "C:\\msys64\\ucrt64\\bin\\cmake.exe",
+                "C:\\msys64\\clang64\\bin\\cmake.exe"
+        };
+        for (String p : wellKnown) {
+            File f = new File(p);
+            if (f.isFile() && f.canExecute()) return f.getAbsolutePath();
+        }
+
+        // 3. Android SDK CMake
+        String userHome = System.getProperty("user.home");
+        if (userHome != null) {
+            File sdkCmake = new File(userHome, "AppData\\Local\\Android\\Sdk\\cmake");
+            if (sdkCmake.isDirectory()) {
+                File[] versions = sdkCmake.listFiles(File::isDirectory);
+                if (versions != null) {
+                    Arrays.sort(versions, (a, b) -> b.getName().compareTo(a.getName()));
+                    for (File v : versions) {
+                        File exe = new File(v, "bin\\cmake.exe");
+                        if (exe.isFile() && exe.canExecute()) return exe.getAbsolutePath();
+                    }
+                }
+            }
+        }
+
+        // 4. PATH des Systems (NUR native Windows-Executables, KEINE MSYS/Cygwin POSIX /usr/bin)
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv != null) {
+            for (String dir : pathEnv.split(File.pathSeparator)) {
+                if (isPosixEmulatorPath(dir)) continue;
+                File candidate = new File(dir, "cmake.exe");
+                if (candidate.isFile() && candidate.canExecute()) return candidate.getAbsolutePath();
+            }
+        }
+
+        return null;
+    }
+
     private static String findMakeExecutable() {
         String exe = findExecutable("mingw32-make");
         if (exe != null) return exe;
@@ -782,8 +1294,7 @@ public final class CompilerEngine {
 
         String[] wellKnown = {
                 "C:\\msys64\\mingw64\\bin\\mingw32-make.exe",
-                "C:\\msys64\\ucrt64\\bin\\mingw32-make.exe",
-                "C:\\msys64\\usr\\bin\\make.exe"
+                "C:\\msys64\\ucrt64\\bin\\mingw32-make.exe"
         };
         for (String p : wellKnown) {
             File f = new File(p);
@@ -800,7 +1311,7 @@ public final class CompilerEngine {
 
         String[] wellKnown = {
                 "C:\\Program Files\\LLVM\\bin\\clang++.exe",
-                "C:\\msys64\\mingw64\bin\\clang++.exe",
+                "C:\\msys64\\mingw64\\bin\\clang++.exe",
                 "C:\\msys64\\mingw64\\bin\\g++.exe",
                 "C:\\msys64\\ucrt64\\bin\\g++.exe"
         };
@@ -813,6 +1324,10 @@ public final class CompilerEngine {
 
     private static String findExecutable(String name) {
         String withExe = name.toLowerCase(Locale.ROOT).endsWith(".exe") ? name : name + ".exe";
+        if (name.equalsIgnoreCase("ninja")) {
+            String ninja = ToolchainManager.getInstance().getNinjaExecutable();
+            if (ninja != null) return ninja;
+        }
 
         // 1. Primär: Portable integrierte Toolchain der KR Compiler IDE
         File tc = ToolchainManager.getInstance().getToolchainDir();
@@ -825,10 +1340,11 @@ public final class CompilerEngine {
             if (inRustBin.isFile() && inRustBin.canExecute()) return inRustBin.getAbsolutePath();
         }
 
-        // 2. PATH des Systems
+        // 2. PATH des Systems (NUR native Windows-Executables, keine MSYS/Cygwin POSIX /usr/bin)
         String pathEnv = System.getenv("PATH");
         if (pathEnv != null) {
             for (String dir : pathEnv.split(File.pathSeparator)) {
+                if (isPosixEmulatorPath(dir)) continue;
                 File candidate = new File(dir, withExe);
                 if (candidate.isFile() && candidate.canExecute()) return candidate.getAbsolutePath();
             }
