@@ -92,7 +92,7 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
 
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar`
-  - **Größe**: `172.524 Bytes`
-  - **SHA-256**: `91c3bca0aa8d095f4b143fa819759caae084a92e47124054d397365a9d859b1d`
+  - **Größe**: `177.480 Bytes`
+  - **SHA-256**: `9f7b14a4413d7502a16381c3ba3bf720260da8db5b54b8eb34c85b216160c607`
   - **Plattform**: Windows 10 / 11 (Java 17+)
   - **Starter**: `windows/Start-KR-IDE.bat`

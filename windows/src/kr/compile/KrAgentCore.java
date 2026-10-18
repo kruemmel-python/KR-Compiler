@@ -239,30 +239,32 @@ public final class KrAgentCore {
         initial.put("role", "system");
 
         StringBuilder sys = new StringBuilder();
-        sys.append("Du bist der autonome Programmieragent der KR Compiler Windows IDE. Du entwickelst und analysierst Projekte in der KR Unified Language (.kr), C++20, Rust und Go.\n\n")
+        sys.append("Du bist der autonome Programmieragent der KR Compiler Windows IDE. Du entwickelst und reparierst Projekte in der KR Unified Language (.kr), C++20, Rust und Go.\n\n")
            .append("KOMMUNIKATIONSREGELN:\n")
-           .append("1. Antworte AUSSCHLIESSLICH als gültiges JSON-Objekt mit genau diesen Schlüsseln: {\"action\": \"...\", \"path\": \"...\", \"content\": \"...\", \"message\": \"...\"}\n")
-           .append("   action MUSS eines der folgenden Schlüsselwörter sein: list, read, write, build, done.\n")
+           .append("1. Antworte AUSSCHLIESSLICH als gültiges JSON-Objekt mit genau diesen Schlüsseln: {\"action\": \"...\", \"path\": \"...\", \"search\": \"...\", \"replace\": \"...\", \"content\": \"...\", \"message\": \"...\"}\n")
+           .append("   action MUSS eines der folgenden Schlüsselwörter sein: list, read, replace, write, build, done.\n")
            .append("2. WERKZEUG-REGELN:\n")
-           .append("   - 'list': Listet Verzeichnisse auf (z. B. path=\"\" für das Hauptverzeichnis, path=\"app\" für Unterordner).\n")
-           .append("   - 'read': Liest den Inhalt einer Textdatei (z. B. path=\"nexus.krproject\", path=\"main.kr\", path=\"README.md\"). Verwende 'read' NUR für Dateien, NIEMALS für Ordner oder '.'!\n")
-           .append("   - 'write': Ersetzt den Inhalt einer Zieldatei (benötigt 'path' und 'content').\n")
+           .append("   - 'list': Listet Verzeichnisse auf (z. B. path=\"\" für das Hauptverzeichnis, path=\"gui\" für Unterordner).\n")
+           .append("   - 'read': Liest den Inhalt einer Textdatei mit Zeilennummern (z. B. path=\"nexus.krproject\", path=\"main.kr\").\n")
+           .append("             TIPP: Um gezielt Zeilen zu lesen, gib den Bereich an: path=\"gui/window.kr:190-230\".\n")
+           .append("   - 'replace': Ersetzt einen fehlerhaften Codeabschnitt zielgenau in einer Datei (benötigt 'path', 'search' und 'replace').\n")
+           .append("                HAUPTWERKZEUG ZUR FEHLERBEHEBUNG: Nutze immer 'replace' statt 'write', um Tippfehler oder Datenverlust bei großen Dateien zu verhindern!\n")
+           .append("   - 'write': Erstellt eine neue Datei oder ersetzt eine gesamte Datei (benötigt 'path' und 'content').\n")
            .append("   - 'build': Führt den Compilerlauf für die aktive Zielplattform aus.\n")
            .append("   - 'done': Beendet den Auftrag erfolgreich (Abschlussbericht im Feld 'message').\n\n");
 
         if (isReadOnly) {
             sys.append("WICHTIGE REGEL FÜR DIESEN AUFTRAG (REINE ANALYSE):\n")
                .append("• Der Benutzer möchte NUR eine Analyse oder Erklärung des Projekts ('").append(task).append("').\n")
-               .append("• Führe KEINEN Build ('build') und KEINE Dateiänderungen ('write') aus!\n")
+               .append("• Führe KEINEN Build ('build') und KEINE Dateiänderungen ('replace' / 'write') aus!\n")
                .append("• Lies die relevanten Dateien mit 'read' und 'list'.\n")
                .append("• Sobald du die Struktur und den Code verstanden hast, beende direkt mit 'done' und präsentiere deine vollständige, strukturierte Analyse im Feld 'message'!\n\n");
         } else {
-            sys.append("ARBEITSABLAUF:\n")
-               .append("• Lies IMMER zuerst die relevanten Projektdateien (z. B. 'nexus.krproject', 'main.kr') mit 'read'.\n")
-               .append("• Nimm die gewünschten Codeanpassungen mit 'write' vor.\n")
-               .append("• Baue mit 'build', wenn du den Code angepasst hast oder Fehler testen willst.\n")
-               .append("• Analysiere Compilerfehler nach dem Build und behebe sie mit 'write'.\n")
-               .append("• Wenn alle Ziele erreicht sind, beende mit 'done'.\n\n");
+            sys.append("ARBEITSABLAUF BEI FEHLERBEHEBUNG & ENTWICKLUNG:\n")
+               .append("1. Wenn Compilerfehler vorliegen: Baue zuerst mit 'build' oder lies 'KR_BUILD/build.log'.\n")
+               .append("2. Die Fehlerausgabe von 'build' zeigt dir automatisch die fehlerhafte Quelldatei (z. B. 'gui/window.kr'), die Zeilennummer und einen 'replace'-Vorschlag.\n")
+               .append("3. Korrigiere den Fehler sofort mit 'replace': Setze 'search' auf die fehlerhafte Zeile und 'replace' auf den korrigierten Code.\n")
+               .append("4. Baue erneut mit 'build'. Wenn der Build fehlerfrei ist ('BUILD OK'), beende mit 'done'!\n\n");
         }
         sys.append("Begründe jede Aktion im Feld 'message' kurz und verständlich auf Deutsch.");
         initial.put("content", sys.toString());
@@ -300,7 +302,38 @@ public final class KrAgentCore {
             try {
                 switch (kind) {
                     case "list" -> output = listFiles(workspace, path);
-                    case "read" -> output = read(workspace, path);
+                    case "read" -> output = read(workspace, path, action);
+                    case "replace" -> {
+                        if (isReadOnly) {
+                            output = "Hinweis: Der Benutzer hat keine Codeänderung angefordert (Auftrag: '" + task + "'). Bitte ändere keine Dateien, sondern analysiere die vorhandenen Dateien und beende mit 'done'.";
+                            emit("ℹ️ Codeänderung übersprungen (reiner Analyseauftrag).");
+                            break;
+                        }
+                        String search = action.optString("search", "");
+                        String replacement = action.optString("replace", action.optString("content", ""));
+                        File target = safeFile(workspace, path, true);
+                        if (!target.isFile()) {
+                            throw new IOException("Datei existiert nicht: " + path);
+                        }
+                        String current = new String(Files.readAllBytes(target.toPath()), StandardCharsets.UTF_8);
+                        String updated = performReplace(current, search, replacement);
+                        String diffPreview = "Datei: " + path + "\n\n--- ZU ERSETZEN ---\n" + preview(search) + "\n\n+++ NEUER CODE +++\n" + preview(replacement);
+                        boolean ok = requireApproval("Code ersetzen in: " + path, diffPreview);
+                        if (!ok) {
+                            output = "Ersetzung wurde vom Benutzer abgelehnt.";
+                            emit("❌ Ersetzung abgelehnt: " + path);
+                        } else {
+                            writeAtomically(target, updated);
+                            final String finalPath = path;
+                            final String finalContent = updated;
+                            SwingUtilities.invokeLater(() -> {
+                                projects.refreshTree();
+                                DocumentManager.getInstance().reloadIfOpen(finalPath, finalContent);
+                            });
+                            output = "Code in '" + path + "' erfolgreich ersetzt!";
+                            emit("✅ Code ersetzt in: " + path);
+                        }
+                    }
                     case "write" -> {
                         if (isReadOnly) {
                             output = "Hinweis: Der Benutzer hat keine Dateiänderung angefordert (Auftrag: '" + task + "'). Bitte ändere keine Dateien, sondern analysiere die vorhandenen Dateien und beende mit 'done'.";
@@ -353,7 +386,7 @@ public final class KrAgentCore {
                         emit("🏁 ERGEBNIS:\n" + finalMessage);
                         return;
                     }
-                    default -> output = "Unbekannte Aktion '" + kind + "'. Erlaubt sind: list, read, write, build, done";
+                    default -> output = "Unbekannte Aktion '" + kind + "'. Erlaubt sind: list, read, replace, write, build, done";
                 }
             } catch (Exception ex) {
                 output = "Fehler bei Aktion '" + kind + "': " + ex.getMessage() + ". Bitte Parameter prüfen und nächsten Schritt ausführen.";
@@ -512,6 +545,61 @@ public final class KrAgentCore {
         return "";
     }
 
+    private static String extractNamedField(String text, String fieldName) {
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("\"" + java.util.regex.Pattern.quote(fieldName) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
+        java.util.regex.Matcher m = p.matcher(text);
+        if (m.find()) {
+            return m.group(1).replace("\\n", "\n").replace("\\t", "\t").replace("\\\"", "\"").replace("\\\\", "\\");
+        }
+        return null;
+    }
+
+    private static String performReplace(String fileContent, String search, String replacement) throws IOException {
+        if (search == null || search.isEmpty()) {
+            throw new IOException("'replace' benötigt ein 'search'-Feld mit dem zu ersetzenden Codeabschnitt.");
+        }
+        if (replacement == null) replacement = "";
+
+        // 1. Bereinige eventuell vom Modell mitkopierte Zeilennummern (z. B. " 207 | ")
+        String cleanSearch = search.replaceAll("(?m)^\\s*\\d+\\s*[|:]\\s*", "");
+        String cleanReplace = replacement.replaceAll("(?m)^\\s*\\d+\\s*[|:]\\s*", "");
+
+        // 2. Direkter Treffer
+        if (fileContent.contains(cleanSearch)) {
+            return fileContent.replace(cleanSearch, cleanReplace);
+        }
+
+        // 3. CRLF / LF Normalisierung
+        String normContent = fileContent.replace("\r\n", "\n");
+        String normSearch = cleanSearch.replace("\r\n", "\n");
+        String normReplace = cleanReplace.replace("\r\n", "\n");
+        if (normContent.contains(normSearch)) {
+            String updated = normContent.replace(normSearch, normReplace);
+            return fileContent.contains("\r\n") ? updated.replace("\n", "\r\n") : updated;
+        }
+
+        // 4. Zeilenweiser getrimmter Abgleich für Einzeiler
+        String trimmedSearch = normSearch.trim();
+        if (!trimmedSearch.isEmpty() && !trimmedSearch.contains("\n")) {
+            String[] lines = normContent.split("\n", -1);
+            boolean replaced = false;
+            for (int i = 0; i < lines.length; i++) {
+                if (lines[i].trim().equals(trimmedSearch) || lines[i].contains(trimmedSearch)) {
+                    String leadingIndent = lines[i].replaceAll("^(\\s*).*", "$1");
+                    lines[i] = leadingIndent + normReplace.trim();
+                    replaced = true;
+                    break;
+                }
+            }
+            if (replaced) {
+                String updated = String.join("\n", lines);
+                return fileContent.contains("\r\n") ? updated.replace("\n", "\r\n") : updated;
+            }
+        }
+
+        throw new IOException("Suchmuster 'search' wurde in der Zieldatei nicht gefunden!\nGesucht wurde:\n" + cleanSearch);
+    }
+
     private static JSONObject parseActionJson(String raw) throws JSONException {
         if (raw == null || raw.isBlank()) {
             throw new JSONException("Leere Antwort vom Modell erhalten.");
@@ -559,6 +647,10 @@ public final class KrAgentCore {
             recovered.put("action", actionVal.trim().toLowerCase(Locale.ROOT));
             String pathVal = extractRegex(text, "\"path\"\\s*:\\s*\"([^\"]+)\"");
             recovered.put("path", pathVal != null ? pathVal.trim() : "");
+            String searchVal = extractNamedField(text, "search");
+            recovered.put("search", searchVal != null ? searchVal : "");
+            String replaceVal = extractNamedField(text, "replace");
+            recovered.put("replace", replaceVal != null ? replaceVal : "");
             String msgVal = extractRegex(text, "\"message\"\\s*:\\s*\"([^\"]+)\"");
             recovered.put("message", msgVal != null ? msgVal.trim() : "");
             String contentVal = extractContentField(text);
@@ -682,21 +774,86 @@ public final class KrAgentCore {
         return b.length() == 0 ? "(Ordner ist leer)" : b.toString();
     }
 
-    private String read(File root, String relative) throws IOException {
+    private String read(File root, String relative, JSONObject action) throws IOException {
         if (relative == null || relative.isBlank() || relative.equals(".") || relative.equals("./")) {
             return "Hinweis: '" + relative + "' ist das Projektverzeichnis. Bitte gib einen Dateinamen an (z. B. 'main.kr', 'nexus.krproject' oder 'README.md').\nDateien im Projekt:\n" + listFiles(root, "");
         }
-        File file = safeFile(root, relative, false);
+        String cleanPath = relative.trim();
+        int reqStartLine = -1;
+        int reqEndLine = -1;
+
+        // Prüfe ob path das Format datei:start-end oder datei:zeile hat (z. B. gui/window.kr:190-230)
+        int colonIdx = cleanPath.lastIndexOf(':');
+        if (colonIdx > 0 && colonIdx < cleanPath.length() - 1) {
+            String suffix = cleanPath.substring(colonIdx + 1).trim();
+            if (suffix.matches("\\d+(?:-\\d+)?")) {
+                cleanPath = cleanPath.substring(0, colonIdx).trim();
+                if (suffix.contains("-")) {
+                    String[] parts = suffix.split("-", 2);
+                    try {
+                        reqStartLine = Integer.parseInt(parts[0]);
+                        reqEndLine = Integer.parseInt(parts[1]);
+                    } catch (NumberFormatException ignored) {}
+                } else {
+                    try {
+                        int targetLine = Integer.parseInt(suffix);
+                        reqStartLine = Math.max(1, targetLine - 25);
+                        reqEndLine = targetLine + 25;
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+        }
+        if (reqStartLine < 0 && action != null) {
+            String linesStr = action.optString("lines", "").trim();
+            if (linesStr.matches("\\d+-\\d+")) {
+                String[] parts = linesStr.split("-", 2);
+                try {
+                    reqStartLine = Integer.parseInt(parts[0]);
+                    reqEndLine = Integer.parseInt(parts[1]);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        File file = safeFile(root, cleanPath, false);
         if (file.isDirectory()) {
-            return "Hinweis: '" + relative + "' ist ein Ordner, keine Datei. Verwende 'list', um Ordnerinhalte aufzulisten, oder lies eine konkrete Datei im Ordner.\nInhalt von " + relative + ":\n" + listFiles(root, relative);
+            return "Hinweis: '" + cleanPath + "' ist ein Ordner, keine Datei. Verwende 'list', um Ordnerinhalte aufzulisten, oder lies eine konkrete Datei im Ordner.\nInhalt von " + cleanPath + ":\n" + listFiles(root, cleanPath);
         }
         if (!file.isFile() || file.length() > 512 * 1024) {
-            throw new IOException("Nur Textdateien bis 512 KiB lesbar: " + relative);
+            throw new IOException("Nur Textdateien bis 512 KiB lesbar: " + cleanPath);
         }
         if (ProjectManager.isBinaryFile(file.getName())) {
-            throw new IOException("Binärdatei nicht erlaubt: " + relative);
+            throw new IOException("Binärdatei nicht erlaubt: " + cleanPath);
         }
-        return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+
+        List<String> allLines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+        if (allLines.isEmpty()) return "(Datei ist leer)";
+
+        if (reqStartLine > 0) {
+            int start = Math.max(1, Math.min(reqStartLine, allLines.size()));
+            int end = Math.max(start, Math.min(reqEndLine > 0 ? reqEndLine : start + 50, allLines.size()));
+            StringBuilder sb = new StringBuilder();
+            sb.append("Ausschnitt aus '").append(cleanPath).append("' (Zeilen ").append(start).append(" bis ").append(end).append(" von ").append(allLines.size()).append("):\n");
+            for (int i = start; i <= end; i++) {
+                sb.append(String.format(Locale.ROOT, "%4d | %s\n", i, allLines.get(i - 1)));
+            }
+            return sb.toString();
+        }
+
+        if (allLines.size() > 180) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("Ausschnitt aus '").append(cleanPath).append("' (Zeilen 1 bis 120 von ").append(allLines.size()).append("):\n");
+            for (int i = 1; i <= Math.min(120, allLines.size()); i++) {
+                sb.append(String.format(Locale.ROOT, "%4d | %s\n", i, allLines.get(i - 1)));
+            }
+            sb.append("... [Zeilen 121 bis ").append(allLines.size()).append(" gekürzt. Nutze: {\"action\": \"read\", \"path\": \"").append(cleanPath).append(":121-240\"} für weitere Zeilen]\n");
+            return sb.toString();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= allLines.size(); i++) {
+            sb.append(String.format(Locale.ROOT, "%4d | %s\n", i, allLines.get(i - 1)));
+        }
+        return sb.toString();
     }
 
     private void writeAtomically(File file, String content) throws IOException {
@@ -755,14 +912,92 @@ public final class KrAgentCore {
                     truncate(summary[0] == null ? "" : summary[0], 3000) + "\n" +
                     truncate(manager.getFullLog(), 9000);
             if (!ok) {
-                buildResult += "\n\nHINWEIS ZUR FEHLERBEHEBUNG:\n" +
-                        "Dateien unter 'KR_BUILD/modules/...' werden vom KR-Compiler aus den '.kr'-Quelldateien im Projekt generiert.\n" +
-                        "Um Compilerfehler zu beheben, bearbeite bitte direkt die entsprechende Quelldatei im Projekt (z. B. 'gui/window.kr' statt 'KR_BUILD/modules/gui_window.cpp')!";
+                String hints = extractDiagnosticHints(root, manager.getFullLog());
+                if (!hints.isEmpty()) {
+                    buildResult += "\n" + hints;
+                } else {
+                    buildResult += "\n\nHINWEIS ZUR FEHLERBEHEBUNG:\n" +
+                            "Dateien unter 'KR_BUILD/modules/...' werden vom KR-Compiler aus den '.kr'-Quelldateien im Projekt generiert.\n" +
+                            "Um Compilerfehler zu beheben, nutze die Aktion 'replace' direkt auf der Quelldatei im Projekt (z. B. 'gui/window.kr')!";
+                }
             }
             return buildResult;
         } finally {
             manager.removeListener(listener);
         }
+    }
+
+    private static String extractDiagnosticHints(File root, String fullLog) {
+        if (fullLog == null || fullLog.isBlank()) return "";
+        StringBuilder hints = new StringBuilder();
+        String[] lines = fullLog.split("\r?\n");
+        int found = 0;
+        Set<String> seen = new HashSet<>();
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            DiagnosticParser.Item item = DiagnosticParser.parseLine(line);
+            if (item != null && item.severity == DiagnosticParser.Severity.ERROR) {
+                String srcFile = findSourceForGeneratedFile(root, item.file);
+                String key = srcFile + ":" + item.line;
+                if (!seen.add(key)) continue;
+
+                File realFile = new File(root, srcFile);
+                hints.append("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+                hints.append("🔴 COMPILERFEHLER #").append(++found).append(" in Quelldatei: '").append(srcFile).append("'\n");
+                hints.append("Fehlermeldung: ").append(item.message).append("\n");
+
+                // Suche den Code-Ausschnitt in den nachfolgenden Logzeilen (z. B. "  212 |     const int width=...")
+                String snippet = null;
+                for (int j = i + 1; j < Math.min(lines.length, i + 8); j++) {
+                    String sub = lines[j].trim();
+                    if (sub.matches("^\\d+\\s*\\|\\s*.*$")) {
+                        snippet = sub.substring(sub.indexOf('|') + 1).trim();
+                        break;
+                    }
+                }
+
+                if (realFile.isFile()) {
+                    try {
+                        List<String> srcLines = Files.readAllLines(realFile.toPath(), StandardCharsets.UTF_8);
+                        int matchedLine = -1;
+                        if (snippet != null && !snippet.isEmpty()) {
+                            for (int l = 0; l < srcLines.size(); l++) {
+                                String srcTrimmed = srcLines.get(l).trim();
+                                if (!srcTrimmed.isEmpty() && (srcLines.get(l).contains(snippet) || (snippet.length() > 5 && snippet.contains(srcTrimmed)))) {
+                                    matchedLine = l + 1;
+                                    break;
+                                }
+                            }
+                        }
+                        if (matchedLine < 0) {
+                            matchedLine = Math.max(1, Math.min(item.line > 5 ? item.line - 5 : item.line, srcLines.size()));
+                        }
+
+                        int start = Math.max(1, matchedLine - 3);
+                        int end = Math.min(srcLines.size(), matchedLine + 3);
+                        hints.append("Betroffener Code in '").append(srcFile).append("' (Zeilen ").append(start).append(" bis ").append(end).append("):\n");
+                        for (int l = start; l <= end; l++) {
+                            String prefix = (l == matchedLine) ? "👉 " : "   ";
+                            hints.append(String.format(Locale.ROOT, "%s%4d | %s\n", prefix, l, srcLines.get(l - 1)));
+                        }
+
+                        String badLine = srcLines.get(matchedLine - 1).trim();
+                        hints.append("\n👉 ANWEISUNG ZUR BEHEBUNG:\n");
+                        hints.append("Führe die Aktion 'replace' aus, um diese Zeile zu korrigieren:\n");
+                        hints.append("{\n");
+                        hints.append("  \"action\": \"replace\",\n");
+                        hints.append("  \"path\": \"").append(srcFile).append("\",\n");
+                        hints.append("  \"search\": \"").append(badLine.replace("\"", "\\\"")).append("\",\n");
+                        hints.append("  \"replace\": \"<korrigierter C++-Code>\",\n");
+                        hints.append("  \"message\": \"Fehler behoben\"\n");
+                        hints.append("}\n");
+                    } catch (Exception ignored) {}
+                }
+                if (found >= 2) break;
+            }
+        }
+        return hints.toString();
     }
 
     private static boolean isReadOnlyTask(String task) {

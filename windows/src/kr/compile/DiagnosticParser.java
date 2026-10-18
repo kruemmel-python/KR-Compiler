@@ -31,9 +31,9 @@ public final class DiagnosticParser {
     }
 
     // Matches: path/to/file.cpp:42:15: error: expected ';'
-    // or: path/to/file.cpp:42: error: ...
+    // or Windows path: C:\path\file.cpp:42:15: error: ...
     private static final Pattern CLANG_DIAG_PATTERN = Pattern.compile(
-            "^([a-zA-Z0-9_./\\\\-]+):(\\d+)(?::(\\d+))?:\\s*(fatal error|error|warning|note):\\s*(.*)$",
+            "^((?:[a-zA-Z]:)?[a-zA-Z0-9_./\\\\-]+):(\\d+)(?::(\\d+))?:\\s*(fatal error|error|warning|note):\\s*(.*)$",
             Pattern.CASE_INSENSITIVE);
 
     // Matches: CMake Error at CMakeLists.txt:42 (target_link_libraries):
