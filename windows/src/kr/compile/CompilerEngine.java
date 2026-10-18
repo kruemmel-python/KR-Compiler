@@ -146,7 +146,8 @@ public final class CompilerEngine {
                         log.line("[INFO] Rust-Statische Bibliothek erfolgreich erzeugt: " + a.getName() + " (" + a.length() + " Bytes)");
                     }
                 } catch (Exception ex) {
-                    log.line("[WARNUNG] Cargo-Build fehlgeschlagen: " + ex.getMessage() + ". Verwende integrierte Fallback-Bridge.");
+                    log.line("[FEHLER] Cargo-Build fehlgeschlagen: " + ex.getMessage());
+                    throw new IOException("Cargo-Build fehlgeschlagen: " + ex.getMessage(), ex);
                 }
             } else {
                 log.line("[INFO] Kein lokales Cargo/Rust gefunden. Integrierte C++ ABI-Bridge für Rust-Symbole wird verwendet.");
@@ -176,7 +177,8 @@ public final class CompilerEngine {
                         log.line("[INFO] Go-Bibliothek erfolgreich erzeugt: " + a.getName() + " (" + a.length() + " Bytes)");
                     }
                 } catch (Exception ex) {
-                    log.line("[WARNUNG] Go-Build fehlgeschlagen: " + ex.getMessage() + ". Verwende integrierte Fallback-Bridge.");
+                    log.line("[FEHLER] Go-Build fehlgeschlagen: " + ex.getMessage());
+                    throw new IOException("Go-Build fehlgeschlagen: " + ex.getMessage(), ex);
                 }
             } else {
                 log.line("[INFO] Kein lokales Go gefunden. Integrierte C++ ABI-Bridge für Go-Symbole wird verwendet.");

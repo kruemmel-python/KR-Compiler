@@ -311,27 +311,49 @@ public final class KrAgentCore {
                         }
                         String search = action.optString("search", "");
                         String replacement = action.optString("replace", action.optString("content", ""));
-                        File target = safeFile(workspace, path, true);
-                        if (!target.isFile()) {
+
+                        File target = null;
+                        String effectivePath = path;
+                        try {
+                            target = safeFile(workspace, path, false);
+                        } catch (Exception ignored) {}
+
+                        if (target == null || !target.isFile() || effectivePath.contains("KR_BUILD") || effectivePath.endsWith(".rs") || effectivePath.endsWith(".go")) {
+                            String resolved = findSourceForGeneratedFile(workspace, path, null);
+                            if (resolved != null && !resolved.equalsIgnoreCase(path)) {
+                                File candidate = new File(workspace, resolved);
+                                if (candidate.isFile()) {
+                                    target = candidate;
+                                    effectivePath = resolved;
+                                }
+                            }
+                        }
+
+                        if (target == null || !target.isFile()) {
                             throw new IOException("Datei existiert nicht: " + path);
                         }
                         String current = new String(Files.readAllBytes(target.toPath()), StandardCharsets.UTF_8);
                         String updated = performReplace(current, search, replacement);
-                        String diffPreview = "Datei: " + path + "\n\n--- ZU ERSETZEN ---\n" + preview(search) + "\n\n+++ NEUER CODE +++\n" + preview(replacement);
-                        boolean ok = requireApproval("Code ersetzen in: " + path, diffPreview);
+                        String diffPreview = "Datei: " + effectivePath + "\n\n--- ZU ERSETZEN ---\n" + preview(search) + "\n\n+++ NEUER CODE +++\n" + preview(replacement);
+                        boolean ok = requireApproval("Code ersetzen in: " + effectivePath, diffPreview);
                         if (!ok) {
                             output = "Ersetzung wurde vom Benutzer abgelehnt.";
-                            emit("❌ Ersetzung abgelehnt: " + path);
+                            emit("❌ Ersetzung abgelehnt: " + effectivePath);
                         } else {
                             writeAtomically(target, updated);
-                            final String finalPath = path;
+                            final String finalPath = effectivePath;
                             final String finalContent = updated;
                             SwingUtilities.invokeLater(() -> {
                                 projects.refreshTree();
                                 DocumentManager.getInstance().reloadIfOpen(finalPath, finalContent);
                             });
-                            output = "Code in '" + path + "' erfolgreich ersetzt!";
-                            emit("✅ Code ersetzt in: " + path);
+                            if (!effectivePath.equalsIgnoreCase(path)) {
+                                output = "Code in '" + effectivePath + "' erfolgreich ersetzt! (Hinweis: '" + path + "' war ein generiertes Build-Artefakt; die Änderung wurde automatisch in der Original-Quelldatei gespeichert).";
+                                emit("✅ Code ersetzt in: " + effectivePath + " (aus '" + path + "')");
+                            } else {
+                                output = "Code in '" + path + "' erfolgreich ersetzt!";
+                                emit("✅ Code ersetzt in: " + path);
+                            }
                         }
                     }
                     case "write" -> {
@@ -701,7 +723,66 @@ public final class KrAgentCore {
         return false;
     }
 
-    private static String findSourceForGeneratedFile(File root, String path) {
+    private static String findSourceForGeneratedFile(File root, String path, String functionHint) {
+        if (root == null || path == null) return "main.kr";
+
+        // 1. Prüfe KrSourceMap (KR_BUILD/source_map.json)
+        KrSourceMap sourceMap = KrSourceMap.loadFromProject(root);
+        if (sourceMap != null) {
+            String resolved = sourceMap.resolveOriginalFile(path, functionHint);
+            if (resolved != null && new File(root, resolved).isFile()) {
+                return resolved;
+            }
+        }
+
+        // 2. Heuristische Erkennung für Rust (src/lib.rs, lib.rs, rust_module)
+        String norm = path.replace('\\', '/').toLowerCase(Locale.ROOT);
+        if (norm.endsWith(".rs") || norm.contains("rust_module")) {
+            List<File> krFiles = KrPipeline.findKrFiles(root);
+            if (functionHint != null && !functionHint.isBlank()) {
+                for (File k : krFiles) {
+                    try {
+                        String content = Files.readString(k.toPath(), StandardCharsets.UTF_8);
+                        if (content.contains("fn " + functionHint)) {
+                            return root.toPath().relativize(k.toPath()).toString().replace('\\', '/');
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+            for (File k : krFiles) {
+                try {
+                    String content = Files.readString(k.toPath(), StandardCharsets.UTF_8);
+                    if (content.contains("pub fn ") || content.contains("extern \"C\" fn")) {
+                        return root.toPath().relativize(k.toPath()).toString().replace('\\', '/');
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // 3. Heuristische Erkennung für Go (main.go, go_module)
+        if (norm.endsWith(".go") || norm.contains("go_module")) {
+            List<File> krFiles = KrPipeline.findKrFiles(root);
+            if (functionHint != null && !functionHint.isBlank()) {
+                for (File k : krFiles) {
+                    try {
+                        String content = Files.readString(k.toPath(), StandardCharsets.UTF_8);
+                        if (content.contains("func " + functionHint)) {
+                            return root.toPath().relativize(k.toPath()).toString().replace('\\', '/');
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+            for (File k : krFiles) {
+                try {
+                    String content = Files.readString(k.toPath(), StandardCharsets.UTF_8);
+                    if (content.contains("func ") && !content.contains("#include")) {
+                        return root.toPath().relativize(k.toPath()).toString().replace('\\', '/');
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // 4. Modul- und Namensbasierte Auflösung (z. B. modules/gui_window.cpp -> gui/window.kr)
         String filename = new File(path).getName();
         String base = filename.replace(".cpp", "").replace(".c", "").replace("_kr", "");
         File direct = new File(root, base + ".kr");
@@ -719,6 +800,10 @@ public final class KrAgentCore {
             }
         }
         return "main.kr";
+    }
+
+    private static String findSourceForGeneratedFile(File root, String path) {
+        return findSourceForGeneratedFile(root, path, null);
     }
 
     private static File safeFile(File root, String relative, boolean isWrite) throws IOException {
@@ -814,7 +899,30 @@ public final class KrAgentCore {
             }
         }
 
-        File file = safeFile(root, cleanPath, false);
+        File file = null;
+        String effectivePath = cleanPath;
+        String redirectionNotice = null;
+        try {
+            file = safeFile(root, cleanPath, false);
+        } catch (Exception ignored) {}
+
+        if (file == null || !file.isFile()) {
+            String resolved = findSourceForGeneratedFile(root, cleanPath, null);
+            if (resolved != null && !resolved.equalsIgnoreCase(cleanPath)) {
+                File candidate = new File(root, resolved);
+                if (candidate.isFile()) {
+                    file = candidate;
+                    effectivePath = resolved;
+                    redirectionNotice = "ℹ️ HINWEIS: '" + cleanPath + "' ist ein vom KR-Compiler generiertes Build-Artefakt.\n"
+                            + "👉 Die Original-Quelldatei im Projekt ist: '" + resolved + "'.\n"
+                            + "Hier ist der Inhalt von '" + resolved + "' (Änderungen bitte per 'replace' direkt auf '" + resolved + "' anwenden!):\n\n";
+                }
+            }
+        }
+
+        if (file == null || !file.exists()) {
+            throw new IOException("Datei nicht gefunden: " + cleanPath);
+        }
         if (file.isDirectory()) {
             return "Hinweis: '" + cleanPath + "' ist ein Ordner, keine Datei. Verwende 'list', um Ordnerinhalte aufzulisten, oder lies eine konkrete Datei im Ordner.\nInhalt von " + cleanPath + ":\n" + listFiles(root, cleanPath);
         }
@@ -826,13 +934,14 @@ public final class KrAgentCore {
         }
 
         List<String> allLines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
-        if (allLines.isEmpty()) return "(Datei ist leer)";
+        if (allLines.isEmpty()) return (redirectionNotice != null ? redirectionNotice : "") + "(Datei ist leer)";
 
         if (reqStartLine > 0) {
             int start = Math.max(1, Math.min(reqStartLine, allLines.size()));
             int end = Math.max(start, Math.min(reqEndLine > 0 ? reqEndLine : start + 50, allLines.size()));
             StringBuilder sb = new StringBuilder();
-            sb.append("Ausschnitt aus '").append(cleanPath).append("' (Zeilen ").append(start).append(" bis ").append(end).append(" von ").append(allLines.size()).append("):\n");
+            if (redirectionNotice != null) sb.append(redirectionNotice);
+            sb.append("Ausschnitt aus '").append(effectivePath).append("' (Zeilen ").append(start).append(" bis ").append(end).append(" von ").append(allLines.size()).append("):\n");
             for (int i = start; i <= end; i++) {
                 sb.append(String.format(Locale.ROOT, "%4d | %s\n", i, allLines.get(i - 1)));
             }
@@ -841,15 +950,17 @@ public final class KrAgentCore {
 
         if (allLines.size() > 180) {
             StringBuilder sb = new StringBuilder();
-            sb.append("Ausschnitt aus '").append(cleanPath).append("' (Zeilen 1 bis 120 von ").append(allLines.size()).append("):\n");
+            if (redirectionNotice != null) sb.append(redirectionNotice);
+            sb.append("Ausschnitt aus '").append(effectivePath).append("' (Zeilen 1 bis 120 von ").append(allLines.size()).append("):\n");
             for (int i = 1; i <= Math.min(120, allLines.size()); i++) {
                 sb.append(String.format(Locale.ROOT, "%4d | %s\n", i, allLines.get(i - 1)));
             }
-            sb.append("... [Zeilen 121 bis ").append(allLines.size()).append(" gekürzt. Nutze: {\"action\": \"read\", \"path\": \"").append(cleanPath).append(":121-240\"} für weitere Zeilen]\n");
+            sb.append("... [Zeilen 121 bis ").append(allLines.size()).append(" gekürzt. Nutze: {\"action\": \"read\", \"path\": \"").append(effectivePath).append(":121-240\"} für weitere Zeilen]\n");
             return sb.toString();
         }
 
         StringBuilder sb = new StringBuilder();
+        if (redirectionNotice != null) sb.append(redirectionNotice);
         for (int i = 1; i <= allLines.size(); i++) {
             sb.append(String.format(Locale.ROOT, "%4d | %s\n", i, allLines.get(i - 1)));
         }
@@ -933,29 +1044,67 @@ public final class KrAgentCore {
         String[] lines = fullLog.split("\r?\n");
         int found = 0;
         Set<String> seen = new HashSet<>();
+        KrSourceMap sourceMap = KrSourceMap.loadFromProject(root);
 
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
             DiagnosticParser.Item item = DiagnosticParser.parseLine(line);
             if (item != null && item.severity == DiagnosticParser.Severity.ERROR) {
-                String srcFile = findSourceForGeneratedFile(root, item.file);
-                String key = srcFile + ":" + item.line;
+                // Bei Rust-Fehler: Echte Fehlermeldung aus vorherigen Zeilen suchen
+                String message = item.message;
+                if ("Rust-Fehlerposition".equals(message)) {
+                    for (int k = i - 1; k >= Math.max(0, i - 6); k--) {
+                        String prev = lines[k].trim();
+                        if (prev.startsWith("error:") || prev.startsWith("error[")) {
+                            message = prev.replaceFirst("^error(?:\\[[^\\]]+\\])?:\\s*", "");
+                            break;
+                        }
+                    }
+                }
+
+                // Suche nach Funktionsname und Code-Snippets in den nachfolgenden Zeilen
+                String functionHint = null;
+                String snippet = null;
+                for (int j = i + 1; j < Math.min(lines.length, i + 25); j++) {
+                    String sub = lines[j].trim();
+                    if (functionHint == null) {
+                        java.util.regex.Matcher mFn = java.util.regex.Pattern.compile("(?:fn|func)\\s+([a-zA-Z0-9_]+)").matcher(sub);
+                        if (mFn.find()) {
+                            functionHint = mFn.group(1);
+                        }
+                    }
+                    if (sub.matches("^\\d+\\s*\\|\\s*.*$")) {
+                        String snipCandidate = sub.substring(sub.indexOf('|') + 1).trim();
+                        if (snipCandidate.length() > 3 && !snipCandidate.equals("}") && !snipCandidate.equals("{")) {
+                            boolean isMarked = false;
+                            for (int m = j + 1; m < Math.min(lines.length, j + 3); m++) {
+                                String mark = lines[m].trim();
+                                if (mark.contains("delimiter") || mark.contains("closed") || mark.contains("^") || mark.contains("-")) {
+                                    isMarked = true;
+                                    break;
+                                }
+                            }
+                            if (isMarked || snippet == null) {
+                                snippet = snipCandidate;
+                            }
+                        }
+                    }
+                }
+
+                // Löse Datei und Position über SourceMap auf
+                KrSourceMap.ResolvedLocation loc = sourceMap != null ? sourceMap.resolveLocation(item.file, item.line, functionHint) : null;
+                String srcFile = loc != null ? loc.originalFile : findSourceForGeneratedFile(root, item.file, functionHint);
+                int targetLine = loc != null ? loc.originalLine : item.line;
+
+                String key = srcFile + ":" + targetLine;
                 if (!seen.add(key)) continue;
 
                 File realFile = new File(root, srcFile);
                 hints.append("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
                 hints.append("🔴 COMPILERFEHLER #").append(++found).append(" in Quelldatei: '").append(srcFile).append("'\n");
-                hints.append("Fehlermeldung: ").append(item.message).append("\n");
-
-                // Suche den Code-Ausschnitt in den nachfolgenden Logzeilen (z. B. "  212 |     const int width=...")
-                String snippet = null;
-                for (int j = i + 1; j < Math.min(lines.length, i + 8); j++) {
-                    String sub = lines[j].trim();
-                    if (sub.matches("^\\d+\\s*\\|\\s*.*$")) {
-                        snippet = sub.substring(sub.indexOf('|') + 1).trim();
-                        break;
-                    }
-                }
+                hints.append("Fehlermeldung: ").append(message);
+                if (functionHint != null) hints.append(" (Funktion: ").append(functionHint).append(")");
+                hints.append("\n");
 
                 if (realFile.isFile()) {
                     try {
@@ -964,14 +1113,14 @@ public final class KrAgentCore {
                         if (snippet != null && !snippet.isEmpty()) {
                             for (int l = 0; l < srcLines.size(); l++) {
                                 String srcTrimmed = srcLines.get(l).trim();
-                                if (!srcTrimmed.isEmpty() && (srcLines.get(l).contains(snippet) || (snippet.length() > 5 && snippet.contains(srcTrimmed)))) {
+                                if (!srcTrimmed.isEmpty() && srcTrimmed.length() > 5 && (srcLines.get(l).contains(snippet) || snippet.contains(srcTrimmed))) {
                                     matchedLine = l + 1;
                                     break;
                                 }
                             }
                         }
                         if (matchedLine < 0) {
-                            matchedLine = Math.max(1, Math.min(item.line > 5 ? item.line - 5 : item.line, srcLines.size()));
+                            matchedLine = Math.max(1, Math.min(targetLine, srcLines.size()));
                         }
 
                         int start = Math.max(1, matchedLine - 3);
@@ -983,14 +1132,19 @@ public final class KrAgentCore {
                         }
 
                         String badLine = srcLines.get(matchedLine - 1).trim();
+                        String suggestedReplace = "<korrigierter Code>";
+                        if (message.toLowerCase(Locale.ROOT).contains("delimiter") || (badLine.contains("{") && !badLine.contains("}"))) {
+                            suggestedReplace = badLine + " }";
+                        }
+
                         hints.append("\n👉 ANWEISUNG ZUR BEHEBUNG:\n");
                         hints.append("Führe die Aktion 'replace' aus, um diese Zeile zu korrigieren:\n");
                         hints.append("{\n");
                         hints.append("  \"action\": \"replace\",\n");
                         hints.append("  \"path\": \"").append(srcFile).append("\",\n");
                         hints.append("  \"search\": \"").append(badLine.replace("\"", "\\\"")).append("\",\n");
-                        hints.append("  \"replace\": \"<korrigierter C++-Code>\",\n");
-                        hints.append("  \"message\": \"Fehler behoben\"\n");
+                        hints.append("  \"replace\": \"").append(suggestedReplace.replace("\"", "\\\"")).append("\",\n");
+                        hints.append("  \"message\": \"Syntaxfehler in ").append(srcFile).append(" behoben\"\n");
                         hints.append("}\n");
                     } catch (Exception ignored) {}
                 }

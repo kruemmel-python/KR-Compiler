@@ -20,6 +20,7 @@ public final class KrCodeGenerator {
     private final List<KrSegment> segments;
     private final File buildDir;
     private final boolean isGui;
+    private final KrSourceMap sourceMap = new KrSourceMap();
 
     public KrCodeGenerator(KrSymbolTable symbolTable, List<KrSegment> segments, File buildDir, boolean isGui) {
         this.symbolTable = symbolTable;
@@ -38,9 +39,15 @@ public final class KrCodeGenerator {
         public final File goDir;
         public final File bridgeHeader;
         public final Set<String> vcpkgDependencies = new LinkedHashSet<>();
+        public final KrSourceMap sourceMap;
 
         Result(boolean hasCpp, boolean hasRust, boolean hasGo, File cppSource, List<File> cppSources,
                File rustDir, File goDir, File bridgeHeader, Set<String> vcpkgDependencies) {
+            this(hasCpp, hasRust, hasGo, cppSource, cppSources, rustDir, goDir, bridgeHeader, vcpkgDependencies, new KrSourceMap());
+        }
+
+        Result(boolean hasCpp, boolean hasRust, boolean hasGo, File cppSource, List<File> cppSources,
+               File rustDir, File goDir, File bridgeHeader, Set<String> vcpkgDependencies, KrSourceMap sourceMap) {
             this.hasCpp = hasCpp;
             this.hasRust = hasRust;
             this.hasGo = hasGo;
@@ -51,6 +58,7 @@ public final class KrCodeGenerator {
             this.goDir = goDir;
             this.bridgeHeader = bridgeHeader;
             if (vcpkgDependencies != null) this.vcpkgDependencies.addAll(vcpkgDependencies);
+            this.sourceMap = sourceMap != null ? sourceMap : new KrSourceMap();
         }
     }
 
@@ -99,7 +107,13 @@ public final class KrCodeGenerator {
             generateGoModule(goDir);
         }
 
-        return new Result(hasCpp, hasRust, hasGo, cppSource, cppSources, rustDir, goDir, bridgeHeader, projectDependencies);
+        // 5. Save source map
+        File sourceMapFile = new File(buildDir, "source_map.json");
+        try {
+            sourceMap.save(sourceMapFile);
+        } catch (Exception ignored) {}
+
+        return new Result(hasCpp, hasRust, hasGo, cppSource, cppSources, rustDir, goDir, bridgeHeader, projectDependencies, sourceMap);
     }
 
     private void generateBridgeHeader(File destination) throws IOException {
@@ -150,7 +164,12 @@ public final class KrCodeGenerator {
             for (KrSegment seg : segments) {
                 if (seg.language == KrLanguage.CPP) {
                     sb.append("\n// --- Segment aus ").append(seg.file).append(":").append(seg.startLine).append(" ---\n");
+                    int curLine = countLines(sb.toString()) + 1;
                     sb.append(seg.source).append("\n");
+                    int endLine = countLines(sb.toString());
+                    sourceMap.addMapping(new KrSourceMap.SegmentMapping(
+                            "kr_cpp.cpp", seg.file, curLine, endLine, seg.startLine, seg.endLine, "CPP", extractFunctionNames(seg.declaredFunctions)
+                    ));
                 }
             }
         }
@@ -197,7 +216,12 @@ public final class KrCodeGenerator {
                 mb.append("#include \"../kr_bridge.h\"\n");
                 mb.append("#include <iostream>\n#include <string>\n\n");
                 for (KrSegment s : entry.getValue()) {
+                    int curLine = countLines(mb.toString()) + 1;
                     mb.append(s.source).append("\n");
+                    int endLine = countLines(mb.toString());
+                    sourceMap.addMapping(new KrSourceMap.SegmentMapping(
+                            "modules/" + modFile.getName(), s.file, curLine, endLine, s.startLine, s.endLine, "CPP", extractFunctionNames(s.declaredFunctions)
+                    ));
                 }
                 writeText(modFile, mb.toString());
                 generated.add(modFile);
@@ -305,7 +329,12 @@ public final class KrCodeGenerator {
                         }
                     }
                 }
+                int curLine = countLines(sb.toString()) + 1;
                 sb.append(segCode).append("\n");
+                int endLine = countLines(sb.toString());
+                sourceMap.addMapping(new KrSourceMap.SegmentMapping(
+                        "rust_module/src/lib.rs", seg.file, curLine, endLine, seg.startLine, seg.endLine, "RUST", extractFunctionNames(seg.declaredFunctions)
+                ));
             }
         }
 
@@ -327,7 +356,7 @@ public final class KrCodeGenerator {
 
         // 1. Collect user imports and clean segments
         Set<String> userImports = new LinkedHashSet<>();
-        List<String> cleanedSegments = new ArrayList<>();
+        List<CleanedGoSegment> cleanedSegments = new ArrayList<>();
         for (KrSegment seg : segments) {
             if (seg.language == KrLanguage.GO) {
                 String code = seg.source;
@@ -357,7 +386,7 @@ public final class KrCodeGenerator {
                                 "$1//export " + fn.name + "\n$1func " + fn.name);
                     }
                 }
-                cleanedSegments.add("\n// --- Segment aus " + seg.file + ":" + seg.startLine + " ---\n" + code);
+                cleanedSegments.add(new CleanedGoSegment(seg, code));
             }
         }
 
@@ -446,8 +475,14 @@ public final class KrCodeGenerator {
         }
 
         // Cleaned segments
-        for (String segText : cleanedSegments) {
-            sb.append(segText).append("\n");
+        for (CleanedGoSegment cs : cleanedSegments) {
+            sb.append("\n// --- Segment aus ").append(cs.segment.file).append(":").append(cs.segment.startLine).append(" ---\n");
+            int curLine = countLines(sb.toString()) + 1;
+            sb.append(cs.code).append("\n");
+            int endLine = countLines(sb.toString());
+            sourceMap.addMapping(new KrSourceMap.SegmentMapping(
+                    "go_module/main.go", cs.segment.file, curLine, endLine, cs.segment.startLine, cs.segment.endLine, "GO", extractFunctionNames(cs.segment.declaredFunctions)
+            ));
         }
 
         KrFunction mainFn = symbolTable.getMainFunction();
@@ -458,6 +493,36 @@ public final class KrCodeGenerator {
         }
 
         writeText(new File(goDir, "main.go"), sb.toString());
+    }
+
+    private static final class CleanedGoSegment {
+        final KrSegment segment;
+        final String code;
+        CleanedGoSegment(KrSegment segment, String code) {
+            this.segment = segment;
+            this.code = code;
+        }
+    }
+
+    private static int countLines(String text) {
+        if (text == null || text.isEmpty()) return 0;
+        int lines = 1;
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == '\n') lines++;
+        }
+        return lines;
+    }
+
+    private static List<String> extractFunctionNames(List<KrFunction> fns) {
+        List<String> names = new ArrayList<>();
+        if (fns != null) {
+            for (KrFunction fn : fns) {
+                if (fn != null && fn.name != null) {
+                    names.add(fn.name);
+                }
+            }
+        }
+        return names;
     }
 
     private static String toCgoHeaderType(KrType type) {

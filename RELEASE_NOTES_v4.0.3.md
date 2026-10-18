@@ -91,6 +91,24 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 
 ---
 
+### 8. Intelligente KrSourceMap & Autonome KI-Fehlerbehebung (LM Studio & Ollama)
+- **Bidirektionale KrSourceMap**:
+  - Exaktes Mapping von generierten Zwischen- und Build-Dateien (`KR_BUILD/rust_module/src/lib.rs`, `KR_BUILD/go_module/main.go`, `KR_BUILD/modules/*.cpp`) zurück auf die originären `.kr`-Quelldateien, Funktionsdeklarationen und Zeilennummern.
+  - Automatische Persistierung als `KR_BUILD/source_map.json` bei jedem Pipeline- und Codegenerator-Lauf.
+- **Transparente Pfad-Redirection**:
+  - Wenn ein lokales KI-Modell (z. B. `gemma-4-e2b`) aus Compiler-Logs abgeleitete Pfade wie `src/lib.rs`, `lib.rs` oder `KR_BUILD/...` per `read` anfordert, fängt `KrAgentCore` dies transparent ab und liefert direkt den Inhalt der zuständigen `.kr`-Quelldatei (z. B. `security/policy.kr`) mit Zeilennummern und Hinweis-Präfix.
+  - Führt das Modell ein `replace` auf einem generierten Pfad aus, wird die Änderung automatisch in der zugrundeliegenden `.kr`-Originaldatei gespeichert.
+- **Smarte Diagnose-Extraktion (`extractDiagnosticHints`)**:
+  - Vollständiges Parsing von Cargo/Rust- (`--> src\lib.rs:...`) und Go-Compiler-Meldungen.
+  - Automatische Identifikation der fehlerhaften Zeile in der `.kr`-Datei und Bereitstellung einer sofort ausführbaren `replace`-Befehlsvorlage (inkl. automatischer Ergänzung fehlender schließender Klammern bei Delimiter-Fehlern).
+- **Robuste Fehlererkennung**:
+  - Cargo- und Go-Kompilierfehler werden bei lokal vorhandenen Toolchains nicht mehr als Warnung verschluckt, sondern führen zu einem sauberen Build-Abbruch, der die KI-Fehlerdiagnose triggert.
+- **LM Studio Stabilitäts-Upgrade**:
+  - Modell-Antwort-Timeout auf 10 Minuten (`600.000 ms`) angehoben.
+  - Kontext-Kompaktierung (`compactHistory`) zur Entlastung des KV-Caches lokaler Inferenz-Engines.
+
+---
+
 ## Prüfsummen & Assets
 
 - **Android Release**: `KR-Compiler-Android-IDE-v4.0.3.apk`
@@ -99,7 +117,7 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
 
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar`
-  - **Größe**: `177.480 Bytes`
-  - **SHA-256**: `9f7b14a4413d7502a16381c3ba3bf720260da8db5b54b8eb34c85b216160c607`
+  - **Größe**: `195.185 Bytes`
+  - **SHA-256**: `8b15fa8708c6b9aacecb2e0e59f314fc0610f5906886e996581570a26662156f`
   - **Plattform**: Windows 10 / 11 (Java 17+)
   - **Starter**: `windows/Start-KR-IDE.bat`
