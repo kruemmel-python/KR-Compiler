@@ -11,6 +11,7 @@ Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Doku
 - **Release-APK (Android)**: `KR-Compiler-Android-IDE-v4.0.3.apk`
 - **SHA-256**: `ac7823db51e65b920d1445ea5ab6db8883d2fd692f4110412f1c61a1be35094d`
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar` (1:1 Port für Windows 10/11, Starter: `windows/Start-KR-IDE.bat`)
+- **Windows Toolchain (Portabel)**: `KR-Compiler-Windows-toolchain-v4.0.3.zip` (Inklusive MinGW C++20, Go-Binutils, Android-APK-Runner, SDL3 & SQLite3)
 
 ### Systemvoraussetzungen
 - **Android**: Android 8.0+ (API 26+), 64-Bit ARM (`arm64-v8a`), ca. 3 GiB freier Speicher
@@ -18,20 +19,26 @@ Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Doku
 
 ---
 
-## Neu in Version 4.0.3: Autonomer KI-Agent & Modulare Großprojekte
+## Neu in Version 4.0.3: Autonomer KI-Agent, Modulare Großprojekte & Windows Desktop Edition
 
-Version 4.0.3 führt zwei fundamentale Erweiterungen ein:
+Version 4.0.3 führt wesentliche Enterprise- und Multiplattform-Erweiterungen ein:
+- **Windows Desktop Edition (Vollständige Parität zur Android-App)**:
+  - **Android ARM64 APK-Erzeugung**: Baut für die Zielplattform Android nun direkt auf dem Windows-PC eine vollwertige, sofort installierbare `programm-android-arm64.apk`.
+  - **Umfassende Modul-Bündelung**: Automatische Einbettung von `libuser.so` (kompiliert via Android NDK Clang), `libkr_runner.so`, `libc++_shared.so`, `libsqlite3.so`, `libSDL3.so` und `libkr_go.so`.
+  - **Integrierte Signierung**: Automatische Signierung mit Android v1-, v2- und v3-Signaturen via `apksigner`.
+  - **Nativer Multi-Language-Build**: Echte native Kompilierung von C++20, Rust (statische Bibliothek via Cargo für Windows x64 und Android ARM64) und Go (via portabler Go-Toolchain und MinGW-Binutils `ar`/`ranlib` als `libkr_go.a` bzw. `libkr_go.so`) ohne Fallback-Bridge.
+  - **Plattformgerechte Ausgabedateien**: Windows x64 (`programm.exe`), Linux x64 ELF (`programm`) und Android ARM64 (`programm-android-arm64.apk`).
 - **Integrierter autonomer KI-Programmierassistent („AGENT“)**:
-  - Direkter Zugriff über den neuen **`AGENT`**-Button in der Navigationsleiste der App.
+  - Direkter Zugriff über den neuen **`AGENT`**-Button in der Navigationsleiste der App und der Desktop-IDE.
   - Autonome Problemlösungsschleife (ReAct): Verzeichnisse scannen (`list`), Code lesen (`read`), Code modifizieren (`write`) und automatischen Kompilierungslauf (`build`) zur iterativen Fehlerbehebung starten.
   - Kompatibel mit allen OpenAI-kompatiblen HTTPS-Endpunkten (OpenAI, Claude via Proxy, Mistral, Groq, OpenRouter) und lokalen Modellen (Ollama / LM Studio via `http://127.0.0.1:...`).
   - Strikte Sicherheits-Sandbox (`safeFile`), Freigabepflicht für alle Dateiänderungen („Human-in-the-Loop“) und revisionssicheres Audit-Log (`kr_agent_audit.jsonl`).
 - **Modulare Projektarchitektur (`*.krproject`)**: Deklarative Konfiguration von Metadaten (`[project]`), rekursiven Modulverzeichnissen (`[modules]`), Drittpaketen (`[dependencies]`) und Compiler-Optimierungen (`[build]`).
-- **Hierarchische Enterprise-Strukturen (`KR_FORGE`)**: Volle Unterstützung für Enterprise-Strukturen am Referenzmodell `KR_FORGE` (`app/`, `gui/`, `research/`, `compute/`, `orchestration/`, `storage/`, `contracts/`, `tests/` und `docs/`).
+- **Hierarchische Enterprise-Strukturen (`KR_FORGE` / `KR_NEXUS_ENTERPRISE`)**: Volle Unterstützung für Enterprise-Strukturen (`app/`, `gui/`, `research/`, `compute/`, `orchestration/`, `storage/`, `contracts/`, `tests/` und `docs/`).
 - **Modulare C++ Translation Units & zentraler ABI-Header**: Automatisches Aufteilen modularer C++-Inhalte in `modules/*.cpp`, Generierung von `kr_bridge.h` und modulübergreifende Bündelung von Rust (`kr_rust/src/lib.rs`) und Go (`kr_go/main.go`).
 - **Lückenloser Cross-File & Cross-Language FFI**: Funktionen rufen einander über Modul- und Sprachgrenzen ($C++ \leftrightarrow Rust \leftrightarrow Go$) direkt auf, ohne manuelle Header-Inkludierungen.
 - **Integriertes vcpkg-Manifest**: Automatische Erzeugung und Verwaltung von `vcpkg.json` für Drittbibliotheken (`opencl`, `sqlite3`, `nlohmann-json`).
-- **Physisch verifiziert**: Erfolgreich getestet auf Samsung Galaxy Tab S6 Lite (`SM-P615`) und Realme GT 6T (`RMX3853`).
+- **Physisch verifiziert**: Erfolgreich getestet auf Samsung Galaxy Tab S6 Lite (`SM-P615`), Realme GT 6T (`RMX3853`) und Windows 11 PC.
 
 ---
 
