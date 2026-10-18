@@ -1,6 +1,7 @@
 package kr.compile;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import javax.swing.SwingUtilities;
@@ -233,22 +234,27 @@ public final class KrAgentCore {
         initial.put("content",
                 "Du bist der autonome Programmieragent der KR Compiler Windows IDE. Du entwickelst und debuggst Projekte in der KR Unified Language (.kr), C++20, Rust und Go.\n\n" +
                 "KOMMUNIKATIONSREGELN:\n" +
-                "1. Antworte AUSSCHLIESSLICH als gültiges JSON-Objekt mit genau diesen Schlüsseln: {action, path, content, message}\n" +
+                "1. Antworte AUSSCHLIESSLICH als gültiges JSON-Objekt mit genau diesen Schlüsseln: {\"action\": \"...\", \"path\": \"...\", \"content\": \"...\", \"message\": \"...\"}\n" +
                 "   action MUSS eines der folgenden Schlüsselwörter sein: list, read, write, build, done.\n" +
-                "2. Verwende immer relative Pfade ohne führenden Schrägstrich.\n" +
+                "2. WERKZEUG-REGELN:\n" +
+                "   - 'list': Listet Verzeichnisse auf (z. B. path=\"\" für das Hauptverzeichnis, path=\"app\" für Unterordner).\n" +
+                "   - 'read': Liest den Inhalt einer Textdatei (z. B. path=\"main.kr\", path=\"nexus.krproject\", path=\"README.md\"). Verwende 'read' NUR für Dateien, NIEMALS für Ordner oder '.'!\n" +
+                "   - 'write': Ersetzt den Inhalt einer Zieldatei (benötigt 'path' und 'content').\n" +
+                "   - 'build': Führt den Compilerlauf für die aktive Zielplattform aus.\n" +
+                "   - 'done': Beendet den Auftrag erfolgreich (Abschlussbericht in 'message').\n" +
                 "3. ARBEITSABLAUF:\n" +
-                "   - Lies IMMER zuerst die relevanten Projektdateien mit 'read', bevor du Änderungen vornimmst.\n" +
-                "   - Nimm die gewünschten Codeanpassungen mit 'write' vor. 'write' ersetzt den kompletten Textinhalt der Zieldatei.\n" +
-                "   - Baue erst mit 'build', wenn du den Code tatsächlich angepasst hast oder einen gemeldeten Compilerfehler reproduzieren willst. Ein unverändertes Projekt ohne Grund zu bauen, löst die Aufgabe nicht!\n" +
+                "   - Lies IMMER zuerst die relevanten Projektdateien (z. B. 'nexus.krproject', 'main.kr') mit 'read'.\n" +
+                "   - Nimm die gewünschten Codeanpassungen mit 'write' vor.\n" +
+                "   - Baue erst mit 'build', wenn du den Code angepasst hast oder einen gemeldeten Compilerfehler reproduzieren willst.\n" +
                 "   - Analysiere Compilerfehler nach dem Build und behebe sie mit 'write'.\n" +
-                "   - Wenn alle Ziele erreicht sind, beende mit 'done' und erkläre im Feld 'message' zusammenfassend, was geändert und verifiziert wurde.\n" +
+                "   - Wenn alle Ziele erreicht sind, beende mit 'done'.\n" +
                 "4. Begründe jede Aktion im Feld 'message' kurz und verständlich auf Deutsch.");
         history.put(initial);
 
         String initialPrompt = "AUFTRAG:\n" + task + "\n\n" +
                 "PROJEKT: " + projectName + "\n" +
                 "DATEIEN IM PROJEKT:\n" + fileListing + "\n\n" +
-                "Bitte starte mit der Analyse der relevanten Dateien.";
+                "Bitte starte deine Analyse, indem du eine der relevanten Dateien mit 'read' liest (z. B. path=\"main.kr\" oder path=\"nexus.krproject\").";
         history.put(new JSONObject().put("role", "user").put("content", initialPrompt));
 
         int budget = Math.min(40, Math.max(1, settings.maxSteps()));
@@ -269,49 +275,57 @@ public final class KrAgentCore {
             updateStatus("Schritt " + (step + 1) + ": " + kind + (path.isEmpty() ? "" : " " + path));
 
             String output;
-            switch (kind) {
-                case "list" -> output = listFiles(workspace, path);
-                case "read" -> output = read(workspace, path);
-                case "write" -> {
-                    String content = action.optString("content", "");
-                    File target = safeFile(workspace, path);
-                    if (target.exists() && target.length() > 1024 * 1024) {
-                        throw new IOException("Datei zu groß (> 1 MiB): " + path);
+            try {
+                switch (kind) {
+                    case "list" -> output = listFiles(workspace, path);
+                    case "read" -> output = read(workspace, path);
+                    case "write" -> {
+                        String content = action.optString("content", "");
+                        File target = safeFile(workspace, path);
+                        if (target.isDirectory()) {
+                            throw new IOException("Zielpfad ist ein Verzeichnis: " + path + ". Bitte konkrete Datei angeben.");
+                        }
+                        if (target.exists() && target.length() > 1024 * 1024) {
+                            throw new IOException("Datei zu groß (> 1 MiB): " + path);
+                        }
+                        String diffPreview = "Datei: " + path + "\n\n" + preview(content);
+                        boolean ok = requireApproval("Datei ändern: " + path, diffPreview);
+                        if (!ok) {
+                            output = "Änderung wurde vom Benutzer abgelehnt.";
+                            emit("❌ Änderung abgelehnt: " + path);
+                        } else {
+                            writeAtomically(target, content);
+                            final String finalPath = path;
+                            final String finalContent = content;
+                            SwingUtilities.invokeLater(() -> {
+                                projects.refreshTree();
+                                DocumentManager.getInstance().reloadIfOpen(finalPath, finalContent);
+                            });
+                            output = "Datei erfolgreich geschrieben: " + path;
+                            emit("✅ Datei geschrieben: " + path);
+                        }
                     }
-                    String diffPreview = "Datei: " + path + "\n\n" + preview(content);
-                    boolean ok = requireApproval("Datei ändern: " + path, diffPreview);
-                    if (!ok) {
-                        output = "Änderung wurde vom Benutzer abgelehnt.";
-                        emit("❌ Änderung abgelehnt: " + path);
-                    } else {
-                        writeAtomically(target, content);
-                        final String finalPath = path;
-                        final String finalContent = content;
-                        SwingUtilities.invokeLater(() -> {
-                            projects.refreshTree();
-                            DocumentManager.getInstance().reloadIfOpen(finalPath, finalContent);
-                        });
-                        output = "Datei erfolgreich geschrieben: " + path;
-                        emit("✅ Datei geschrieben: " + path);
+                    case "build" -> {
+                        CompilerEngine.Target target = BuildManager.getInstance().getCurrentTarget();
+                        boolean ok = requireApproval("Projekt kompilieren",
+                                "Zielplattform: " + target + "\nProjekt: " + projectName + "\n\nSoll der Compilerlauf jetzt gestartet werden?");
+                        if (!ok) {
+                            output = "Kompilierung wurde vom Benutzer abgelehnt.";
+                            emit("❌ Build abgelehnt.");
+                        } else {
+                            output = build(workspace, target);
+                        }
                     }
-                }
-                case "build" -> {
-                    CompilerEngine.Target target = BuildManager.getInstance().getCurrentTarget();
-                    boolean ok = requireApproval("Projekt kompilieren",
-                            "Zielplattform: " + target + "\nProjekt: " + projectName + "\n\nSoll der Compilerlauf jetzt gestartet werden?");
-                    if (!ok) {
-                        output = "Kompilierung wurde vom Benutzer abgelehnt.";
-                        emit("❌ Build abgelehnt.");
-                    } else {
-                        output = build(workspace, target);
+                    case "done" -> {
+                        String finalMessage = action.optString("message", "Auftrag erfolgreich abgeschlossen.");
+                        emit("🏁 ERGEBNIS:\n" + finalMessage);
+                        return;
                     }
+                    default -> output = "Unbekannte Aktion '" + kind + "'. Erlaubt sind: list, read, write, build, done";
                 }
-                case "done" -> {
-                    String finalMessage = action.optString("message", "Auftrag erfolgreich abgeschlossen.");
-                    emit("🏁 ERGEBNIS:\n" + finalMessage);
-                    return;
-                }
-                default -> output = "Unbekannte Aktion '" + kind + "'. Erlaubt sind: list, read, write, build, done";
+            } catch (Exception ex) {
+                output = "Fehler bei Aktion '" + kind + "': " + ex.getMessage() + ". Bitte Parameter prüfen und nächsten Schritt ausführen.";
+                emit("⚠️ " + output);
             }
 
             emit("📄 Ergebnis: " + (output.length() > 1500 ? output.substring(0, 1500) + " … [gekürzt]" : output));
@@ -377,12 +391,54 @@ public final class KrAgentCore {
 
             JSONObject response = new JSONObject(payload);
             String text = response.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim();
-            if (text.startsWith("```")) {
-                text = text.replaceFirst("^```(?:json)?\\s*", "").replaceFirst("\\s*```$", "");
-            }
-            return new JSONObject(text);
+            return parseActionJson(text);
         } finally {
             c.disconnect();
+        }
+    }
+
+    private static JSONObject parseActionJson(String raw) throws JSONException {
+        if (raw == null || raw.isBlank()) {
+            throw new JSONException("Leere Antwort vom Modell erhalten.");
+        }
+        String text = raw.trim();
+
+        // 1. Entferne <think>...</think> Tags (z. B. DeepSeek / Qwen Modellen)
+        text = text.replaceAll("(?si)<think>.*?</think>", "").trim();
+
+        // 2. Extrahiere Markdown Code-Block falls vorhanden
+        if (text.contains("```")) {
+            int firstFence = text.indexOf("```");
+            int secondFence = text.indexOf("```", firstFence + 3);
+            if (secondFence > firstFence) {
+                String inside = text.substring(firstFence + 3, secondFence).trim();
+                if (inside.toLowerCase(Locale.ROOT).startsWith("json")) {
+                    inside = inside.substring(4).trim();
+                }
+                text = inside;
+            }
+        }
+
+        // 3. Finde das äußerste JSON-Objekt { ... }
+        int start = text.indexOf('{');
+        int end = text.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            String jsonPart = text.substring(start, end + 1).trim();
+            try {
+                return new JSONObject(jsonPart);
+            } catch (JSONException ignored) {}
+        }
+
+        // 4. Direkter Versuch
+        try {
+            return new JSONObject(text);
+        } catch (JSONException e) {
+            // 5. Fallback bei freier Textantwort: Behandle als 'done' mit Antworttext
+            JSONObject fallback = new JSONObject();
+            fallback.put("action", "done");
+            fallback.put("path", "");
+            fallback.put("message", text);
+            return fallback;
         }
     }
 
@@ -422,16 +478,21 @@ public final class KrAgentCore {
     }
 
     private static File safeFile(File root, String relative) throws IOException {
-        if (relative == null || relative.isBlank() || relative.startsWith("/") || relative.contains("\\") || relative.contains(":")) {
-            throw new IOException("Ungültiger relativer Pfad: " + relative);
+        if (relative == null || relative.isBlank()) {
+            return root.getCanonicalFile();
         }
-        File target = new File(root, relative).getCanonicalFile();
-        if (!target.toPath().startsWith(root.toPath()) || target.equals(root)) {
+        String clean = relative.trim().replace('\\', '/');
+        while (clean.startsWith("/")) clean = clean.substring(1);
+        while (clean.startsWith("./")) clean = clean.substring(2);
+        if (clean.isEmpty() || clean.equals(".")) {
+            return root.getCanonicalFile();
+        }
+        File target = new File(root, clean).getCanonicalFile();
+        if (!target.toPath().startsWith(root.toPath())) {
             throw new IOException("Pfad außerhalb des Projekts: " + relative);
         }
-        String normalized = relative.replace('\\', '/');
-        for (String segment : normalized.split("/")) {
-            if (Set.of(".git", "KR_BUILD", ".kragent", "..", ".").contains(segment)) {
+        for (String segment : clean.split("/")) {
+            if (Set.of(".git", "KR_BUILD", ".kragent", "..").contains(segment)) {
                 throw new IOException("Geschützter Pfad: " + segment);
             }
         }
@@ -439,7 +500,7 @@ public final class KrAgentCore {
     }
 
     private String listFiles(File root, String relative) throws IOException {
-        File dir = relative.isBlank() ? root : safeFile(root, relative);
+        File dir = (relative == null || relative.isBlank() || relative.equals(".") || relative.equals("./")) ? root : safeFile(root, relative);
         if (!dir.isDirectory()) return "Kein Ordner: " + relative;
         File[] files = dir.listFiles();
         if (files == null) return "Ordner nicht lesbar";
@@ -458,7 +519,13 @@ public final class KrAgentCore {
     }
 
     private String read(File root, String relative) throws IOException {
+        if (relative == null || relative.isBlank() || relative.equals(".") || relative.equals("./")) {
+            return "Hinweis: '" + relative + "' ist das Projektverzeichnis. Bitte gib einen Dateinamen an (z. B. 'main.kr', 'nexus.krproject' oder 'README.md').\nDateien im Projekt:\n" + listFiles(root, "");
+        }
         File file = safeFile(root, relative);
+        if (file.isDirectory()) {
+            return "Hinweis: '" + relative + "' ist ein Ordner, keine Datei. Verwende 'list', um Ordnerinhalte aufzulisten, oder lies eine konkrete Datei im Ordner.\nInhalt von " + relative + ":\n" + listFiles(root, relative);
+        }
         if (!file.isFile() || file.length() > 256 * 1024) {
             throw new IOException("Nur Textdateien bis 256 KiB lesbar: " + relative);
         }

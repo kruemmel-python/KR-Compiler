@@ -41,6 +41,12 @@ public final class DarkTheme {
         UIManager.put("Panel.background", BG_PANEL);
         UIManager.put("Panel.foreground", FG_PRIMARY);
 
+        UIManager.put("OptionPane.background", BG_PANEL);
+        UIManager.put("OptionPane.foreground", FG_PRIMARY);
+        UIManager.put("OptionPane.messageForeground", FG_PRIMARY);
+        UIManager.put("OptionPane.messageArea.background", BG_PANEL);
+        UIManager.put("OptionPane.buttonArea.background", BG_PANEL);
+
         UIManager.put("Label.foreground", FG_PRIMARY);
         UIManager.put("Label.font", FONT_REGULAR);
 

@@ -383,17 +383,82 @@ public final class KrWindowsIde extends JFrame {
         boolean hasTc = kr.compile.ToolchainManager.getInstance().isEmbeddedToolchainPresent();
         String tcStatus = hasTc ? "Aktiv (" + kr.compile.ToolchainManager.getInstance().getToolchainDir().getName() + ")" : "Host-System";
 
-        String info = "KR Compiler IDE – Windows Desktop Edition\n"
-                + "Version: 4.0.3\n\n"
-                + "Entwickler: Ralf Krümmel\n\n"
-                + "Compiler-Status: " + tcStatus + "\n\n"
-                + "Funktionsumfang:\n"
-                + "• Vollständig integrierte, portable C/C++20 Toolchain (ohne externe SDK-Installation)\n"
-                + "• KR Unified Language (.kr) mit vollem Multi-File Support (*.krproject)\n"
-                + "• C++20, Rust und Go Übersetzung direkt auf Windows\n"
-                + "• Multi-Target Builds: Windows x64 (.exe), Linux x64, Android ARM64\n"
-                + "• Autonomer KI-Programmierassistent („AGENT“) mit Tool-Loop, Audit-Log, Export und Freigabesystem\n"
-                + "• Integrierter vcpkg Paket-Manager";
-        JOptionPane.showMessageDialog(this, info, "Über KR IDE", JOptionPane.INFORMATION_MESSAGE);
+        JDialog dialog = new JDialog(this, "Über KR IDE", true);
+        dialog.setLayout(new BorderLayout());
+        dialog.getContentPane().setBackground(DarkTheme.BG_PANEL);
+
+        JPanel mainPanel = new JPanel();
+        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        mainPanel.setBackground(DarkTheme.BG_PANEL);
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 24, 20, 24));
+
+        JLabel titleLabel = new JLabel("KR Compiler IDE – Windows Desktop Edition");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titleLabel.setForeground(Color.WHITE);
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel versionLabel = new JLabel("Version 4.0.3");
+        versionLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        versionLabel.setForeground(DarkTheme.ACCENT_BLUE);
+        versionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel authorLabel = new JLabel("Entwickler: Ralf Krümmel");
+        authorLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        authorLabel.setForeground(new Color(78, 201, 176));
+        authorLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel tcLabel = new JLabel("Compiler-Status: " + tcStatus);
+        tcLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        tcLabel.setForeground(DarkTheme.FG_SECONDARY);
+        tcLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel featuresTitle = new JLabel("Funktionsumfang:");
+        featuresTitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        featuresTitle.setForeground(Color.WHITE);
+        featuresTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        String[] features = {
+                "• Vollständig integrierte, portable C/C++20 Toolchain (ohne externe SDK-Installation)",
+                "• KR Unified Language (.kr) mit vollem Multi-File Support (*.krproject)",
+                "• C++20, Rust und Go Übersetzung direkt auf Windows",
+                "• Multi-Target Builds: Windows x64 (.exe), Linux x64 (ELF), Android ARM64 (.apk)",
+                "• Autonomer KI-Programmierassistent („AGENT“) mit Tool-Loop, Audit-Log und Freigabesystem",
+                "• Integrierter vcpkg Paket-Manager"
+        };
+
+        mainPanel.add(titleLabel);
+        mainPanel.add(Box.createVerticalStrut(4));
+        mainPanel.add(versionLabel);
+        mainPanel.add(Box.createVerticalStrut(10));
+        mainPanel.add(authorLabel);
+        mainPanel.add(Box.createVerticalStrut(4));
+        mainPanel.add(tcLabel);
+        mainPanel.add(Box.createVerticalStrut(16));
+        mainPanel.add(featuresTitle);
+        mainPanel.add(Box.createVerticalStrut(8));
+
+        for (String feat : features) {
+            JLabel featLabel = new JLabel(feat);
+            featLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            featLabel.setForeground(new Color(225, 225, 225));
+            featLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            mainPanel.add(featLabel);
+            mainPanel.add(Box.createVerticalStrut(3));
+        }
+
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        btnPanel.setBackground(DarkTheme.BG_TOOLBAR);
+        btnPanel.setBorder(BorderFactory.createEmptyBorder(12, 24, 12, 24));
+        JButton okBtn = DarkTheme.createStyledButton("Schließen", DarkTheme.ACCENT_BLUE, Color.WHITE);
+        okBtn.setPreferredSize(new Dimension(100, 32));
+        okBtn.addActionListener(e -> dialog.dispose());
+        btnPanel.add(okBtn);
+
+        dialog.add(mainPanel, BorderLayout.CENTER);
+        dialog.add(btnPanel, BorderLayout.SOUTH);
+        dialog.pack();
+        dialog.setResizable(false);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
     }
 }
