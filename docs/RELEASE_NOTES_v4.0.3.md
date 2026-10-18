@@ -30,7 +30,8 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
     - **`📋 Kopieren`**: Überträgt das gesamte Agentenprotokoll mit einem Klick in die Android-Zwischenablage.
     - **`💾 Export`**: Speichert das Protokoll formatiert mit Projektname und Zeitstempel als `kr_agent_log.txt` direkt in den Projektordner und aktualisiert die IDE-Dateiansicht.
   - **Robuste Netzwerk- & Modell-Konnektivität**:
-    - Erhöhte Timeouts (60s Verbindungsaufbau, 300s Modell-Inferenz/Read).
+    - Erhöhte Timeouts (60s Verbindungsaufbau, 600s / 10 Minuten Modell-Inferenz/Read für LM Studio & Ollama).
+    - Automatische Kontext-Kompaktierung (`compactHistory`), um lokale Modelle bei längeren Unterhaltungen performant zu halten.
     - `usesCleartextTraffic="true"` und LAN-IP-Freigabe (`192.168.x.x`, `10.x.x.x`, `localhost`) für nahtlose Anbindung lokaler LLM-Server (Ollama, LM Studio).
     - Detaillierte Fehlerdiagnostik bei Verbindungsproblemen mit konkreten Lösungshinweisen.
   - **Sofortiger Abbruch**: Laufende Agentenprozesse und Builds können jederzeit über **`STOPP`** beendet werden.
