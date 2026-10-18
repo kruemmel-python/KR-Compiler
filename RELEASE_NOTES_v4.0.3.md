@@ -109,6 +109,21 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 
 ---
 
+### 9. Härtung der Agenten-Pfadauflösung & Schleifenterminierung
+- **Präzise Verzeichnis-Klassifizierung**:
+  - Ordnerpfade (`gui`, `engine`, `storage`, `services`, `tests` etc.) werden bei Aufruf von `read` sofort als Verzeichnis erkannt und listen ihren Inhalt auf, statt fehlerhaft als Build-Artefakt eingestuft und auf `main.kr` umgeleitet zu werden.
+- **Projektweite Dateisuche (`findFileInProject`)**:
+  - Bei Aufruf von Quellcodedateien ohne Verzeichnisangabe (z. B. `read -> lifecycle.kr`) durchsucht der Agent rekursiv den Projektbaum und findet z. B. `app/lifecycle.kr` direkt als reguläre Quelldatei ohne Verfälschung oder Artefakt-Warnung.
+- **Sichere Artefakt-Guards (`isGeneratedArtifactPath`)**:
+  - Quellcode-Umleitungen werden ausschließlich für reale generierte Dateien (`src/lib.rs`, `main.go`, `KR_BUILD/...` oder per `KrSourceMap` registriert) aktiviert.
+  - Für unbekannte oder ungültige Pfade gibt `findSourceForGeneratedFile` sauber `null` zurück – der pauschale Fallback auf `main.kr` wurde vollständig entfernt.
+- **Post-Build Schleifenterminierung**:
+  - Sobald ein Build mit `BUILD OK` erfolgreich durchläuft und die Zieldatei (z. B. `programm.exe`) erzeugt wurde, weist das System den Agenten explizit an, die Aufgabe unmittelbar mit `done` zu beenden. Unnötige Folgeaufrufe (wiederholtes Lesen, Verzeichnislisten oder Neuschreiben) lokaler LLMs werden unterbunden.
+- **Idempotenz-Schutz beim Schreiben (`write`)**:
+  - Übergibt ein Modell identischen Quellcode für eine bereits unveränderte Datei, wird der Schreibvorgang ohne Freigabedialog übersprungen und das Modell zur Beendigung angeleitet.
+
+---
+
 ## Prüfsummen & Assets
 
 - **Android Release**: `KR-Compiler-Android-IDE-v4.0.3.apk`
@@ -117,7 +132,7 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
 
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar`
-  - **Größe**: `195.185 Bytes`
-  - **SHA-256**: `8b15fa8708c6b9aacecb2e0e59f314fc0610f5906886e996581570a26662156f`
+  - **Größe**: `188.369 Bytes`
+  - **SHA-256**: `059b9a8550f6813654b60b6b8a41519f362b8952f7248c3179bb46841dcb2c1b`
   - **Plattform**: Windows 10 / 11 (Java 17+)
   - **Starter**: `windows/Start-KR-IDE.bat`

@@ -9,8 +9,9 @@ KR Compiler Android IDE ist eine autarke, native mobile Entwicklungsumgebung fü
 Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Dokumentation und die geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.3](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.3).
 
 - **Release-APK (Android)**: `KR-Compiler-Android-IDE-v4.0.3.apk`
-- **SHA-256**: `ac7823db51e65b920d1445ea5ab6db8883d2fd692f4110412f1c61a1be35094d`
+- **SHA-256 (APK)**: `ac7823db51e65b920d1445ea5ab6db8883d2fd692f4110412f1c61a1be35094d`
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar` (1:1 Port für Windows 10/11, Starter: `windows/Start-KR-IDE.bat`)
+- **SHA-256 (Windows JAR)**: `059b9a8550f6813654b60b6b8a41519f362b8952f7248c3179bb46841dcb2c1b` (188.369 Bytes)
 - **Windows Toolchain (Portabel)**: `KR-Compiler-Windows-toolchain-v4.0.3.zip` (Inklusive MinGW C++20, Go-Binutils, Android-APK-Runner, SDL3 & SQLite3)
 
 ### Systemvoraussetzungen
@@ -30,7 +31,10 @@ Version 4.0.3 führt wesentliche Enterprise- und Multiplattform-Erweiterungen ei
   - **Plattformgerechte Ausgabedateien**: Windows x64 (`programm.exe`), Linux x64 ELF (`programm`) und Android ARM64 (`programm-android-arm64.apk`).
 - **Integrierter autonomer KI-Programmierassistent („AGENT“)**:
   - Direkter Zugriff über den neuen **`AGENT`**-Button in der Navigationsleiste der App und der Desktop-IDE.
-  - Autonome Problemlösungsschleife (ReAct): Verzeichnisse scannen (`list`), Code lesen (`read`), Code modifizieren (`write`) und automatischen Kompilierungslauf (`build`) zur iterativen Fehlerbehebung starten.
+  - Autonome Problemlösungsschleife (ReAct): Verzeichnisse scannen (`list`), Code lesen (`read`), Code modifizieren (`write` / `replace`) und automatischen Kompilierungslauf (`build`) zur iterativen Fehlerbehebung starten.
+  - **Virtuelle Quelltext-Rückführung (`KrSourceMap`)**: Automatische Zuordnung von Fehlermeldungen in Zwischenartefakten (`KR_BUILD/rust_module/src/lib.rs`, `modules/*.cpp`, `kr_bridge.h`) zurück auf die exakte `.kr`-Originaldatei und -Zeile.
+  - **Präzise Verzeichnis- und Dateiauflösung**: Klare Unterscheidung zwischen Projektordnern (`app/`, `gui/`, `storage/`) und virtuellen Build-Artefakten sowie rekursive Suche via `findFileInProject()`.
+  - **Intelligente Schleifenterminierung**: Erkennt einen erfolgreichen Build nach Fehlerbehebung sofort und beendet die ReAct-Schleife ohne Endlositerationen.
   - Kompatibel mit allen OpenAI-kompatiblen HTTPS-Endpunkten (OpenAI, Claude via Proxy, Mistral, Groq, OpenRouter) und lokalen Modellen (Ollama / LM Studio via `http://127.0.0.1:...`).
   - Strikte Sicherheits-Sandbox (`safeFile`), Freigabepflicht für alle Dateiänderungen („Human-in-the-Loop“) und revisionssicheres Audit-Log (`kr_agent_audit.jsonl`).
 - **Modulare Projektarchitektur (`*.krproject`)**: Deklarative Konfiguration von Metadaten (`[project]`), rekursiven Modulverzeichnissen (`[modules]`), Drittpaketen (`[dependencies]`) und Compiler-Optimierungen (`[build]`).
@@ -105,13 +109,13 @@ Zusätzlich werden reine **Rust-Projekte** (Cargo / `rustc`) und **Go-Projekte**
 Alle Handbücher, Architekturberichte und Testprotokolle stehen im Ordner [`docs/`](docs/) bereit:
 
 - **[KR Unified Language Entwickler-Leitfaden](docs/KR_UNIFIED_LANGUAGE_GUIDE.md)**: Vollständige Sprachfusionsregeln, Speicherverwaltung, Datentypen, FFI-Konventionen und Best Practices für `.kr`.
-- **[Benutzerhandbuch v4.0 (Markdown)](docs/BENUTZERHANDBUCH_v4.0.md)**: Bebilderte Schritt-für-Schritt-Anleitung für die mobile IDE.
-- **[Benutzerhandbuch v4.0 (Word docx)](docs/KR_Compiler_Android_Benutzerhandbuch_v4.0_15-10-2026.docx)**: Vollständiges formatiertes Benutzerhandbuch.
-- **[Technische Dokumentation v4.0 (Markdown)](docs/DOKUMENTATION_v4.0.md)**: Architektur, Pipeline-Stufen, ABI-Design, Compiler-Orchestrierung und Plattform-Profile.
-- **[Technische Dokumentation v4.0 (Word docx)](docs/KR_Compiler_Android_Dokumentation_v4.0_15-10-2026.docx)**: Vollständige technische Dokumentation als Word-Dokument.
-- **[Testprotokoll v4.0](docs/TESTPROTOKOLL_v4.0.md)**: Verifikation aller 18 Zielkombinationen sowie des rechenintensiven DSP-Algorithmus (RoPE Attention) auf dem realen Smartphone RMX3853.
-- **[Release Notes v4.0.0](docs/RELEASE_NOTES_v4.0.0.md)**: Offizielle Versionshinweise und Änderungsprotokoll.
-- **[Projektgeschichte Kreta & KR IDE (Word docx)](docs/KR_Compiler_Android_Kreta_Geschichte_v4.0_15-10-2026.docx)**: Entstehungsgeschichte und Evolution der mobilen Entwicklungsumgebung.
+- **[Benutzerhandbuch v4.0.3 (Markdown)](docs/BENUTZERHANDBUCH_v4.0.3.md)**: Bebilderte Anleitung für die mobile IDE und Desktop Edition inkl. Autonomer KI-Agent, ReAct-Loop, LM Studio & Ollama.
+- **[Benutzerhandbuch v4.0.3 (Word docx)](docs/KR_Compiler_Android_Benutzerhandbuch_v4.0.3_16-10-2026.docx)**: Vollständiges formatiertes Benutzerhandbuch.
+- **[Technische Dokumentation v4.0.3 (Markdown)](docs/DOKUMENTATION_v4.0.3.md)**: Architektur, KrSourceMap-Rückführung, FFI-Pipeline, Windows Desktop Parität und ReAct-Loop-Spezifikation.
+- **[Technische Dokumentation v4.0.3 (Word docx)](docs/KR_Compiler_Android_Dokumentation_v4.0.3_16-10-2026.docx)**: Vollständige technische Dokumentation als Word-Dokument.
+- **[Testprotokoll v4.0.3](docs/TESTPROTOKOLL_v4.0.3.md)**: Verifikation von Multi-Language-Enterprise-Projekten (KR_NEXUS_ENTERPRISE, 5,25 MB) und E2E-Autonom-Reparatur mit LM Studio (gemma-4-e2b).
+- **[Release Notes v4.0.3](docs/RELEASE_NOTES_v4.0.3.md)**: Offizielle Versionshinweise und Änderungsprotokoll zu v4.0.3.
+- **[Projektgeschichte Kreta & KR IDE (Word docx)](docs/KR_Compiler_Android_Kreta_Geschichte_v4.0.3_16-10-2026.docx)**: Entstehungsgeschichte und Evolution der mobilen Entwicklungsumgebung.
 
 ---
 

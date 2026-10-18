@@ -55,3 +55,39 @@ Alle zuvor etablierten Fähigkeiten bleiben vollständig erhalten:
 - **18 reale C/C++ GitHub Repositories (54/54 Builds)**: Weiterhin zu 100 % funktionsfähig.
 - **CC_OpenCl_Enterprise**: Windows-x64-Kompilierung mit 140/140 Exporten intakt.
 - **Single-File KR Sprachfusion**: Abwärtskompatibel zu allen v4.0.0-Projekten.
+
+---
+
+## 4. Verifikation der Windows Desktop Edition (1:1 Parität)
+
+Getestet auf Windows 11 Enterprise (x64) mit dem modularen Enterprise-Projekt `KR_NEXUS_ENTERPRISE`:
+- **Projektstruktur**: 9 `.kr`-Dateien, 6 Module (`app`, `gui`, `engine`, `security`, `services`, `storage`), `nexus.krproject`.
+- **Compilerlauf**:
+  - `KrPipeline`: Multi-File Pipeline & Codegenerator erzeugt 5 Translation Units unter `KR_BUILD/modules/`.
+  - `Cargo`: Kompiliert `kr_rust_module` via `cargo build --release`.
+  - `MinGW C++20 Linker`: Bindet SDL3, SQLite3 und Rust-Objekte ein.
+- **Ergebnis**:
+  - `programm.exe`: **5.255.448 Bytes**
+  - **Status**: **PASS (100 % funktionsfähig)**
+
+---
+
+## 5. End-to-End Test: Autonome KI-Fehlerbehebung via LM Studio (`google/gemma-4-e2b`)
+
+Testziel: Vollautomatische Diagnose, Quellcode-Zuordnung und Korrektur eines Syntaxfehlers in einem modularen KR-Projekt ohne menschliche Codeeingriffe.
+
+### 5.1 Testablauf
+1. **Fehler-Injektion**:
+   In `security/policy.kr` (Rust-Segment) wurde eine ungeschlossene geschweifte Klammer simuliert (`if value < low + near || value > high - near { 1 } else { 0`).
+2. **Build-Abbruch**:
+   Der Compilerlauf bricht mit Cargo Exit-Code 101 ab (`error: this file contains an unclosed delimiter --> src\lib.rs:56:3`).
+3. **Smarte Fehlerdiagnose (`extractDiagnosticHints`)**:
+   Die IDE parst den Cargo-Fehler, schlägt über `KrSourceMap` die Brücke von `src/lib.rs` zur Originaldatei `security/policy.kr` und generiert dem Agenten einen passenden `replace`-Vorschlag.
+4. **Zielgenaue Korrektur (`replace`)**:
+   Der Agent wendet `replace` auf `security/policy.kr` an (`{ 0 }`).
+5. **Erfolgreicher Re-Build**:
+   Der anschließende Build baut fehlerfrei durch (`BUILD OK`, `programm.exe` mit 5.255.448 Bytes erzeugt).
+6. **Pfadklassifizierungs- & Schleifenprüfung**:
+   - Aufrufe von `read` auf Ordner (`gui`, `engine`, `storage`, `services`, `tests`) liefern sofort die Ordnerinhalte und leiten **nicht** fälschlich auf `main.kr` um.
+   - Aufruf von `read -> lifecycle.kr` findet automatisch `app/lifecycle.kr` im Projektbaum.
+   - Der Agent beendet nach Erhalt von `BUILD OK` die Ausführung sofort mit `done` ohne Endlosschleifen.

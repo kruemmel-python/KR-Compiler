@@ -80,7 +80,47 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 - Vollständiger 1:1 Desktop-Port im neuen Projektordner `windows/`.
 - Nativ lauffähig auf Windows 10 / 11 (64-Bit) mit Java 17+.
 - Enthält die gesamte KR Pipeline, Projekt-Explorer, Multi-Tab Editor mit Syntax-Highlighting, Build-Konsole, Artefakte-Verwaltung mit 1-Klick-Ausführung (`.exe`) und den autonomen KI-Agenten (`AGENT`).
+- **Vollständige KR-Projekt-Parität**: Sämtliche KR-Projekte, die in der Android-App erstellt werden können (Modulare `*.krproject`, Single-File `.kr`, C++20, Rust, Go), lassen sich 1:1 in der Windows-Version anlegen, bearbeiten und fehlerfrei kompilieren.
+- **Zero-Setup Autonomie & ABI-Fallback-Bridge**: Wie bei der Android-APK sind keine externen SDKs auf dem PC erforderlich. Rust-Module werden bei vorhandenem Cargo direkt gebaut; für externe Komponenten (z. B. Go) generiert die IDE automatisch typgerechte C++ ABI-Bridges, sodass das Projekt auf jedem Windows-PC ohne manuelle SDK-Installationen kompiliert.
+- **Saubere modulare Übersetzung & Subsystem-Linker**: Trennung von monolithischer und modularer Übersetzungseinheiten verhindert `multiple definition`-Kollisionen. Korrekte Subsystem-Steuerung (`-mconsole`, `-Wl,--allow-multiple-definition`) verhindert `WinMain`-Fehler.
+- **Multi-Target-Erfolgsnachweis**: Alle drei Zielplattformen (**Windows x64 `.exe`**, **Linux x64**, **Android ARM64 `libuser.so`**) bauen erfolgreich durch.
+- **Hochkontrast-Dark-Theme**: Einheitliches, augenschonendes Dark-Design im VS-Code-Stil (#1E1E1E / #252526 / #007ACC) über alle Panels, Menüleisten, Explorer, Buttons, TabbedPanes und Agenten-Dialoge hinweg.
+- **Saubere Glyphen- & Tag-Darstellung**: Professionelle Compiler-Log-Tags (`[INFO]`, `[EXEC]`, `[ERFOLG]`, `[FEHLER]`) und native Unicode-Symbole (`▶`, `■`, `✕`, `↺`, `↗`).
+- **Toolchain-Umgebungs-Injektion**: Automatische Einbindung der MinGW/MSYS2/LLVM-Binärverzeichnisse in den Subprozess-`PATH`, wodurch stumme DLL-Ladefehler von `g++.exe` (`cc1plus.exe`, `as.exe`, `ld.exe`) behoben sind.
 - Startbar über `windows/Start-KR-IDE.bat`, `windows/Start-KR-IDE-Console.bat` oder direkt via `KR-Compiler-IDE.jar`.
+
+---
+
+### 8. Intelligente KrSourceMap & Autonome KI-Fehlerbehebung (LM Studio & Ollama)
+- **Bidirektionale KrSourceMap**:
+  - Exaktes Mapping von generierten Zwischen- und Build-Dateien (`KR_BUILD/rust_module/src/lib.rs`, `KR_BUILD/go_module/main.go`, `KR_BUILD/modules/*.cpp`) zurück auf die originären `.kr`-Quelldateien, Funktionsdeklarationen und Zeilennummern.
+  - Automatische Persistierung als `KR_BUILD/source_map.json` bei jedem Pipeline- und Codegenerator-Lauf.
+- **Transparente Pfad-Redirection**:
+  - Wenn ein lokales KI-Modell (z. B. `gemma-4-e2b`) aus Compiler-Logs abgeleitete Pfade wie `src/lib.rs`, `lib.rs` oder `KR_BUILD/...` per `read` anfordert, fängt `KrAgentCore` dies transparent ab und liefert direkt den Inhalt der zuständigen `.kr`-Quelldatei (z. B. `security/policy.kr`) mit Zeilennummern und Hinweis-Präfix.
+  - Führt das Modell ein `replace` auf einem generierten Pfad aus, wird die Änderung automatisch in der zugrundeliegenden `.kr`-Originaldatei gespeichert.
+- **Smarte Diagnose-Extraktion (`extractDiagnosticHints`)**:
+  - Vollständiges Parsing von Cargo/Rust- (`--> src\lib.rs:...`) und Go-Compiler-Meldungen.
+  - Automatische Identifikation der fehlerhaften Zeile in der `.kr`-Datei und Bereitstellung einer sofort ausführbaren `replace`-Befehlsvorlage (inkl. automatischer Ergänzung fehlender schließender Klammern bei Delimiter-Fehlern).
+- **Robuste Fehlererkennung**:
+  - Cargo- und Go-Kompilierfehler werden bei lokal vorhandenen Toolchains nicht mehr als Warnung verschluckt, sondern führen zu einem sauberen Build-Abbruch, der die KI-Fehlerdiagnose triggert.
+- **LM Studio Stabilitäts-Upgrade**:
+  - Modell-Antwort-Timeout auf 10 Minuten (`600.000 ms`) angehoben.
+  - Kontext-Kompaktierung (`compactHistory`) zur Entlastung des KV-Caches lokaler Inferenz-Engines.
+
+---
+
+### 9. Härtung der Agenten-Pfadauflösung & Schleifenterminierung
+- **Präzise Verzeichnis-Klassifizierung**:
+  - Ordnerpfade (`gui`, `engine`, `storage`, `services`, `tests` etc.) werden bei Aufruf von `read` sofort als Verzeichnis erkannt und listen ihren Inhalt auf, statt fehlerhaft als Build-Artefakt eingestuft und auf `main.kr` umgeleitet zu werden.
+- **Projektweite Dateisuche (`findFileInProject`)**:
+  - Bei Aufruf von Quellcodedateien ohne Verzeichnisangabe (z. B. `read -> lifecycle.kr`) durchsucht der Agent rekursiv den Projektbaum und findet z. B. `app/lifecycle.kr` direkt als reguläre Quelldatei ohne Verfälschung oder Artefakt-Warnung.
+- **Sichere Artefakt-Guards (`isGeneratedArtifactPath`)**:
+  - Quellcode-Umleitungen werden ausschließlich für reale generierte Dateien (`src/lib.rs`, `main.go`, `KR_BUILD/...` oder per `KrSourceMap` registriert) aktiviert.
+  - Für unbekannte oder ungültige Pfade gibt `findSourceForGeneratedFile` sauber `null` zurück – der pauschale Fallback auf `main.kr` wurde vollständig entfernt.
+- **Post-Build Schleifenterminierung**:
+  - Sobald ein Build mit `BUILD OK` erfolgreich durchläuft und die Zieldatei (z. B. `programm.exe`) erzeugt wurde, weist das System den Agenten explizit an, die Aufgabe unmittelbar mit `done` zu beenden. Unnötige Folgeaufrufe (wiederholtes Lesen, Verzeichnislisten oder Neuschreiben) lokaler LLMs werden unterbunden.
+- **Idempotenz-Schutz beim Schreiben (`write`)**:
+  - Übergibt ein Modell identischen Quellcode für eine bereits unveränderte Datei, wird der Schreibvorgang ohne Freigabedialog übersprungen und das Modell zur Beendigung angeleitet.
 
 ---
 
@@ -92,7 +132,7 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
 
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar`
-  - **Größe**: `177.480 Bytes`
-  - **SHA-256**: `9f7b14a4413d7502a16381c3ba3bf720260da8db5b54b8eb34c85b216160c607`
+  - **Größe**: `188.369 Bytes`
+  - **SHA-256**: `059b9a8550f6813654b60b6b8a41519f362b8952f7248c3179bb46841dcb2c1b`
   - **Plattform**: Windows 10 / 11 (Java 17+)
   - **Starter**: `windows/Start-KR-IDE.bat`

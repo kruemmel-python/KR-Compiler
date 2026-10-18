@@ -139,3 +139,60 @@ flowchart LR
    Der Agent operiert als optionale Schicht und hat keinerlei Schreibzugriff auf IDE-Systemdateien (`CompilerEngine`, `KrPipeline`, Toolchain-Sysroots).
 4. **Audit-Trail**:
    Alle Aktionen, Zeitstempel und Modellmeldungen werden persistent in `kr_agent_audit.jsonl` protokolliert.
+
+### 5.3 `KrSourceMap` & Bidirektionales Quellcode-Mapping
+Bei der Kompilierung generiert der KR-Compiler Zwischen- und Zieldateien (z. B. `KR_BUILD/rust_module/src/lib.rs`, `KR_BUILD/go_module/main.go`, `KR_BUILD/modules/*.cpp`).
+- Die Klasse `KrSourceMap` speichert Segmente und Funktionsmappings (`SegmentMapping`) zwischen generierten Zeilen und den originalen `.kr`-Quelldateien.
+- Die Map wird bei jedem Build-Lauf serialisiert und unter `KR_BUILD/source_map.json` abgelegt.
+- **Transparente Pfadumleitung**: Fordert ein LLM (wie LM Studio / Ollama) einen aus dem Compiler-Log entnommenen Pfad wie `src/lib.rs` oder `KR_BUILD/rust_module/src/lib.rs` an, löst `KrAgentCore` dies transparent auf und liefert den Inhalt der Original-Quelldatei (z. B. `security/policy.kr`).
+
+### 5.4 Smarte Diagnose-Extraktion (`extractDiagnosticHints`) & `replace`-Werkzeug
+- Bei Compilerfehlern von Cargo/Rust (`error: ... --> src\lib.rs:56:3`) oder Go parst `extractDiagnosticHints` die Fehlermeldung, mappt sie via `KrSourceMap` auf die Quellzeile in der `.kr`-Datei und blendet dem Agenten einen sofort ausführbaren `replace`-Befehlsvorschlag ein.
+- Das Werkzeug `replace` ersetzt Codeblöcke gezielt (`search` $\to$ `replace`), inklusive Zeilennummern-Bereinigung und Einrückungstoleranz, wodurch Datenverlust bei großen Dateien vermieden wird.
+
+### 5.5 Robuste Dateipfad-Klassifizierung & Projektweite Entdeckung
+- **Verzeichnis-Schutz**: Verzeichnisse (`gui`, `engine`, `storage`, etc.) werden vor der Artefaktprüfung abgefangen (`file.isDirectory()`). Der Agent erhält eine Ordner-Inhaltsübersicht (`listFiles()`), wodurch eine Fehlleitung auf `main.kr` ausgeschlossen ist.
+- **Projektweite Dateisuche (`findFileInProject`)**: Gibt das Modell Pfade ohne übergeordneten Ordner an (z. B. `lifecycle.kr`), durchsucht die Engine rekursiv den Projektbaum, findet `app/lifecycle.kr` und öffnet die Datei direkt als reguläre Quelldatei.
+- **Sichere Artefakt-Guards (`isGeneratedArtifactPath`)**: Nur echte Build-Dateien (`KR_BUILD/`, `rust_module/`, `go_module/`, `modules/`) werden als generierte Artefakte behandelt. Unbekannte Dateien lösen einen sauberen `FileNotFound`-Fehler aus.
+
+### 5.6 Schleifen-Terminierung nach erfolgreichem Build & Idempotenz
+- Sobald ein Build erfolgreich abschließt (`BUILD OK`), injiziert die Engine eine strikte Beendigungsanweisung (`🎉 Der Build war vollständig erfolgreich! Beende den Auftrag JETZT sofort mit 'done'`).
+- Wiederholt das Modell einen Schreibaufruf (`write`) mit exakt identischem Inhalt, greift der Idempotenz-Schutz: Die Datei wird nicht unnötig überschrieben und das Modell zum Abschluss geleitet.
+
+---
+
+## 6. Windows Desktop Edition Architektur (1:1 Portierung)
+
+Die Windows Desktop Edition (`windows/src/kr/compile/`) repliziert die vollständige Compiler- und IDE-Architektur der Android-App auf dem Desktop (Java 17+ / Swing):
+
+```mermaid
+flowchart TD
+    subgraph UI ["Windows Desktop UI (KrWindowsIde)"]
+        Tree["ProjectExplorerPanel (Dateibaum)"]
+        Tabs["CodeEditorPanel (Multi-Tab Syntax-Editor)"]
+        Console["BuildConsolePanel (Echtzeit-Compilerlog)"]
+        Arts["ArtifactsPanel (1-Klick .exe Ausführung)"]
+        AgentUI["AgentDialog (Autonomer KI-Agent)"]
+    end
+
+    subgraph Managers ["State & Build Management"]
+        PM["ProjectManager (Singuläre Projektverwaltung)"]
+        DM["DocumentManager (Tab-Synchronisation & Puffer)"]
+        BM["BuildManager (Asynchroner Thread-Worker)"]
+        TM["ToolchainManager (MinGW / Clang PATH-Injektion)"]
+    end
+
+    subgraph Core ["KR Compiler Engine"]
+        Pipe["KrPipeline & KrCodeGenerator"]
+        Engine["CompilerEngine (C++20, Cargo, Go CGO)"]
+        SMap["KrSourceMap (JSON-Mapping)"]
+    end
+
+    UI --> Managers
+    Managers --> Core
+```
+
+- **Integrierte Toolchain-Umgebung**: `ToolchainManager` injiziert die MinGW/MSYS2/LLVM-Binärpfade automatisch in die Subprozess-Umgebung (`PATH`), wodurch DLL-Ladefehler behoben sind.
+- **Multi-Target-Erzeugung**: Unterstützt Windows x64 (`.exe`), Linux x64 ELF und Android ARM64 (`programm-android-arm64.apk` via NDK & `apksigner`).
+- **Subsystem-Linker-Konfiguration**: Saubere Trennung von modularer und monolithischer Übersetzung (`-mconsole`, `-Wl,--allow-multiple-definition`) verhindert `WinMain`- und Doppeldefinitionsfehler.
+- **Ausführung**: Startbar über `windows/Start-KR-IDE.bat` oder direkt als Standalone-JAR `dist/KR-Compiler-IDE.jar`.

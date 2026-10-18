@@ -149,6 +149,65 @@ Beschreibe deine Aufgabe im Auftragsfeld:
 
 ### 5.4 Genehmigung von Änderungen („Human-in-the-Loop“)
 Der Agent arbeitet autonom, aber sicher:
-- Vor jedem Schreibzugriff auf Projektdateien (`write`) erscheint ein Dialog mit einer **Vorschau der Änderungen**. Du entscheidest per **Genehmigen** oder **Ablehnen**.
+- Vor jedem Schreibzugriff auf Projektdateien (`write`) oder gezieltem Codeersatz (`replace`) erscheint ein Dialog mit einer **Vorschau der Änderungen**. Du entscheidest per **Genehmigen** oder **Ablehnen**.
 - Vor jedem Kompiliervorgang (`build`) wird ebenfalls eine Bestätigung erbeten.
 - Über den Button **`STOPP`** kann der Vorgang jederzeit sofort abgebrochen werden.
+
+### 5.5 Lokale KI-Modelle einbinden (LM Studio & Ollama)
+Die IDE unterstützt lokale LLMs vollständig ohne Cloud-Zwang oder externe Kosten:
+- **LM Studio**:
+  - Starte den lokalen Server in LM Studio (z. B. auf Port `1234`).
+  - Endpunkt: `http://localhost:1234/v1/chat/completions` (auf dem Desktop) bzw. `http://<PC-IP>:1234/v1/chat/completions` (in der Android-App im selben WLAN).
+  - Modellname: Der in LM Studio geladene Modellbezeichner (z. B. `google/gemma-4-e2b`, `qwen2.5-coder-7b`).
+  - API-Key: Beliebiger Text (z. B. `lm-studio`).
+- **Ollama**:
+  - Endpunkt: `http://localhost:11434/v1/chat/completions` bzw. `http://<PC-IP>:11434/v1/chat/completions`.
+  - Modellname: Z. B. `codellama`, `llama3.1`, `qwen2.5-coder`.
+- **Lange Denkzeiten (10 Minuten Timeout)**:
+  - Lokale Modelle auf CPU/iGPU benötigen für komplexe Analysen oft mehrere Minuten. Die IDE gewährt standardmäßig ein Timeout von **600 Sekunden (10 Minuten)** pro Schritt.
+
+### 5.6 Zielgenaues Code-Ersetzen (`replace`)
+Statt ganze Dateien neu zu schreiben, nutzt der Agent bevorzugt das `replace`-Werkzeug:
+- Ersetzt nur den fehlerhaften Codeabschnitt (`search` $\to$ `replace`).
+- Verhindert versehentlichen Codeverlust in großen Dateien.
+- Bereinigt automatisch mitkopierte Zeilennummern und toleriert unterschiedliche Einrückungen.
+
+### 5.7 Transparente Quellcode-Zuordnung (`KrSourceMap`)
+- Meldet der Compiler einen Fehler in einer generierten Datei (z. B. `KR_BUILD/rust_module/src/lib.rs` oder `modules/gui_window_kr.cpp`), ordnet die IDE den Fehler über die interne `KrSourceMap` automatisch der ursprünglichen `.kr`-Quelldatei zu (z. B. `security/policy.kr`).
+- Der Agent liest und editiert stets die echte `.kr`-Projektdatei, nicht das temporäre Build-Artefakt.
+
+### 5.8 Robustes Pfad-Handling & Ordner-Schutz
+- **Verzeichnisse werden geschützt**: Fordert der Agent `read -> gui` oder `read -> engine` an, liefert die IDE die Ordnerliste, statt den Ordner als Artefakt auf `main.kr` umzuleiten.
+- **Projektweite Suche**: Ruft der Agent `read -> lifecycle.kr` auf, findet die IDE die Datei automatisch unter `app/lifecycle.kr`.
+- **Echte Artefakte**: Nur tatsächliche Build-Pfade (`KR_BUILD/`, `src/lib.rs`) werden umgeleitet. Unbekannte Pfade brechen sauber mit einer Fehlermeldung ab.
+
+### 5.9 Sofortiges Anhalten nach erfolgreichem Build
+- Sobald das Projekt fehlerfrei gebaut hat (`BUILD OK`) und das Binary (z. B. `programm.exe`) erzeugt wurde, weist die IDE das Modell an, die Aufgabe unverzüglich mit `done` zu beenden.
+- Unnötige Nachlauf-Schleifen (mehrfaches Lesen oder unabsichtliches Überschreiben) werden damit effektiv verhindert.
+
+### 5.10 Protokoll-Export & Zwischenablage
+- **`📋 Kopieren`**: Überträgt das gesamte Agenten-Protokoll in die Zwischenablage.
+- **`💾 Export`**: Speichert das Protokoll als `kr_agent_log.txt` direkt im Projektordner.
+
+---
+
+## 6. Windows Desktop Edition (`KR-Compiler-IDE.jar`)
+
+Mit Version 4.0.3 steht die vollständige Funktionalität der mobilen App auch als native Windows Desktop Edition zur Verfügung:
+
+### 6.1 Starten der Desktop IDE
+- Doppelklick auf `windows/Start-KR-IDE.bat` oder Direktausführung von `KR-Compiler-IDE.jar` (erfordert Java 17 oder neuer).
+- Für Konsolen-Ausgaben steht `windows/Start-KR-IDE-Console.bat` bereit.
+
+### 6.2 Bedienoberfläche & Arbeitsbereiche
+- **Projekt-Explorer (links)**: Zeigt die Projektstruktur an. Neue Dateien und Ordner können per Kontextmenü angelegt werden.
+- **Multi-Tab Code-Editor (Mitte)**: Unterstützt Syntax-Highlighting für KR, C++, Rust und Go, automatische Einrückung und Zeilennummern.
+- **Build-Konsole (unten)**: Echtzeit-Ausgabe des Compilers (`Clang`, `Cargo`, `Go`, `Linker`) mit farbiger Kennzeichnung.
+- **Artefakte-Panel (rechts)**: Zeigt erzeugte Binärdateien (`.exe`, `.apk`, `.elf`) an. Windows-Binärdateien können mit einem Klick direkt gestartet werden.
+- **AGENT-Button (oben rechts)**: Öffnet den integrierten KI-Programmierassistenten.
+
+### 6.3 Multi-Target Builds auf Windows
+Wähle in der Symbolleiste die Zielplattform:
+- **Windows x64 (.exe)**: Erzeugt eine native 64-Bit PE/COFF-Anwendung.
+- **Linux x64**: Erzeugt eine statisch gelinkte ELF-64-Binärdatei.
+- **Android ARM64 (.apk)**: Erzeugt direkt auf dem Windows-PC eine vollständige, signierte `programm-android-arm64.apk` inklusive aller Bibliotheken (`libuser.so`, `libSDL3.so`, `libc++_shared.so`).
