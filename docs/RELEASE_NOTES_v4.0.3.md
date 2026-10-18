@@ -122,6 +122,11 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 - **Idempotenz-Schutz beim Schreiben (`write`)**:
   - Übergibt ein Modell identischen Quellcode für eine bereits unveränderte Datei, wird der Schreibvorgang ohne Freigabedialog übersprungen und das Modell zur Beendigung angeleitet.
 
+- **Robuste CMake- & Toolchain-Isolation**:
+  - `CompilerEngine` filtert MSYS2/Cygwin POSIX-Emulationspfade (`\usr\bin`, `\msys64\bin`) bei der Executable-Suche (`cmake.exe`, `make.exe`, `ninja.exe`, `gcc.exe`) strikt heraus. Verhindert Pfadverfälschungen (z. B. `/f/Projekt/F:/Projekt`) unter Windows.
+  - Native Unterstützung für Windows CMake mit automatischer Konfiguration des Generators (`Ninja` / `MinGW Makefiles`), Compilers (`gcc`/`g++`) und Auffinden erzeugter Executables über `cmake_build`, `bin` und `KR_BUILD`.
+  - Ergänzung fehlender Windows-System-Importbibliotheken (`libwinspool.a`, `libcomdlg32.a`, `libcomctl32.a`, `libopengl32.a`, `libwinhttp.a`, etc.) in der Windows-Toolchain.
+
 ---
 
 ## Prüfsummen & Assets
@@ -132,7 +137,7 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
 
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar`
-  - **Größe**: `188.369 Bytes`
-  - **SHA-256**: `059b9a8550f6813654b60b6b8a41519f362b8952f7248c3179bb46841dcb2c1b`
+  - **Größe**: `189.537 Bytes`
+  - **SHA-256**: `bc8c6e156ed1b0c1bebb598d7c5197d5872796a2a8e4e9cdbce47b6e82f230fd`
   - **Plattform**: Windows 10 / 11 (Java 17+)
   - **Starter**: `windows/Start-KR-IDE.bat`
