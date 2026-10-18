@@ -3,12 +3,21 @@ package kr.compile.runner;
 import android.app.Activity;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.os.Build;
+import android.os.Environment;
+import android.content.ContentValues;
+import android.provider.MediaStore;
+import android.net.Uri;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.io.FileOutputStream;
@@ -64,11 +73,48 @@ public final class RunnerActivity extends Activity {
                 File project = RunnerFiles.prepareProjectFiles(this);
                 int code = execute(output.getPath(), library.getPath(), project.getPath());
                 String content = output.isFile() ? new String(Files.readAllBytes(output.toPath()), StandardCharsets.UTF_8) : "";
-                shown = content + "\n[Programm beendet: " + code + "]\n";
+                String exportResult = exportExecutionLog(new File(project, "cc_opencl_execution.log"));
+                shown = content + "\n[Programm beendet: " + code + "]\n" + exportResult + "\n";
             } catch (Throwable error) { shown = "Programmfehler: " + error + "\n"; }
             running.set(false);
             String result = shown; runOnUiThread(() -> text.setText(result));
         }, "kr-cpp-main").start();
+    }
+
+    /** Publishes a native execution log in public Downloads without broad storage permissions. */
+    private String exportExecutionLog(File source) {
+        if (!source.isFile() || source.length() == 0) return "[LOG] Kein natives Ausführungslog gefunden.";
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return "[LOG] Automatischer MediaStore-Export benötigt Android 10 oder neuer.";
+        }
+        String name = "cc_opencl_" + new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.ROOT)
+                .format(new Date()) + ".log";
+        Uri uri = null;
+        try {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+            values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/");
+            values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+            uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) throw new IOException("MediaStore insert lieferte keine URI");
+            try (InputStream in = new java.io.FileInputStream(source);
+                 OutputStream out = getContentResolver().openOutputStream(uri, "w")) {
+                if (out == null) throw new IOException("MediaStore-Ausgabestream nicht verfügbar");
+                byte[] buffer = new byte[16384];
+                int n;
+                while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+                out.flush();
+            }
+            ContentValues complete = new ContentValues();
+            complete.put(MediaStore.MediaColumns.IS_PENDING, 0);
+            if (getContentResolver().update(uri, complete, null, null) < 1)
+                throw new IOException("MediaStore-Datei konnte nicht freigegeben werden");
+            return "[LOG EXPORT OK] Download/" + name + " (" + source.length() + " Bytes)";
+        } catch (Exception error) {
+            if (uri != null) try { getContentResolver().delete(uri, null, null); } catch (Exception ignored) { }
+            return "[LOG EXPORT ERROR] " + error + " (internes Log bleibt erhalten: " + source.getPath() + ")";
+        }
     }
 
 }

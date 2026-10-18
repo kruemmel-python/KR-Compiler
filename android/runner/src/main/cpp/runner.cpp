@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 
 extern "C" JNIEXPORT jboolean JNICALL
@@ -40,6 +41,9 @@ Java_kr_compile_runner_RunnerActivity_execute(JNIEnv* env, jclass, jstring outpu
         close(saved_out); close(saved_error);
         return 123;
     }
+    // Route native diagnostics to an app-private writable file. Java exports via MediaStore.
+    const std::string log_path = working_path + "/cc_opencl_execution.log";
+    setenv("CC_OPENCL_LOG_PATH", log_path.c_str(), 1);
     using Main = int (*)(int, char**);
     void* user_library = dlopen(library_path.c_str(), RTLD_NOW | RTLD_LOCAL);
     auto main_function = user_library ? reinterpret_cast<Main>(dlsym(user_library, "main")) : nullptr;
