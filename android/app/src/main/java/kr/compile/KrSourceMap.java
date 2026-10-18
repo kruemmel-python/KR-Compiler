@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
@@ -179,30 +180,34 @@ public final class KrSourceMap {
      * Schreibt die SourceMap als JSON-Datei nach KR_BUILD/source_map.json
      */
     public void save(File jsonFile) throws IOException {
-        JSONObject root = new JSONObject();
-        root.put("version", "1.0");
-        JSONArray arr = new JSONArray();
-        for (SegmentMapping m : mappings) {
-            JSONObject obj = new JSONObject();
-            obj.put("generatedFile", m.generatedFile);
-            obj.put("originalFile", m.originalFile);
-            obj.put("generatedStartLine", m.generatedStartLine);
-            obj.put("generatedEndLine", m.generatedEndLine);
-            obj.put("originalStartLine", m.originalStartLine);
-            obj.put("originalEndLine", m.originalEndLine);
-            obj.put("language", m.language);
-            JSONArray fns = new JSONArray();
-            for (String f : m.functions) fns.put(f);
-            obj.put("functions", fns);
-            arr.put(obj);
-        }
-        root.put("mappings", arr);
+        try {
+            JSONObject root = new JSONObject();
+            root.put("version", "1.0");
+            JSONArray arr = new JSONArray();
+            for (SegmentMapping m : mappings) {
+                JSONObject obj = new JSONObject();
+                obj.put("generatedFile", m.generatedFile);
+                obj.put("originalFile", m.originalFile);
+                obj.put("generatedStartLine", m.generatedStartLine);
+                obj.put("generatedEndLine", m.generatedEndLine);
+                obj.put("originalStartLine", m.originalStartLine);
+                obj.put("originalEndLine", m.originalEndLine);
+                obj.put("language", m.language);
+                JSONArray fns = new JSONArray();
+                for (String f : m.functions) fns.put(f);
+                obj.put("functions", fns);
+                arr.put(obj);
+            }
+            root.put("mappings", arr);
 
-        if (jsonFile.getParentFile() != null && !jsonFile.getParentFile().exists()) {
-            jsonFile.getParentFile().mkdirs();
-        }
-        try (FileOutputStream out = new FileOutputStream(jsonFile)) {
-            out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));
+            if (jsonFile.getParentFile() != null && !jsonFile.getParentFile().exists()) {
+                jsonFile.getParentFile().mkdirs();
+            }
+            try (FileOutputStream out = new FileOutputStream(jsonFile)) {
+                out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));
+            }
+        } catch (JSONException e) {
+            throw new IOException("Fehler beim Erstellen der SourceMap-JSON: " + e.getMessage(), e);
         }
     }
 
@@ -212,7 +217,7 @@ public final class KrSourceMap {
     public static KrSourceMap load(File jsonFile) {
         if (jsonFile == null || !jsonFile.isFile()) return null;
         try {
-            String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
+            String content = new String(Files.readAllBytes(jsonFile.toPath()), StandardCharsets.UTF_8);
             JSONObject root = new JSONObject(content);
             JSONArray arr = root.optJSONArray("mappings");
             if (arr == null) return null;

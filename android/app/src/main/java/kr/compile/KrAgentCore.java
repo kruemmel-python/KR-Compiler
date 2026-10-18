@@ -312,6 +312,12 @@ public final class KrAgentCore {
                .append("Der aktuelle Auftrag ist eine reine Analyse-, Lese- oder Informationsabfrage!\n")
                .append("Führe KEINE Änderungen aus (weder 'write' noch 'replace') und führe KEINEN 'build' aus!\n")
                .append("Lies die relevanten Dateien mit 'read' und beende dann direkt mit 'done'. Erkläre deine Analyse im Feld 'message'.\n\n");
+        } else {
+            sys.append("ARBEITSABLAUF BEI FEHLERBEHEBUNG & ENTWICKLUNG:\n")
+               .append("1. Wenn Compilerfehler vorliegen: Baue zuerst mit 'build' oder lies 'KR_BUILD/build.log'.\n")
+               .append("2. Die Fehlerausgabe von 'build' zeigt dir automatisch die fehlerhafte Quelldatei (z. B. 'gui/window.kr'), die Zeilennummer und einen 'replace'-Vorschlag.\n")
+               .append("3. Korrigiere den Fehler sofort mit 'replace': Setze 'search' auf die fehlerhafte Zeile und 'replace' auf den korrigierten Code.\n")
+               .append("4. Baue erneut mit 'build'. Wenn der Build fehlerfrei ist ('BUILD OK'), beende SOFORT mit 'done'! Führe danach KEINE weiteren Lese- oder Schreibaktionen aus!\n\n");
         }
 
         sys.append("Begründe jede Aktion im Feld 'message' kurz und verständlich auf Deutsch.");
@@ -365,7 +371,7 @@ public final class KrAgentCore {
                             target = safeFile(workspace, path, false);
                         } catch (Exception ignored) {}
 
-                        if (target == null || !target.isFile() || effectivePath.contains("KR_BUILD") || effectivePath.endsWith(".rs") || effectivePath.endsWith(".go")) {
+                        if (target == null || !target.isFile() || effectivePath.contains("KR_BUILD") || isGeneratedArtifactPath(workspace, effectivePath)) {
                             String resolved = findSourceForGeneratedFile(workspace, path, null);
                             if (resolved != null && !resolved.equalsIgnoreCase(path)) {
                                 File candidate = new File(workspace, resolved);
@@ -373,6 +379,14 @@ public final class KrAgentCore {
                                     target = candidate;
                                     effectivePath = resolved;
                                 }
+                            }
+                        }
+
+                        if (target == null || !target.isFile()) {
+                            File found = findFileInProject(workspace, path);
+                            if (found != null && found.isFile()) {
+                                target = found;
+                                effectivePath = workspace.toPath().relativize(found.toPath()).toString().replace('\\', '/');
                             }
                         }
 
@@ -424,6 +438,16 @@ public final class KrAgentCore {
                         }
                         if (target.exists() && target.length() > 1024 * 1024) {
                             throw new IOException("Datei zu groß (> 1 MiB): " + path);
+                        }
+                        if (target.exists() && target.isFile()) {
+                            try {
+                                String currentContent = new String(Files.readAllBytes(target.toPath()), StandardCharsets.UTF_8);
+                                if (currentContent.equals(content)) {
+                                    output = "Datei '" + path + "' hat bereits genau diesen Inhalt (keine Änderungen nötig). Wenn der Build fehlerfrei war ('BUILD OK'), beende JETZT mit 'done'!";
+                                    emit("ℹ️ Datei '" + path + "' unverändert (bereits aktuell).");
+                                    break;
+                                }
+                            } catch (Exception ignored) {}
                         }
                         String diffPreview = "Datei: " + path + "\n\n" + preview(content);
                         boolean ok = requireApproval("Datei ändern: " + path, diffPreview);
@@ -488,8 +512,14 @@ public final class KrAgentCore {
 
             emit("📄 Ergebnis: " + (output.length() > 1500 ? output.substring(0, 1500) + " … [gekürzt]" : output));
             history.put(new JSONObject().put("role", "assistant").put("content", action.toString()));
+            String nextInstruction;
+            if (output.startsWith("BUILD OK")) {
+                nextInstruction = "🎉 Der Build war vollständig erfolgreich ('BUILD OK')! Das Ziel ist erreicht. Beende den Auftrag JETZT sofort mit der Aktion 'done' und fasse das Ergebnis im Feld 'message' zusammen:\n{\"action\": \"done\", \"message\": \"...\"}";
+            } else {
+                nextInstruction = "Fahre mit der nächsten logischen Aktion fort.";
+            }
             history.put(new JSONObject().put("role", "user").put("content",
-                    "Werkzeugergebnis:\n" + truncate(output, 5000) + "\n\nFahre mit der nächsten logischen Aktion fort."));
+                    "Werkzeugergebnis:\n" + truncate(output, 5000) + "\n\n" + nextInstruction));
         }
 
         emit("⚠️ Maximale Schrittzahl (" + budget + ") erreicht oder abgebrochen.");
@@ -503,7 +533,9 @@ public final class KrAgentCore {
             if (msg != null && "user".equals(msg.optString("role"))) {
                 String c = msg.optString("content", "");
                 if (c.startsWith("Werkzeugergebnis:\n") && c.length() > 1000) {
-                    msg.put("content", c.substring(0, 1000) + "\n[…älteres Ergebnis für Kontext gekürzt…]");
+                    try {
+                        msg.put("content", c.substring(0, 1000) + "\n[…älteres Ergebnis für Kontext gekürzt…]");
+                    } catch (JSONException ignored) {}
                 }
             }
         }
@@ -792,8 +824,74 @@ public final class KrAgentCore {
         return false;
     }
 
+    private static void collectProjectFiles(File dir, List<File> result) {
+        if (dir == null || !dir.isDirectory()) return;
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            String name = f.getName();
+            if (name.startsWith(".") || name.equals("KR_BUILD")) continue;
+            if (f.isDirectory()) {
+                collectProjectFiles(f, result);
+            } else if (f.isFile()) {
+                result.add(f);
+            }
+        }
+    }
+
+    private static File findFileInProject(File root, String requestedPath) {
+        if (root == null || requestedPath == null || requestedPath.isBlank()) return null;
+        String clean = requestedPath.trim().replace('\\', '/');
+        while (clean.startsWith("/")) clean = clean.substring(1);
+        while (clean.startsWith("./")) clean = clean.substring(2);
+        String targetName = new File(clean).getName();
+        if (targetName.isEmpty() || targetName.equals(".") || targetName.equals("..")) return null;
+
+        List<File> candidates = new ArrayList<>();
+        collectProjectFiles(root, candidates);
+
+        for (File f : candidates) {
+            if (f.getName().equalsIgnoreCase(targetName)) {
+                return f;
+            }
+        }
+        if (!targetName.contains(".")) {
+            String withKr = targetName + ".kr";
+            for (File f : candidates) {
+                if (f.getName().equalsIgnoreCase(withKr)) {
+                    return f;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean isGeneratedArtifactPath(File root, String path) {
+        if (path == null || path.isBlank()) return false;
+        String norm = path.trim().replace('\\', '/').toLowerCase(Locale.ROOT);
+        while (norm.startsWith("/")) norm = norm.substring(1);
+        while (norm.startsWith("./")) norm = norm.substring(2);
+
+        // Ordner oder direkte .kr Dateien sind niemals generierte Build-Artefakte
+        if (norm.endsWith(".kr")) return false;
+
+        // Echte Build-Artefakt-Muster
+        if (norm.startsWith("kr_build/") || norm.equals("kr_build")) return true;
+        if (norm.contains("rust_module") || norm.endsWith(".rs")) return true;
+        if (norm.contains("go_module") || norm.endsWith(".go")) return true;
+        if (norm.startsWith("modules/") || norm.contains("/modules/")) return true;
+
+        if (root != null) {
+            KrSourceMap sm = KrSourceMap.loadFromProject(root);
+            if (sm != null && sm.resolveOriginalFile(path, null) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static String findSourceForGeneratedFile(File root, String path, String functionHint) {
-        if (root == null || path == null) return "main.kr";
+        if (root == null || path == null) return null;
 
         // 1. Prüfe KrSourceMap (KR_BUILD/source_map.json)
         KrSourceMap sourceMap = KrSourceMap.loadFromProject(root);
@@ -811,7 +909,7 @@ public final class KrAgentCore {
             if (functionHint != null && !functionHint.isBlank()) {
                 for (File k : krFiles) {
                     try {
-                        String content = Files.readString(k.toPath(), StandardCharsets.UTF_8);
+                        String content = new String(Files.readAllBytes(k.toPath()), StandardCharsets.UTF_8);
                         if (content.contains("fn " + functionHint)) {
                             return root.toPath().relativize(k.toPath()).toString().replace('\\', '/');
                         }
@@ -820,7 +918,7 @@ public final class KrAgentCore {
             }
             for (File k : krFiles) {
                 try {
-                    String content = Files.readString(k.toPath(), StandardCharsets.UTF_8);
+                    String content = new String(Files.readAllBytes(k.toPath()), StandardCharsets.UTF_8);
                     if (content.contains("pub fn ") || content.contains("extern \"C\" fn")) {
                         return root.toPath().relativize(k.toPath()).toString().replace('\\', '/');
                     }
@@ -834,7 +932,7 @@ public final class KrAgentCore {
             if (functionHint != null && !functionHint.isBlank()) {
                 for (File k : krFiles) {
                     try {
-                        String content = Files.readString(k.toPath(), StandardCharsets.UTF_8);
+                        String content = new String(Files.readAllBytes(k.toPath()), StandardCharsets.UTF_8);
                         if (content.contains("func " + functionHint)) {
                             return root.toPath().relativize(k.toPath()).toString().replace('\\', '/');
                         }
@@ -843,7 +941,7 @@ public final class KrAgentCore {
             }
             for (File k : krFiles) {
                 try {
-                    String content = Files.readString(k.toPath(), StandardCharsets.UTF_8);
+                    String content = new String(Files.readAllBytes(k.toPath()), StandardCharsets.UTF_8);
                     if (content.contains("func ") && !content.contains("#include")) {
                         return root.toPath().relativize(k.toPath()).toString().replace('\\', '/');
                     }
@@ -853,7 +951,13 @@ public final class KrAgentCore {
 
         // 4. Modul- und Namensbasierte Auflösung (z. B. modules/gui_window.cpp -> gui/window.kr)
         String filename = new File(path).getName();
-        String base = filename.replace(".cpp", "").replace(".c", "").replace("_kr", "");
+        String base = filename;
+        for (String ext : List.of(".cpp", ".c", ".h", ".rs", ".go", ".kr", ".o", ".obj")) {
+            if (base.toLowerCase(Locale.ROOT).endsWith(ext)) {
+                base = base.substring(0, base.length() - ext.length());
+            }
+        }
+        base = base.replace("_kr", "");
         File direct = new File(root, base + ".kr");
         if (direct.isFile()) return base + ".kr";
         if (base.contains("_")) {
@@ -868,7 +972,7 @@ public final class KrAgentCore {
                 return root.toPath().relativize(k.toPath()).toString().replace('\\', '/');
             }
         }
-        return "main.kr";
+        return null;
     }
 
     private static String findSourceForGeneratedFile(File root, String path) {
@@ -889,7 +993,8 @@ public final class KrAgentCore {
         if (clean.startsWith("KR_BUILD/") || clean.equals("KR_BUILD")) {
             if (isWrite) {
                 String src = findSourceForGeneratedFile(root, clean);
-                throw new IOException("'" + clean + "' ist ein generiertes Build-Artefakt und wird beim Build überschrieben. Bitte bearbeite stattdessen die Quelldatei im Projektordner: '" + src + "'!");
+                throw new IOException("'" + clean + "' ist ein generiertes Build-Artefakt und wird beim Build überschrieben." +
+                        (src != null ? " Bitte bearbeite stattdessen die Quelldatei im Projektordner: '" + src + "'!" : " Bitte bearbeite die Original-Quelldatei!"));
             }
             File bTarget = new File(root, clean).getCanonicalFile();
             if (bTarget.toPath().startsWith(root.toPath())) {
@@ -975,16 +1080,46 @@ public final class KrAgentCore {
             file = safeFile(root, cleanPath, false);
         } catch (Exception ignored) {}
 
-        if (file == null || !file.isFile()) {
-            String resolved = findSourceForGeneratedFile(root, cleanPath, null);
-            if (resolved != null && !resolved.equalsIgnoreCase(cleanPath)) {
-                File candidate = new File(root, resolved);
-                if (candidate.isFile()) {
-                    file = candidate;
-                    effectivePath = resolved;
-                    redirectionNotice = "ℹ️ HINWEIS: '" + cleanPath + "' ist ein vom KR-Compiler generiertes Build-Artefakt.\n"
-                            + "👉 Die Original-Quelldatei im Projekt ist: '" + resolved + "'.\n"
-                            + "Hier ist der Inhalt von '" + resolved + "' (Änderungen bitte per 'replace' direkt auf '" + resolved + "' anwenden!):\n\n";
+        // Ordner-Prüfung ZUERST: Verhindert, dass Ordner wie "gui" als Artefakte fehlinterpretiert werden!
+        if (file != null && file.isDirectory()) {
+            return "Hinweis: '" + cleanPath + "' ist ein Ordner, keine Datei. Verwende 'list', um Ordnerinhalte aufzulisten, oder lies eine konkrete Datei im Ordner.\nInhalt von " + cleanPath + ":\n" + listFiles(root, cleanPath);
+        }
+
+        // Wenn Datei direkt existiert
+        if (file != null && file.isFile()) {
+            // Wenn die Datei direkt in KR_BUILD liegt, Quell-.kr-Datei zuordnen
+            if (cleanPath.startsWith("KR_BUILD/") || cleanPath.contains("KR_BUILD")) {
+                String resolved = findSourceForGeneratedFile(root, cleanPath, null);
+                if (resolved != null && !resolved.equalsIgnoreCase(cleanPath)) {
+                    File candidate = new File(root, resolved);
+                    if (candidate.isFile()) {
+                        file = candidate;
+                        effectivePath = resolved;
+                        redirectionNotice = "ℹ️ HINWEIS: '" + cleanPath + "' ist ein vom KR-Compiler generiertes Build-Artefakt.\n"
+                                + "👉 Die Original-Quelldatei im Projekt ist: '" + resolved + "'.\n"
+                                + "Hier ist der Inhalt von '" + resolved + "' (Änderungen bitte per 'replace' direkt auf '" + resolved + "' anwenden!):\n\n";
+                    }
+                }
+            }
+        } else {
+            // Datei existiert nicht direkt am angegebenen Pfad
+            // 1. Suche nach Datei im Projektbaum (z. B. "lifecycle.kr" -> "app/lifecycle.kr")
+            File foundInProject = findFileInProject(root, cleanPath);
+            if (foundInProject != null && foundInProject.isFile()) {
+                file = foundInProject;
+                effectivePath = root.toPath().relativize(foundInProject.toPath()).toString().replace('\\', '/');
+            } else if (isGeneratedArtifactPath(root, cleanPath)) {
+                // 2. Nur wenn es ein echtes Build-Artefakt ist (z. B. "src/lib.rs", "main.go", "modules/gui.cpp"), umleiten
+                String resolved = findSourceForGeneratedFile(root, cleanPath, null);
+                if (resolved != null && !resolved.equalsIgnoreCase(cleanPath)) {
+                    File candidate = new File(root, resolved);
+                    if (candidate.isFile()) {
+                        file = candidate;
+                        effectivePath = resolved;
+                        redirectionNotice = "ℹ️ HINWEIS: '" + cleanPath + "' ist ein vom KR-Compiler generiertes Build-Artefakt.\n"
+                                + "👉 Die Original-Quelldatei im Projekt ist: '" + resolved + "'.\n"
+                                + "Hier ist der Inhalt von '" + resolved + "' (Änderungen bitte per 'replace' direkt auf '" + resolved + "' anwenden!):\n\n";
+                    }
                 }
             }
         }
