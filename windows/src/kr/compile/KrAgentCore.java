@@ -303,7 +303,7 @@ public final class KrAgentCore {
                             break;
                         }
                         String content = action.optString("content", "");
-                        File target = safeFile(workspace, path);
+                        File target = safeFile(workspace, path, true);
                         if (target.isDirectory()) {
                             throw new IOException("Zielpfad ist ein Verzeichnis: " + path + ". Bitte konkrete Datei angeben.");
                         }
@@ -424,6 +424,73 @@ public final class KrAgentCore {
         }
     }
 
+    private static String sanitizeJsonStrings(String json) {
+        StringBuilder sb = new StringBuilder(json.length() + 64);
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (escaped) {
+                sb.append(c);
+                escaped = false;
+                continue;
+            }
+            if (c == '\\') {
+                sb.append(c);
+                escaped = true;
+                continue;
+            }
+            if (c == '"') {
+                inString = !inString;
+                sb.append(c);
+                continue;
+            }
+            if (inString) {
+                if (c == '\n') {
+                    sb.append("\\n");
+                } else if (c == '\r') {
+                    // skip CR
+                } else if (c == '\t') {
+                    sb.append("\\t");
+                } else {
+                    sb.append(c);
+                }
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String extractRegex(String src, String regex) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(regex).matcher(src);
+        return m.find() ? m.group(1) : null;
+    }
+
+    private static String extractContentField(String text) {
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("\"content\"\\s*:\\s*\"");
+        java.util.regex.Matcher m = p.matcher(text);
+        if (!m.find()) return "";
+        int start = m.end();
+        int end = -1;
+        int msgIdx = text.indexOf("\"message\"", start);
+        if (msgIdx > 0) {
+            int lastQuote = text.lastIndexOf('"', msgIdx - 1);
+            if (lastQuote > start) end = lastQuote;
+        }
+        if (end <= start) {
+            int lastBrace = text.lastIndexOf('}');
+            if (lastBrace > start) {
+                int lastQuote = text.lastIndexOf('"', lastBrace);
+                if (lastQuote > start) end = lastQuote;
+            }
+        }
+        if (end > start) {
+            return text.substring(start, end).replace("\\n", "\n").replace("\\\"", "\"").replace("\\\\", "\\");
+        }
+        return "";
+    }
+
     private static JSONObject parseActionJson(String raw) throws JSONException {
         if (raw == null || raw.isBlank()) {
             throw new JSONException("Leere Antwort vom Modell erhalten.");
@@ -446,27 +513,44 @@ public final class KrAgentCore {
             }
         }
 
-        // 3. Finde das äußerste JSON-Objekt { ... }
-        int start = text.indexOf('{');
-        int end = text.lastIndexOf('}');
+        // 3. Bereinige unescapte Zeilenumbrüche in String-Literalen
+        String sanitized = sanitizeJsonStrings(text);
+
+        // 4. Finde das äußerste JSON-Objekt { ... }
+        int start = sanitized.indexOf('{');
+        int end = sanitized.lastIndexOf('}');
         if (start >= 0 && end > start) {
-            String jsonPart = text.substring(start, end + 1).trim();
+            String jsonPart = sanitized.substring(start, end + 1).trim();
             try {
                 return new JSONObject(jsonPart);
             } catch (JSONException ignored) {}
         }
 
-        // 4. Direkter Versuch
+        // 5. Direkter Versuch
         try {
-            return new JSONObject(text);
-        } catch (JSONException e) {
-            // 5. Fallback bei freier Textantwort: Behandle als 'done' mit Antworttext
-            JSONObject fallback = new JSONObject();
-            fallback.put("action", "done");
-            fallback.put("path", "");
-            fallback.put("message", text);
-            return fallback;
+            return new JSONObject(sanitized);
+        } catch (JSONException ignored) {}
+
+        // 6. Regex-Extraktion falls JSON syntaktisch unvollständig ist
+        String actionVal = extractRegex(text, "\"action\"\\s*:\\s*\"([a-zA-Z]+)\"");
+        if (actionVal != null && !actionVal.isBlank()) {
+            JSONObject recovered = new JSONObject();
+            recovered.put("action", actionVal.trim().toLowerCase(Locale.ROOT));
+            String pathVal = extractRegex(text, "\"path\"\\s*:\\s*\"([^\"]+)\"");
+            recovered.put("path", pathVal != null ? pathVal.trim() : "");
+            String msgVal = extractRegex(text, "\"message\"\\s*:\\s*\"([^\"]+)\"");
+            recovered.put("message", msgVal != null ? msgVal.trim() : "");
+            String contentVal = extractContentField(text);
+            recovered.put("content", contentVal != null ? contentVal : "");
+            return recovered;
         }
+
+        // 7. Fallback bei freier Textantwort: Behandle als 'done' mit Antworttext
+        JSONObject fallback = new JSONObject();
+        fallback.put("action", "done");
+        fallback.put("path", "");
+        fallback.put("message", text);
+        return fallback;
     }
 
     private static String truncate(String s, int max) {
@@ -504,7 +588,27 @@ public final class KrAgentCore {
         return false;
     }
 
-    private static File safeFile(File root, String relative) throws IOException {
+    private static String findSourceForGeneratedFile(File root, String path) {
+        String filename = new File(path).getName();
+        String base = filename.replace(".cpp", "").replace(".c", "").replace("_kr", "");
+        File direct = new File(root, base + ".kr");
+        if (direct.isFile()) return base + ".kr";
+        if (base.contains("_")) {
+            String[] parts = base.split("_", 2);
+            File sub = new File(new File(root, parts[0]), parts[1] + ".kr");
+            if (sub.isFile()) return parts[0] + "/" + parts[1] + ".kr";
+        }
+        List<File> krFiles = KrPipeline.findKrFiles(root);
+        for (File k : krFiles) {
+            String kn = k.getName().replace(".kr", "");
+            if (kn.equalsIgnoreCase(base) || base.endsWith(kn)) {
+                return root.toPath().relativize(k.toPath()).toString().replace('\\', '/');
+            }
+        }
+        return "main.kr";
+    }
+
+    private static File safeFile(File root, String relative, boolean isWrite) throws IOException {
         if (relative == null || relative.isBlank()) {
             return root.getCanonicalFile();
         }
@@ -514,12 +618,24 @@ public final class KrAgentCore {
         if (clean.isEmpty() || clean.equals(".")) {
             return root.getCanonicalFile();
         }
+
+        if (clean.startsWith("KR_BUILD/") || clean.equals("KR_BUILD")) {
+            if (isWrite) {
+                String src = findSourceForGeneratedFile(root, clean);
+                throw new IOException("'" + clean + "' ist ein generiertes Build-Artefakt und wird beim Build überschrieben. Bitte bearbeite stattdessen die Quelldatei im Projektordner: '" + src + "'!");
+            }
+            File bTarget = new File(root, clean).getCanonicalFile();
+            if (bTarget.toPath().startsWith(root.toPath())) {
+                return bTarget;
+            }
+        }
+
         File target = new File(root, clean).getCanonicalFile();
         if (!target.toPath().startsWith(root.toPath())) {
             throw new IOException("Pfad außerhalb des Projekts: " + relative);
         }
         for (String segment : clean.split("/")) {
-            if (Set.of(".git", "KR_BUILD", ".kragent", "..").contains(segment)) {
+            if (Set.of(".git", ".kragent", "..").contains(segment)) {
                 throw new IOException("Geschützter Pfad: " + segment);
             }
         }
@@ -527,7 +643,7 @@ public final class KrAgentCore {
     }
 
     private String listFiles(File root, String relative) throws IOException {
-        File dir = (relative == null || relative.isBlank() || relative.equals(".") || relative.equals("./")) ? root : safeFile(root, relative);
+        File dir = (relative == null || relative.isBlank() || relative.equals(".") || relative.equals("./")) ? root : safeFile(root, relative, false);
         if (!dir.isDirectory()) return "Kein Ordner: " + relative;
         File[] files = dir.listFiles();
         if (files == null) return "Ordner nicht lesbar";
@@ -549,12 +665,12 @@ public final class KrAgentCore {
         if (relative == null || relative.isBlank() || relative.equals(".") || relative.equals("./")) {
             return "Hinweis: '" + relative + "' ist das Projektverzeichnis. Bitte gib einen Dateinamen an (z. B. 'main.kr', 'nexus.krproject' oder 'README.md').\nDateien im Projekt:\n" + listFiles(root, "");
         }
-        File file = safeFile(root, relative);
+        File file = safeFile(root, relative, false);
         if (file.isDirectory()) {
             return "Hinweis: '" + relative + "' ist ein Ordner, keine Datei. Verwende 'list', um Ordnerinhalte aufzulisten, oder lies eine konkrete Datei im Ordner.\nInhalt von " + relative + ":\n" + listFiles(root, relative);
         }
-        if (!file.isFile() || file.length() > 256 * 1024) {
-            throw new IOException("Nur Textdateien bis 256 KiB lesbar: " + relative);
+        if (!file.isFile() || file.length() > 512 * 1024) {
+            throw new IOException("Nur Textdateien bis 512 KiB lesbar: " + relative);
         }
         if (ProjectManager.isBinaryFile(file.getName())) {
             throw new IOException("Binärdatei nicht erlaubt: " + relative);
@@ -614,9 +730,15 @@ public final class KrAgentCore {
 
             boolean ok = success.get();
             emit(ok ? "✅ Build erfolgreich abgeschlossen." : "❌ Build mit Fehlern beendet.");
-            return (ok ? "BUILD OK\n" : "BUILD FEHLER\n") +
+            String buildResult = (ok ? "BUILD OK\n" : "BUILD FEHLER\n") +
                     truncate(summary[0] == null ? "" : summary[0], 3000) + "\n" +
                     truncate(manager.getFullLog(), 9000);
+            if (!ok) {
+                buildResult += "\n\nHINWEIS ZUR FEHLERBEHEBUNG:\n" +
+                        "Dateien unter 'KR_BUILD/modules/...' werden vom KR-Compiler aus den '.kr'-Quelldateien im Projekt generiert.\n" +
+                        "Um Compilerfehler zu beheben, bearbeite bitte direkt die entsprechende Quelldatei im Projekt (z. B. 'gui/window.kr' statt 'KR_BUILD/modules/gui_window.cpp')!";
+            }
+            return buildResult;
         } finally {
             manager.removeListener(listener);
         }
