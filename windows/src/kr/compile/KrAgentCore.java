@@ -228,34 +228,51 @@ public final class KrAgentCore {
         emit("📋 Projektstruktur:\n" + fileListing);
 
         // 2. Chat-Verlauf aufbauen
+        boolean isReadOnly = isReadOnlyTask(task);
+
         JSONArray history = new JSONArray();
         JSONObject initial = new JSONObject();
         initial.put("role", "system");
-        initial.put("content",
-                "Du bist der autonome Programmieragent der KR Compiler Windows IDE. Du entwickelst und debuggst Projekte in der KR Unified Language (.kr), C++20, Rust und Go.\n\n" +
-                "KOMMUNIKATIONSREGELN:\n" +
-                "1. Antworte AUSSCHLIESSLICH als gültiges JSON-Objekt mit genau diesen Schlüsseln: {\"action\": \"...\", \"path\": \"...\", \"content\": \"...\", \"message\": \"...\"}\n" +
-                "   action MUSS eines der folgenden Schlüsselwörter sein: list, read, write, build, done.\n" +
-                "2. WERKZEUG-REGELN:\n" +
-                "   - 'list': Listet Verzeichnisse auf (z. B. path=\"\" für das Hauptverzeichnis, path=\"app\" für Unterordner).\n" +
-                "   - 'read': Liest den Inhalt einer Textdatei (z. B. path=\"main.kr\", path=\"nexus.krproject\", path=\"README.md\"). Verwende 'read' NUR für Dateien, NIEMALS für Ordner oder '.'!\n" +
-                "   - 'write': Ersetzt den Inhalt einer Zieldatei (benötigt 'path' und 'content').\n" +
-                "   - 'build': Führt den Compilerlauf für die aktive Zielplattform aus.\n" +
-                "   - 'done': Beendet den Auftrag erfolgreich (Abschlussbericht in 'message').\n" +
-                "3. ARBEITSABLAUF:\n" +
-                "   - Lies IMMER zuerst die relevanten Projektdateien (z. B. 'nexus.krproject', 'main.kr') mit 'read'.\n" +
-                "   - Nimm die gewünschten Codeanpassungen mit 'write' vor.\n" +
-                "   - Baue erst mit 'build', wenn du den Code angepasst hast oder einen gemeldeten Compilerfehler reproduzieren willst.\n" +
-                "   - Analysiere Compilerfehler nach dem Build und behebe sie mit 'write'.\n" +
-                "   - Wenn alle Ziele erreicht sind, beende mit 'done'.\n" +
-                "4. Begründe jede Aktion im Feld 'message' kurz und verständlich auf Deutsch.");
+
+        StringBuilder sys = new StringBuilder();
+        sys.append("Du bist der autonome Programmieragent der KR Compiler Windows IDE. Du entwickelst und analysierst Projekte in der KR Unified Language (.kr), C++20, Rust und Go.\n\n")
+           .append("KOMMUNIKATIONSREGELN:\n")
+           .append("1. Antworte AUSSCHLIESSLICH als gültiges JSON-Objekt mit genau diesen Schlüsseln: {\"action\": \"...\", \"path\": \"...\", \"content\": \"...\", \"message\": \"...\"}\n")
+           .append("   action MUSS eines der folgenden Schlüsselwörter sein: list, read, write, build, done.\n")
+           .append("2. WERKZEUG-REGELN:\n")
+           .append("   - 'list': Listet Verzeichnisse auf (z. B. path=\"\" für das Hauptverzeichnis, path=\"app\" für Unterordner).\n")
+           .append("   - 'read': Liest den Inhalt einer Textdatei (z. B. path=\"nexus.krproject\", path=\"main.kr\", path=\"README.md\"). Verwende 'read' NUR für Dateien, NIEMALS für Ordner oder '.'!\n")
+           .append("   - 'write': Ersetzt den Inhalt einer Zieldatei (benötigt 'path' und 'content').\n")
+           .append("   - 'build': Führt den Compilerlauf für die aktive Zielplattform aus.\n")
+           .append("   - 'done': Beendet den Auftrag erfolgreich (Abschlussbericht im Feld 'message').\n\n");
+
+        if (isReadOnly) {
+            sys.append("WICHTIGE REGEL FÜR DIESEN AUFTRAG (REINE ANALYSE):\n")
+               .append("• Der Benutzer möchte NUR eine Analyse oder Erklärung des Projekts ('").append(task).append("').\n")
+               .append("• Führe KEINEN Build ('build') und KEINE Dateiänderungen ('write') aus!\n")
+               .append("• Lies die relevanten Dateien mit 'read' und 'list'.\n")
+               .append("• Sobald du die Struktur und den Code verstanden hast, beende direkt mit 'done' und präsentiere deine vollständige, strukturierte Analyse im Feld 'message'!\n\n");
+        } else {
+            sys.append("ARBEITSABLAUF:\n")
+               .append("• Lies IMMER zuerst die relevanten Projektdateien (z. B. 'nexus.krproject', 'main.kr') mit 'read'.\n")
+               .append("• Nimm die gewünschten Codeanpassungen mit 'write' vor.\n")
+               .append("• Baue mit 'build', wenn du den Code angepasst hast oder Fehler testen willst.\n")
+               .append("• Analysiere Compilerfehler nach dem Build und behebe sie mit 'write'.\n")
+               .append("• Wenn alle Ziele erreicht sind, beende mit 'done'.\n\n");
+        }
+        sys.append("Begründe jede Aktion im Feld 'message' kurz und verständlich auf Deutsch.");
+        initial.put("content", sys.toString());
         history.put(initial);
 
-        String initialPrompt = "AUFTRAG:\n" + task + "\n\n" +
-                "PROJEKT: " + projectName + "\n" +
-                "DATEIEN IM PROJEKT:\n" + fileListing + "\n\n" +
-                "Bitte starte deine Analyse, indem du eine der relevanten Dateien mit 'read' liest (z. B. path=\"main.kr\" oder path=\"nexus.krproject\").";
-        history.put(new JSONObject().put("role", "user").put("content", initialPrompt));
+        StringBuilder promptBuilder = new StringBuilder();
+        promptBuilder.append("AUFTRAG:\n").append(task).append("\n\n");
+        promptBuilder.append("PROJEKT: ").append(projectName).append("\n");
+        promptBuilder.append("DATEIEN IM PROJEKT:\n").append(fileListing).append("\n\n");
+        if (isReadOnly) {
+            promptBuilder.append("HINWEIS: Dies ist ein reiner Analyseauftrag. Lies die wichtigsten Projektdateien (z. B. 'nexus.krproject', 'main.kr', 'README.md') mit 'read'. Starte KEINEN Build ('build') und ändere keine Dateien! Fasse nach der Analyse alles mit 'done' im Feld 'message' zusammen.\n\n");
+        }
+        promptBuilder.append("Bitte starte deine Analyse mit 'read' (z. B. path=\"nexus.krproject\" oder path=\"main.kr\").");
+        history.put(new JSONObject().put("role", "user").put("content", promptBuilder.toString()));
 
         int budget = Math.min(40, Math.max(1, settings.maxSteps()));
 
@@ -280,6 +297,11 @@ public final class KrAgentCore {
                     case "list" -> output = listFiles(workspace, path);
                     case "read" -> output = read(workspace, path);
                     case "write" -> {
+                        if (isReadOnly) {
+                            output = "Hinweis: Der Benutzer hat keine Dateiänderung angefordert (Auftrag: '" + task + "'). Bitte ändere keine Dateien, sondern analysiere die vorhandenen Dateien und beende mit 'done'.";
+                            emit("ℹ️ Dateiänderung übersprungen (reiner Analyseauftrag).");
+                            break;
+                        }
                         String content = action.optString("content", "");
                         File target = safeFile(workspace, path);
                         if (target.isDirectory()) {
@@ -306,11 +328,16 @@ public final class KrAgentCore {
                         }
                     }
                     case "build" -> {
+                        if (isReadOnly) {
+                            output = "Hinweis: Der Benutzer hat keinen Build angefordert (Auftrag: '" + task + "'). Bitte führe keinen Build aus! Wenn du genügend Dateien gelesen hast, beende mit 'done' und gib deine Analyse im Feld 'message' aus.";
+                            emit("ℹ️ Build übersprungen (reiner Analyseauftrag).");
+                            break;
+                        }
                         CompilerEngine.Target target = BuildManager.getInstance().getCurrentTarget();
                         boolean ok = requireApproval("Projekt kompilieren",
                                 "Zielplattform: " + target + "\nProjekt: " + projectName + "\n\nSoll der Compilerlauf jetzt gestartet werden?");
                         if (!ok) {
-                            output = "Kompilierung wurde vom Benutzer abgelehnt.";
+                            output = "Kompilierung wurde vom Benutzer abgelehnt. Bitte fahre ohne Build mit 'done' fort und erkläre deine Analyse.";
                             emit("❌ Build abgelehnt.");
                         } else {
                             output = build(workspace, target);
@@ -593,5 +620,24 @@ public final class KrAgentCore {
         } finally {
             manager.removeListener(listener);
         }
+    }
+
+    private static boolean isReadOnlyTask(String task) {
+        if (task == null || task.isBlank()) return false;
+        String lower = task.toLowerCase(Locale.ROOT);
+        // Wenn der Nutzer explizit bauen, reparieren oder modifizieren will:
+        if (lower.contains("kompilier") || lower.contains("compile") || lower.contains("build") ||
+                lower.contains("beheb") || lower.contains("fix") || lower.contains("reparier") ||
+                lower.contains("änder") || lower.contains("modifizier") || lower.contains("schreib") ||
+                lower.contains("erstell") || lower.contains("neu") || lower.contains("implementier") ||
+                lower.contains("hinzufüg")) {
+            return false;
+        }
+        // Schlüsselwörter für reine Analyse / Fragen / Lese-Aufträge:
+        return lower.contains("analys") || lower.contains("erklär") || lower.contains("untersuch") ||
+                lower.contains("prüf") || lower.contains("zeig") || lower.contains("was macht") ||
+                lower.contains("wie funktioniert") || lower.contains("beschreib") || lower.contains("review") ||
+                lower.contains("überblick") || lower.contains("struktur") || lower.contains("info") ||
+                lower.contains("zusammenfass") || lower.contains("welche") || lower.contains("lies");
     }
 }
