@@ -125,7 +125,10 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
 - **Robuste CMake- & Toolchain-Isolation**:
   - `CompilerEngine` filtert MSYS2/Cygwin POSIX-Emulationspfade (`\usr\bin`, `\msys64\bin`) bei der Executable-Suche (`cmake.exe`, `make.exe`, `ninja.exe`, `gcc.exe`) strikt heraus. Verhindert Pfadverfälschungen (z. B. `/f/Projekt/F:/Projekt`) unter Windows.
   - Native Unterstützung für Windows CMake mit automatischer Konfiguration des Generators (`Ninja` / `MinGW Makefiles`), Compilers (`gcc`/`g++`) und Auffinden erzeugter Executables über `cmake_build`, `bin` und `KR_BUILD`.
-  - Ergänzung fehlender Windows-System-Importbibliotheken (`libwinspool.a`, `libcomdlg32.a`, `libcomctl32.a`, `libopengl32.a`, `libwinhttp.a`, etc.) in der Windows-Toolchain.
+- **Strikte Zielplattform-Durchsetzung & APK-Erzeugung**:
+  - Wenn als Zielplattform `Android ARM64 (.apk)` gewählt ist, erzeugen sämtliche Build-Typen (KR Unified, CMake, Makefile, Rust, Go) ausnahmslos die signierte `programm-android-arm64.apk` – es wird unter Android niemals eine `.exe` erzeugt oder zurückgegeben.
+  - Zielspezifische CMake-Arbeitsverzeichnisse (`cmake_build_android`, `cmake_build_windows`, `cmake_build_linux`) verhindern Cache-Kontaminationen beim Umschalten der Zielplattform.
+  - Automatischer NDK-Fallback bei CMake-Projekten: Kann CMake eine projekteigene Windows-Bibliothek nicht für Android binden, kompiliert der direkte NDK-Clang-Lauf die Quellen nahtlos als `libuser.so` in die fertige APK.
 
 ---
 
@@ -137,7 +140,7 @@ Zudem wurden die Versionsanzeige und der Infobereich vereinheitlicht und moderni
   - **Signatur**: Release-Entwicklungsschlüssel (v4.0-kompatibel)
 
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar`
-  - **Größe**: `189.537 Bytes`
-  - **SHA-256**: `bc8c6e156ed1b0c1bebb598d7c5197d5872796a2a8e4e9cdbce47b6e82f230fd`
+  - **Größe**: `191.346 Bytes`
+  - **SHA-256**: `80e45889f39136746a798a020fa52a6e1378661931c007d1489c4b7fd263bd64`
   - **Plattform**: Windows 10 / 11 (Java 17+)
   - **Starter**: `windows/Start-KR-IDE.bat`

@@ -11,7 +11,7 @@ Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Doku
 - **Release-APK (Android)**: `KR-Compiler-Android-IDE-v4.0.3.apk`
 - **SHA-256 (APK)**: `ac7823db51e65b920d1445ea5ab6db8883d2fd692f4110412f1c61a1be35094d`
 - **Windows Desktop Edition**: `KR-Compiler-IDE.jar` (1:1 Port für Windows 10/11, Starter: `windows/Start-KR-IDE.bat`)
-- **SHA-256 (Windows JAR)**: `bc8c6e156ed1b0c1bebb598d7c5197d5872796a2a8e4e9cdbce47b6e82f230fd` (189.537 Bytes)
+- **SHA-256 (Windows JAR)**: `80e45889f39136746a798a020fa52a6e1378661931c007d1489c4b7fd263bd64` (191.346 Bytes)
 - **Windows Toolchain (Portabel)**: `KR-Compiler-Windows-toolchain-v4.0.3.zip` (Inklusive MinGW C++20, Go-Binutils, Android-APK-Runner, SDL3 & SQLite3)
 
 ### Systemvoraussetzungen
