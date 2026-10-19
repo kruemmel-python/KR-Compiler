@@ -20,7 +20,12 @@ public class IdeCoreTests {
         assertTrue(header.contains("kr_compute_matmul_f32"));
         assertTrue(header.contains("kr_compute_image_rgba_scale_f32"));
         assertTrue(header.contains("kr_compute_require"));
+        assertTrue(header.contains("kr_compute_set_trace_context"));
         assertTrue(cpp.contains("GPU_REQUIRED_FAILED"));
+        assertTrue(cpp.contains("thread_local kr_compute_telemetry"));
+        assertTrue(cpp.contains("g_telemetry_mutex"));
+        assertTrue(cpp.contains("g_submit_mutex"));
+        assertTrue(cpp.contains("\\\"workerId\\\""));
     }
 
     private static KrSegment cppSegment(String source) {

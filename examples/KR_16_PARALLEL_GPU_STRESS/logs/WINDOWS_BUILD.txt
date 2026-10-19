@@ -1,0 +1,10 @@
+KR Compiler IDE – Windows-x64-Build
+Datum: 2026-10-19
+
+[INFO] Starte Build für Zielplattform: Windows x64 (.exe)
+[INFO] KR Unified Language Projekt erkannt (1 .kr-Datei(en)).
+[INFO] Führe KR Multi-File Pipeline & Code-Generator aus.
+[INFO] Code-Generierung abgeschlossen: 2 Translation Unit(s) erstellt.
+[COMPUTE] CC_OpenCL Enterprise wird aus dem portablen Quellpaket eingebunden.
+[INFO] Erzeugt: programm.exe (3927944 Bytes)
+ERGEBNIS: BUILD SUCCESSFUL

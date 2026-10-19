@@ -1,0 +1,12 @@
+KR_16_PARALLEL_GPU_STRESS – Windows / AMD gfx90c
+Datum: 2026-10-19
+
+Lauf 1: 16/16 Worker, 640/640 Operationen, GPU 640, CPU/Fallback 0,
+         Runtime-Fehler 0, numerische Fehler 0, 7073.89 ms, PASS, Exitcode 0
+Lauf 2: 16/16 Worker, 640/640 Operationen, GPU 640, CPU/Fallback 0,
+         Runtime-Fehler 0, numerische Fehler 0, 914.952 ms, PASS, Exitcode 0
+Lauf 3: 16/16 Worker, 640/640 Operationen, GPU 640, CPU/Fallback 0,
+         Runtime-Fehler 0, numerische Fehler 0, 890.186 ms, PASS, Exitcode 0
+
+Telemetrie je Lauf: 640 JSONL-Zeilen, Worker 0–15, Iterationen 0–19,
+elementwise_add 320, elementwise_multiply 320, backend gpu 640, errorCode 0.

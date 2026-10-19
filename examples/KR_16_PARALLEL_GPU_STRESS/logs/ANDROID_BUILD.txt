@@ -1,0 +1,12 @@
+KR Compiler IDE – Android-ARM64-Build
+Datum: 2026-10-19
+
+[INFO] Starte Build für Zielplattform: Android ARM64 (.apk)
+[INFO] KR Unified Language Projekt erkannt (1 .kr-Datei(en)).
+[INFO] Führe KR Multi-File Pipeline & Code-Generator aus.
+[INFO] Code-Generierung abgeschlossen: 2 Translation Unit(s) erstellt.
+[COMPUTE] CC_OpenCL Enterprise wird aus dem portablen Quellpaket eingebunden.
+[INFO] Erstelle Android ARM64 Runner APK.
+[INFO] Signiere Android APK mit apksigner.
+[ERFOLG] Android ARM64 Runner APK erfolgreich erstellt (8238110 Bytes)
+ERGEBNIS: BUILD SUCCESSFUL

@@ -41,6 +41,7 @@ android/codedump_android.md
 desktop.ini
 setup.log
 *.zip
+!/examples/KR_16_PARALLEL_GPU_STRESS.zip
 windows/bin/
 windows/toolchain/
 windows/toolchain.zip

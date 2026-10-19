@@ -1,0 +1,203 @@
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
+#include <cstdio>
+#include <iostream>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+
+namespace {
+
+constexpr int kWorkerCount = 16;
+constexpr int kIterations = 20;
+constexpr int kElementCount = 8192;
+constexpr int kExpectedOperations = kWorkerCount * kIterations * 2;
+constexpr float kAbsoluteTolerance = 0.0001f;
+constexpr float kRelativeTolerance = 0.0001f;
+
+struct StartGate {
+    std::mutex mutex;
+    std::condition_variable condition;
+    int ready = 0;
+    bool released = false;
+
+    void arrive_and_wait() {
+        std::unique_lock<std::mutex> lock(mutex);
+        ++ready;
+        condition.notify_all();
+        condition.wait(lock, [this] { return released; });
+    }
+
+    void wait_until_all_ready() {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [this] { return ready == kWorkerCount; });
+    }
+
+    void release_all() {
+        std::lock_guard<std::mutex> lock(mutex);
+        released = true;
+        condition.notify_all();
+    }
+};
+
+struct Counters {
+    std::atomic<int> started{0};
+    std::atomic<int> completed{0};
+    std::atomic<int> operations{0};
+    std::atomic<int> gpuOperations{0};
+    std::atomic<int> cpuOperations{0};
+    std::atomic<int> runtimeErrors{0};
+    std::atomic<int> numericErrors{0};
+    std::atomic<long long> kernelMicros{0};
+};
+
+std::mutex outputMutex;
+
+bool close_enough(float expected, float actual) {
+    const float difference = std::fabs(expected - actual);
+    return difference <= kAbsoluteTolerance + kRelativeTolerance * std::fabs(expected);
+}
+
+void automatic_vector_add(float* output, const float* left, const float* right, int count) {
+    for (int index = 0; index < count; index++) {
+        output[index] = left[index] + right[index];
+    }
+}
+
+void automatic_vector_multiply(float* output, const float* left, const float* right, int count) {
+    for (int index = 0; index < count; index++) {
+        output[index] = left[index] * right[index];
+    }
+}
+
+void capture_operation(Counters& counters) {
+    const kr_compute_telemetry* telemetry = kr_compute_last_telemetry();
+    ++counters.operations;
+    if (!telemetry) {
+        ++counters.runtimeErrors;
+        return;
+    }
+    const std::string backend = telemetry->backend ? telemetry->backend : "unknown";
+    if (backend == "gpu") {
+        ++counters.gpuOperations;
+    } else {
+        ++counters.cpuOperations;
+    }
+    if (telemetry->error_code != 0) ++counters.runtimeErrors;
+    counters.kernelMicros.fetch_add(
+        static_cast<long long>(telemetry->kernel_ms * 1000.0),
+        std::memory_order_relaxed);
+}
+
+void run_worker(int workerId, StartGate& gate, Counters& counters) {
+    std::vector<float> left(kElementCount);
+    std::vector<float> right(kElementCount);
+    std::vector<float> sum(kElementCount);
+    std::vector<float> product(kElementCount);
+
+    for (int index = 0; index < kElementCount; ++index) {
+        left[index] = static_cast<float>((workerId + 1) * 17 + index % 251) * 0.03125f;
+        right[index] = static_cast<float>((index * 13 + workerId * 7) % 127 + 1) * 0.0625f;
+    }
+
+    ++counters.started;
+    gate.arrive_and_wait();
+
+    int localNumericErrors = 0;
+    for (int iteration = 0; iteration < kIterations; ++iteration) {
+        const float offset = static_cast<float>(iteration) * 0.0005f;
+        left[(iteration * 193 + workerId) % kElementCount] += offset;
+
+        kr_compute_set_trace_context(workerId, iteration);
+        automatic_vector_add(sum.data(), left.data(), right.data(), kElementCount);
+        capture_operation(counters);
+
+        for (int index = 0; index < kElementCount; ++index) {
+            const float expected = left[index] + right[index];
+            if (!close_enough(expected, sum[index])) ++localNumericErrors;
+        }
+
+        kr_compute_set_trace_context(workerId, iteration);
+        automatic_vector_multiply(product.data(), left.data(), right.data(), kElementCount);
+        capture_operation(counters);
+
+        for (int index = 0; index < kElementCount; ++index) {
+            const float expected = left[index] * right[index];
+            if (!close_enough(expected, product[index])) ++localNumericErrors;
+        }
+    }
+
+    counters.numericErrors.fetch_add(localNumericErrors, std::memory_order_relaxed);
+    const int finished = ++counters.completed;
+    {
+        std::lock_guard<std::mutex> lock(outputMutex);
+        std::cout << "Worker " << workerId << " abgeschlossen ("
+                  << finished << "/" << kWorkerCount << "), numerische Fehler: "
+                  << localNumericErrors << std::endl;
+    }
+}
+
+} // namespace
+
+int main() {
+    std::remove("adaptive_compute_telemetry.jsonl");
+    kr_compute_set_telemetry_path("adaptive_compute_telemetry.jsonl");
+
+    std::cout << "KR Adaptive Compute 16-Thread-GPU-Stresstest" << std::endl;
+    std::cout << "Start: 16 Worker, 20 Iterationen, 8192 FP32-Elemente" << std::endl;
+    std::cout << "Erwartete Compute-Operationen: " << kExpectedOperations << std::endl;
+
+    StartGate gate;
+    Counters counters;
+    std::vector<std::thread> workers;
+    workers.reserve(kWorkerCount);
+
+    for (int workerId = 0; workerId < kWorkerCount; ++workerId) {
+        workers.emplace_back(run_worker, workerId, std::ref(gate), std::ref(counters));
+    }
+
+    gate.wait_until_all_ready();
+    std::cout << "Alle 16 Worker bereit. Gemeinsames Startsignal wird freigegeben." << std::endl;
+    const auto startedAt = std::chrono::steady_clock::now();
+    gate.release_all();
+
+    for (std::thread& worker : workers) worker.join();
+    const auto finishedAt = std::chrono::steady_clock::now();
+    const double elapsedMs = std::chrono::duration<double, std::milli>(finishedAt - startedAt).count();
+
+    const int started = counters.started.load();
+    const int completed = counters.completed.load();
+    const int operations = counters.operations.load();
+    const int gpuOperations = counters.gpuOperations.load();
+    const int cpuOperations = counters.cpuOperations.load();
+    const int runtimeErrors = counters.runtimeErrors.load();
+    const int numericErrors = counters.numericErrors.load();
+    const double kernelMs = static_cast<double>(counters.kernelMicros.load()) / 1000.0;
+
+    const bool pass = started == kWorkerCount
+        && completed == kWorkerCount
+        && operations == kExpectedOperations
+        && gpuOperations == kExpectedOperations
+        && cpuOperations == 0
+        && runtimeErrors == 0
+        && numericErrors == 0;
+
+    std::cout << "\n================ STRESS-ERGEBNIS ================" << std::endl;
+    std::cout << "Worker gestartet:       " << started << "/" << kWorkerCount << std::endl;
+    std::cout << "Worker abgeschlossen:   " << completed << "/" << kWorkerCount << std::endl;
+    std::cout << "Compute-Operationen:    " << operations << "/" << kExpectedOperations << std::endl;
+    std::cout << "GPU-Backend:            " << gpuOperations << std::endl;
+    std::cout << "CPU/Fallback-Backend:   " << cpuOperations << std::endl;
+    std::cout << "Runtime-Fehler:         " << runtimeErrors << std::endl;
+    std::cout << "Numerische Fehler:      " << numericErrors << std::endl;
+    std::cout << "Summierte Kernelzeit:   " << kernelMs << " ms" << std::endl;
+    std::cout << "Gesamtlaufzeit:         " << elapsedMs << " ms" << std::endl;
+    std::cout << "Telemetrie:             adaptive_compute_telemetry.jsonl" << std::endl;
+    std::cout << "ERGEBNIS: " << (pass ? "PASS" : "FAIL") << std::endl;
+    std::cout << "==================================================" << std::endl;
+
+    return pass ? 0 : 1;
+}

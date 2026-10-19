@@ -1,0 +1,15 @@
+KR_16_PARALLEL_GPU_STRESS – physisches Android-Gerät
+Datum: 2026-10-19
+Gerät: RMX3853
+OpenCL-GPU: QUALCOMM Adreno(TM) 732
+
+Lauf 1: 16/16 Worker, 640/640 Operationen, GPU 640, CPU/Fallback 0,
+         Runtime-Fehler 0, numerische Fehler 0, 5255.27 ms, PASS, Exitcode 0
+Lauf 2: 16/16 Worker, 640/640 Operationen, GPU 640, CPU/Fallback 0,
+         Runtime-Fehler 0, numerische Fehler 0, 4408.91 ms, PASS, Exitcode 0
+Lauf 3: 16/16 Worker, 640/640 Operationen, GPU 640, CPU/Fallback 0,
+         Runtime-Fehler 0, numerische Fehler 0, 4153.79 ms, PASS, Exitcode 0
+
+Das PASS war in kr.compile.runner.RunnerActivity sichtbar. Telemetrie je Lauf:
+640 JSONL-Zeilen, Worker 0–15, Iterationen 0–19, elementwise_add 320,
+elementwise_multiply 320, backend gpu 640, errorCode 0.
