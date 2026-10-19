@@ -27,10 +27,19 @@ public final class KrProjectConfig {
     public final String cppStandard;
     public final String rustEdition;
     public final String goVersion;
+    public final KrComputePlan.Mode computeMode;
 
     public KrProjectConfig(String name, String version, String entry, boolean isGui,
                            List<String> modulePaths, Set<String> vcpkgDependencies,
                            String cppStandard, String rustEdition, String goVersion) {
+        this(name, version, entry, isGui, modulePaths, vcpkgDependencies,
+                cppStandard, rustEdition, goVersion, KrComputePlan.Mode.AUTO);
+    }
+
+    public KrProjectConfig(String name, String version, String entry, boolean isGui,
+                           List<String> modulePaths, Set<String> vcpkgDependencies,
+                           String cppStandard, String rustEdition, String goVersion,
+                           KrComputePlan.Mode computeMode) {
         this.name = name != null && !name.trim().isEmpty() ? name.trim() : "KR_PROJECT";
         this.version = version != null && !version.trim().isEmpty() ? version.trim() : "0.1.0";
         this.entry = entry != null && !entry.trim().isEmpty() ? entry.trim() : "main.kr";
@@ -52,6 +61,7 @@ public final class KrProjectConfig {
         this.cppStandard = cppStandard != null ? cppStandard.trim() : "c++20";
         this.rustEdition = rustEdition != null ? rustEdition.trim() : "2024";
         this.goVersion = goVersion != null ? goVersion.trim() : "1.24";
+        this.computeMode = computeMode != null ? computeMode : KrComputePlan.Mode.AUTO;
     }
 
     public static File findProjectConfigFile(File projectDir) {
@@ -81,6 +91,7 @@ public final class KrProjectConfig {
         String cppStandard = "c++20";
         String rustEdition = "2024";
         String goVersion = "1.24";
+        KrComputePlan.Mode computeMode = KrComputePlan.Mode.AUTO;
 
         String currentSection = "";
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8))) {
@@ -143,11 +154,17 @@ public final class KrProjectConfig {
                     else if (key.equals("target_type") || key.equals("gui")) {
                         isGui = val.equalsIgnoreCase("gui") || val.equalsIgnoreCase("true") || val.equalsIgnoreCase("1");
                     }
+                } else if (currentSection.equals("compute") || currentSection.equals("adaptive_compute")) {
+                    if (key.equals("mode")) {
+                        try { computeMode = KrComputePlan.Mode.valueOf(val.trim().toUpperCase(Locale.ROOT)); }
+                        catch (IllegalArgumentException ignored) { computeMode = KrComputePlan.Mode.AUTO; }
+                    }
                 }
             }
         } catch (Exception ignored) {}
 
-        return new KrProjectConfig(name, version, entry, isGui, modulePaths, vcpkgDeps, cppStandard, rustEdition, goVersion);
+        return new KrProjectConfig(name, version, entry, isGui, modulePaths, vcpkgDeps,
+                cppStandard, rustEdition, goVersion, computeMode);
     }
 
     private static void parseArrayValues(String raw, List<String> out) {

@@ -1,7 +1,7 @@
-# KR Compiler IDE – Windows Desktop Edition (v4.0.3)
+# KR Compiler IDE – Windows Desktop Edition (v4.1.0)
 
 **Entwickler:** Ralf Krümmel  
-**Version:** 4.0.3  
+**Version:** 4.1.0
 **Plattform:** Windows x64 (10 / 11)  
 **Technologie:** Java 17+ (Swing Native Dark UI), Clang/LLVM, Rust (cargo/rustc), Go, CMake, Ninja, vcpkg  
 
@@ -60,9 +60,10 @@ Doppelklicken Sie im Ordner `windows\` auf:
 - **`Start-KR-IDE.bat`**: Startet die IDE lautlos als reine Desktop-Anwendung.
 - **`Start-KR-IDE-Console.bat`**: Startet die IDE mit sichtbarem Terminal-Fenster (für Entwickler & Debugging).
 
-Alternativ direkt per Befehlszeile:
+Die Distribution enthält ihre eigene Java-Laufzeit unter `runtime\jdk` und lädt
+beim Start weder JDK noch Compiler nach. Alternativ direkt per Befehlszeile:
 ```cmd
-java -jar dist\KR-Compiler-IDE.jar
+runtime\jdk\bin\java.exe -jar dist\KR-Compiler-IDE.jar
 ```
 
 ### Selbst neu kompilieren

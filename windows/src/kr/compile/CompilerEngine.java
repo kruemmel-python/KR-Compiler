@@ -150,7 +150,7 @@ public final class CompilerEngine {
                     throw new IOException("Cargo-Build fehlgeschlagen: " + ex.getMessage(), ex);
                 }
             } else {
-                log.line("[INFO] Kein lokales Cargo/Rust gefunden. Integrierte C++ ABI-Bridge für Rust-Symbole wird verwendet.");
+                throw new IOException("Portable Rust-Toolchain fehlt; KR ersetzt Rust-Symbole nicht durch Attrappen.");
             }
         }
 
@@ -181,12 +181,12 @@ public final class CompilerEngine {
                     throw new IOException("Go-Build fehlgeschlagen: " + ex.getMessage(), ex);
                 }
             } else {
-                log.line("[INFO] Kein lokales Go gefunden. Integrierte C++ ABI-Bridge für Go-Symbole wird verwendet.");
+                throw new IOException("Portable Go-Toolchain fehlt; KR ersetzt Go-Symbole nicht durch Attrappen.");
             }
         }
 
         // Automatische Fallback-Bridge generieren für alle Symbole, die nicht über die Archive bereitgestellt werden
-        File fallbackBridge = generateFallbackBridge(outputDir, res, rustArchive != null, goArchive != null);
+        File fallbackBridge = null;
 
         // Wenn modularer C++ Output mit CMakeLists.txt im Projekt vorliegt:
         File cmakeLists = new File(projectDir, "CMakeLists.txt");
@@ -203,6 +203,14 @@ public final class CompilerEngine {
 
         if (sourcesToCompile.isEmpty()) {
             sourcesToCompile.addAll(findCppFiles(projectDir));
+        }
+        File ccRoot = new File(projectDir, "components/cc-opencl");
+        File ccDriver = new File(ccRoot, "src/CC_OpenCL.c");
+        File ccNoise = new File(ccRoot, "src/CipherCore_NoiseCtrl.c");
+        if (ccDriver.isFile() && ccNoise.isFile()) {
+            sourcesToCompile.add(ccDriver);
+            sourcesToCompile.add(ccNoise);
+            log.line("[COMPUTE] CC_OpenCL Enterprise wird aus dem portablen Quellpaket eingebunden.");
         }
 
         if (rustArchive != null) {
@@ -338,6 +346,12 @@ public final class CompilerEngine {
                 cmd.add("-I" + subDir.getAbsolutePath());
             }
         }
+        File bundledCcRoot = new File(projectDir, "components/cc-opencl");
+        if (bundledCcRoot.isDirectory()) {
+            cmd.add("-I" + bundledCcRoot.getAbsolutePath());
+            cmd.add("-I" + new File(bundledCcRoot, "include").getAbsolutePath());
+            cmd.add("-I" + new File(bundledCcRoot, "CL").getAbsolutePath());
+        }
 
         // Erkennung von DLL-Export-Projekten (wie Mycelia i18n_api)
         File i18nHeader = new File(projectDir, "i18n_api.h");
@@ -397,7 +411,12 @@ public final class CompilerEngine {
                 if (libDllA.isFile()) {
                     cmd.add("-L" + clDir.getAbsolutePath());
                     cmd.add("-lOpenCL");
+                } else if (ToolchainManager.getInstance().getLibDir() != null
+                        && new File(ToolchainManager.getInstance().getLibDir(), "libOpenCL.dll.a").isFile()) {
+                    cmd.add("-lOpenCL");
                 }
+            } else if (target == Target.LINUX) {
+                cmd.add("-lOpenCL");
             }
         }
 

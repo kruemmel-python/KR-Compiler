@@ -4,6 +4,9 @@ import kr.compile.BuildManager;
 import kr.compile.CompilerEngine;
 import kr.compile.DocumentManager;
 import kr.compile.KrAgentCore;
+import kr.compile.KrAdaptiveComputeAnalyzer;
+import kr.compile.KrComputePlan;
+import kr.compile.KrProjectConfig;
 import kr.compile.ProjectManager;
 
 import javax.swing.*;
@@ -43,7 +46,7 @@ public final class KrWindowsIde extends JFrame {
     }
 
     public KrWindowsIde() {
-        super("KR Compiler IDE v4.0.3 – Windows Desktop Edition");
+        super("KR Compiler IDE v4.1.0 – Windows Desktop Edition");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1280, 800);
         setMinimumSize(new Dimension(900, 600));
@@ -110,7 +113,7 @@ public final class KrWindowsIde extends JFrame {
         statusAgent = new JLabel("Agent: Bereit");
         statusAgent.setForeground(DarkTheme.ACCENT_GREEN);
 
-        JLabel infoVersion = new JLabel("v4.0.3 Windows Edition | Entwickler: Ralf Krümmel");
+        JLabel infoVersion = new JLabel("v4.1.0 Windows Edition | Entwickler: Ralf Krümmel");
         infoVersion.setForeground(DarkTheme.FG_MUTED);
 
         statusBar.add(statusProject);
@@ -125,12 +128,12 @@ public final class KrWindowsIde extends JFrame {
         ProjectManager.getInstance().addListener(new ProjectManager.Listener() {
             @Override public void onProjectOpened(File p) {
                 statusProject.setText("Projekt: " + p.getName());
-                setTitle("KR Compiler IDE v4.0.3 – " + p.getName());
+                setTitle("KR Compiler IDE v4.1.0 – " + p.getName());
                 openDefaultProjectFile(p);
             }
             @Override public void onProjectClosed() {
                 statusProject.setText("Projekt: Kein Projekt");
-                setTitle("KR Compiler IDE v4.0.3 – Windows Desktop Edition");
+                setTitle("KR Compiler IDE v4.1.0 – Windows Desktop Edition");
             }
             @Override public void onTreeRefreshed(File p) {}
         });
@@ -271,6 +274,11 @@ public final class KrWindowsIde extends JFrame {
         mStopBuild.addActionListener(e -> BuildManager.getInstance().cancelBuild());
         mBuild.add(mStopBuild);
 
+        JMenuItem mCompute = new JMenuItem("Adaptive Compute analysieren …");
+        mCompute.addActionListener(e -> showAdaptiveComputeDialog());
+        mBuild.addSeparator();
+        mBuild.add(mCompute);
+
         styleMenu(mBuild);
         mb.add(mBuild);
 
@@ -296,6 +304,30 @@ public final class KrWindowsIde extends JFrame {
         mb.add(mHelp);
 
         setJMenuBar(mb);
+    }
+
+    private void showAdaptiveComputeDialog() {
+        File project = ProjectManager.getInstance().getActiveProjectDir();
+        if (project == null || !project.isDirectory()) {
+            JOptionPane.showMessageDialog(this, "Kein lokales KR-Projekt geöffnet.",
+                    "Adaptive Compute", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        try {
+            KrProjectConfig config = KrProjectConfig.parse(
+                    KrProjectConfig.findProjectConfigFile(project), project.getName(), false);
+            KrComputePlan plan = KrAdaptiveComputeAnalyzer.analyzeProject(project, config.computeMode);
+            JTextArea report = new JTextArea(KrAdaptiveComputeAnalyzer.formatReport(plan), 28, 88);
+            report.setEditable(false);
+            report.setLineWrap(true);
+            report.setWrapStyleWord(true);
+            report.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+            JOptionPane.showMessageDialog(this, new JScrollPane(report),
+                    "Adaptive Compute", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage(),
+                    "Adaptive Compute – Fehler", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void styleMenu(JMenu menu) {
@@ -397,7 +429,7 @@ public final class KrWindowsIde extends JFrame {
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel versionLabel = new JLabel("Version 4.0.3");
+        JLabel versionLabel = new JLabel("Version 4.1.0");
         versionLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
         versionLabel.setForeground(DarkTheme.ACCENT_BLUE);
         versionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);

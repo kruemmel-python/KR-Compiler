@@ -1,6 +1,9 @@
 package kr.compile.runner;
 
 import android.os.Bundle;
+import android.content.Intent;
+import android.net.Uri;
+import android.app.Activity;
 
 import org.libsdl.app.SDLActivity;
 
@@ -24,6 +27,48 @@ public final class GuiRunnerActivity extends SDLActivity {
             throw new IllegalStateException("Projektressourcen können nicht vorbereitet werden.", error);
         }
         super.onCreate(state);
+    }
+
+
+    // MDraft-specific Android Storage Access Framework tree picker.
+    private static final int MD_TREE_REQUEST = 0x4D41;
+    private volatile String mdTreeResult = null; // null=waiting, ""=cancelled
+
+    public boolean mdOpenFolderPicker() {
+        mdTreeResult = null;
+        runOnUiThread(() -> {
+            try {
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                startActivityForResult(intent, MD_TREE_REQUEST);
+            } catch (Exception failure) {
+                android.util.Log.e("MDraftKR", "Ordnerauswahl fehlgeschlagen", failure);
+                mdTreeResult = "";
+            }
+        });
+        return true;
+    }
+
+    public String mdPollFolderPicker() {
+        return mdTreeResult;
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == MD_TREE_REQUEST) {
+            if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+                Uri tree = data.getData();
+                try {
+                    getContentResolver().takePersistableUriPermission(
+                        tree, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (SecurityException ignored) {}
+                mdTreeResult = tree.toString();
+            } else {
+                mdTreeResult = "";
+            }
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override protected String[] getLibraries() {

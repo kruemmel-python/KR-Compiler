@@ -1,0 +1,435 @@
+{
+  "schema_version": "1.0",
+  "driver": {
+    "name": "CC_OpenCl",
+    "binary": "CC_OpenCl.dll",
+    "link_library": "CC_OpenCl.lib",
+    "platform": "Windows x64",
+    "compiler": "MSVC C++17",
+    "gpu_backend": "OpenCL",
+    "documentation_profile": "enterprise_agent_ready",
+    "build_script": "scripts/build_windows_msvc_amd_direct.bat"
+  },
+  "resource_policy": {
+    "safe_vram_fraction": 0.65,
+    "aggressive_vram_fraction": 0.8,
+    "temporary_overhead_fraction": 0.15,
+    "default_grid": {
+      "width": 1024,
+      "height": 1024,
+      "N": 1048576
+    },
+    "default_K": 8,
+    "default_C": 4,
+    "default_R": 16
+  },
+  "domains": {
+    "mycelium": {
+      "purpose": "nutrient fields, pheromone dynamics, colony growth, biological field substrate",
+      "vram_formula_bytes": "N*C*K*4 + N*C*4 + N*4 + N*4 + N*1 + N*K*4",
+      "default_vram_bytes": 193986560,
+      "primary_functions": [
+        "subqg_init_mycel",
+        "subqg_set_active_T",
+        "subqg_realloc_pheromone_channels",
+        "set_pheromone_gains",
+        "set_diffusion_params",
+        "set_neighbors_sparse",
+        "set_mood_state",
+        "set_nutrient_state",
+        "step_pheromone_reinforce",
+        "step_pheromone_diffuse_decay",
+        "step_mycel_update",
+        "step_colony_update",
+        "step_reproduction",
+        "step_subqg_feedback",
+        "step_potential_for_hpio",
+        "read_pheromone_slice",
+        "read_full_pheromone_buffer",
+        "read_nutrient",
+        "read_potential",
+        "read_colonies",
+        "save_mycel_state",
+        "load_mycel_state"
+      ],
+      "risks": [
+        "large pheromone tensor",
+        "K and C scale memory linearly",
+        "CL_OUT_OF_RESOURCES on display GPUs"
+      ]
+    },
+    "subqg_multifield": {
+      "purpose": "eight-channel scalar field exchange and simulation",
+      "vram_formula_bytes": "8*N*4",
+      "default_vram_bytes": 33554432,
+      "primary_functions": [
+        "subqg_initialize_state",
+        "subqg_initialize_state_batched",
+        "subqg_set_multifield_state",
+        "subqg_get_multifield_state",
+        "subqg_debug_read_channel",
+        "subqg_debug_read_field",
+        "subqg_simulation_step",
+        "subqg_simulation_step_batched",
+        "subqg_inject_agents",
+        "subqg_release_state",
+        "subqg_set_params",
+        "subqg_set_deterministic_mode"
+      ],
+      "buffers": [
+        "energy",
+        "pressure",
+        "gravity",
+        "magnetism",
+        "temperature",
+        "potential",
+        "drift_x",
+        "drift_y"
+      ]
+    },
+    "resonance_field": {
+      "purpose": "coupled oscillator/gradient field propagation and energy computation",
+      "vram_formula_bytes": "4*N*4 + 2*N*K*4",
+      "default_vram_bytes": 83886080,
+      "primary_function": "execute_resonant_field_step_gpu",
+      "buffers": [
+        {
+          "name": "state",
+          "type": "float",
+          "count": "N",
+          "mutable": true
+        },
+        {
+          "name": "velocity",
+          "type": "float",
+          "count": "N",
+          "mutable": true
+        },
+        {
+          "name": "drive",
+          "type": "float",
+          "count": "N",
+          "mutable": false
+        },
+        {
+          "name": "energy",
+          "type": "float",
+          "count": "N",
+          "mutable": true
+        },
+        {
+          "name": "neighbors",
+          "type": "int",
+          "count": "N*K",
+          "mutable": false
+        },
+        {
+          "name": "weights",
+          "type": "float",
+          "count": "N*K",
+          "mutable": false
+        }
+      ],
+      "safe_parameters": {
+        "K": [
+          4,
+          8,
+          16
+        ],
+        "dt": [
+          0.001,
+          0.05
+        ],
+        "damping": [
+          0.01,
+          0.2
+        ],
+        "coupling": [
+          0.05,
+          0.5
+        ],
+        "inertia": [
+          0.8,
+          0.98
+        ],
+        "clamp_abs": "recommended > 0"
+      }
+    },
+    "energy_scheduler": {
+      "purpose": "GPU-side active set extraction and sleeping-cell decay",
+      "vram_formula_bytes": "N*1 + N*4 + 4",
+      "default_vram_bytes": 5242884,
+      "primary_function": "execute_energy_gated_scheduler_gpu",
+      "special_requirements": [
+        "active_count_buf must be reset to zero before each call"
+      ]
+    },
+    "morphogenesis": {
+      "purpose": "table-driven cell-type transformation based on nutrient and energy",
+      "vram_formula_bytes": "N*1 + 3*N*4 + R*20",
+      "default_vram_bytes": 13631808,
+      "primary_function": "execute_morphogenetic_rule_step_gpu",
+      "risks": [
+        "rule order changes behavior",
+        "high R causes branch divergence"
+      ]
+    },
+    "bio_brain": {
+      "purpose": "neural, synaptic, plasticity and bio-inspired processing",
+      "vram_formula_bytes": "approximately 21*N + 16*N*K for standard sparse fanout profile",
+      "default_vram_bytes": 156237824,
+      "risks": [
+        "synapse fanout dominates VRAM",
+        "small timesteps needed for stability"
+      ]
+    },
+    "quantum": {
+      "purpose": "quantum-inspired and statevector algorithms",
+      "vram_formula_bytes": "2^q*8 + scratch",
+      "default_q": 24,
+      "default_vram_bytes": 268435456,
+      "primary_functions": [
+        "execute_shor_gpu",
+        "execute_grover_gpu",
+        "execute_vqe_gpu",
+        "execute_vqe_gradients_parallel_gpu",
+        "execute_qaoa_gpu",
+        "execute_hhl_gpu",
+        "execute_qml_classifier_gpu",
+        "execute_qec_cycle_gpu",
+        "quantum_upload_gate_sequence",
+        "quantum_apply_gate_sequence",
+        "quantum_export_to_qasm",
+        "quantum_import_from_qasm",
+        "execute_quantum_echoes_otoc_gpu"
+      ],
+      "risks": [
+        "exponential memory scaling",
+        "must run isolated for high q"
+      ]
+    }
+  },
+  "function_contracts": {
+    "execute_resonant_field_step_gpu": {
+      "returns": {
+        "1": "success",
+        "0": "failure; call cc_get_last_error"
+      },
+      "mutates": [
+        "state_buf",
+        "velocity_buf",
+        "energy_buf"
+      ],
+      "reads": [
+        "drive_buf",
+        "neighbors_buf",
+        "weights_buf"
+      ],
+      "input_shapes": {
+        "state_buf": "float[N]",
+        "velocity_buf": "float[N]",
+        "drive_buf": "float[N]",
+        "energy_buf": "float[N]",
+        "neighbors_buf": "int[N*K]",
+        "weights_buf": "float[N*K]"
+      },
+      "preconditions": [
+        "initialize_gpu(gpu_index)==1",
+        "all buffers are valid OpenCL cl_mem handles",
+        "N>0",
+        "K>0"
+      ],
+      "failure_policy": [
+        "on NaN reduce dt and coupling",
+        "on CL_OUT_OF_RESOURCES reduce N or K"
+      ]
+    },
+    "execute_energy_gated_scheduler_gpu": {
+      "returns": {
+        "1": "success",
+        "0": "failure; call cc_get_last_error"
+      },
+      "mutates": [
+        "energy_buf",
+        "nutrient_buf",
+        "active_flags_buf",
+        "active_indices_buf",
+        "active_count_buf"
+      ],
+      "preconditions": [
+        "active_count_buf contains zero before call",
+        "N>0"
+      ],
+      "postconditions": [
+        "active_count_buf contains number of active indices"
+      ]
+    },
+    "execute_morphogenetic_rule_step_gpu": {
+      "returns": {
+        "1": "success",
+        "0": "failure; call cc_get_last_error"
+      },
+      "mutates": [
+        "cell_type_buf",
+        "nutrient_buf",
+        "potential_buf"
+      ],
+      "reads": [
+        "energy_buf",
+        "rule_in_type_buf",
+        "rule_min_nutrient_buf",
+        "rule_min_energy_buf",
+        "rule_out_type_buf",
+        "rule_delta_potential_buf"
+      ],
+      "preconditions": [
+        "R>0",
+        "rules are ordered by priority"
+      ]
+    }
+  },
+  "exported_functions": [
+    "set_kernel_blocking",
+    "subqg_initialize_state_batched",
+    "set_quantum_enabled",
+    "cc_get_last_error",
+    "get_last_quantum_echo_profile",
+    "set_quantum_enabled",
+    "initialize_gpu",
+    "free_gpu_memory",
+    "write_host_to_gpu_blocking",
+    "read_gpu_to_host_blocking",
+    "subqg_initialize_state",
+    "subqg_initialize_state_batched",
+    "subqg_debug_read_field",
+    "subqg_set_multifield_state",
+    "subqg_get_multifield_state",
+    "subqg_debug_read_channel",
+    "subqg_simulation_step",
+    "subqg_simulation_step_batched",
+    "subqg_inject_agents",
+    "update_genetic_agents",
+    "subqg_init_mycel",
+    "subqg_set_active_T",
+    "subqg_realloc_pheromone_channels",
+    "subqg_set_repro_params",
+    "subqg_set_nutrient_recovery",
+    "set_pheromone_gains",
+    "set_diffusion_params",
+    "set_neighbors_sparse",
+    "set_mood_state",
+    "set_nutrient_state",
+    "step_pheromone_reinforce",
+    "step_pheromone_diffuse_decay",
+    "step_mycel_update",
+    "step_colony_update",
+    "step_reproduction",
+    "step_subqg_feedback",
+    "step_potential_for_hpio",
+    "read_pheromone_slice",
+    "subqg_get_dims",
+    "read_full_pheromone_buffer",
+    "render_frame_to_buffer",
+    "read_nutrient",
+    "read_potential",
+    "read_colonies",
+    "save_mycel_state",
+    "load_mycel_state",
+    "subqg_set_deterministic_mode",
+    "subqg_release_state",
+    "step_hebbian_social_learning",
+    "mycel_agent_cycle",
+    "cycle_vram_organism",
+    "subqg_set_params",
+    "launch_shadow_self_reenqueue",
+    "execute_shor_gpu",
+    "execute_grover_gpu",
+    "execute_vqe_gpu",
+    "execute_vqe_gradients_parallel_gpu",
+    "compute_qualia_resonance_gpu",
+    "compute_intuition_precognition_gpu",
+    "compute_context_resonance_gpu",
+    "generate_dream_state_gpu",
+    "plan_transformation_gpu",
+    "generate_system_narrative_gpu",
+    "abstract_to_symbolic_concepts_gpu",
+    "execute_qaoa_gpu",
+    "execute_hhl_gpu",
+    "execute_qml_classifier_gpu",
+    "execute_qec_cycle_gpu",
+    "quantum_upload_gate_sequence",
+    "quantum_apply_gate_sequence",
+    "quantum_export_to_qasm",
+    "quantum_import_from_qasm",
+    "execute_quantum_echoes_otoc_gpu",
+    "shutdown_gpu",
+    "finish_gpu",
+    "cc_get_last_error",
+    "cc_get_version",
+    "execute_resonant_field_step_gpu",
+    "execute_energy_gated_scheduler_gpu",
+    "execute_morphogenetic_rule_step_gpu",
+    "execute_matmul_on_gpu",
+    "execute_softmax_on_gpu",
+    "execute_gelu_on_gpu",
+    "execute_add_on_gpu",
+    "execute_add_bias_on_gpu",
+    "execute_mul_on_gpu",
+    "execute_conv2d_forward_on_gpu",
+    "execute_conv2d_backward_on_gpu",
+    "execute_patch_permute_reshape_on_gpu",
+    "execute_patch_permute_reshape_backward_on_gpu",
+    "execute_eon_encoder_chain_on_gpu",
+    "execute_eon_encoder_backward_chain_on_gpu",
+    "compute_ctc_loss_cpu",
+    "execute_layernorm_on_gpu",
+    "execute_clone_on_gpu",
+    "execute_transpose_on_gpu",
+    "execute_gelu_backward_on_gpu",
+    "execute_matmul_backward_on_gpu",
+    "execute_layernorm_backward_on_gpu",
+    "execute_adam_update_on_gpu",
+    "execute_softmax_backward_on_gpu",
+    "execute_mul_backward_on_gpu",
+    "execute_transpose_backward_on_gpu",
+    "execute_embedding_lookup_gpu",
+    "execute_embedding_backward_gpu",
+    "execute_reduce_sum_gpu",
+    "execute_broadcast_add_gpu",
+    "execute_transpose_batched_gpu",
+    "execute_transpose_12_batched_gpu",
+    "execute_matmul_batched_on_gpu",
+    "execute_matmul_batched_backward_on_gpu",
+    "execute_log_softmax_stable_gpu",
+    "execute_cross_entropy_loss_grad_gpu",
+    "execute_add_broadcast_pe_gpu",
+    "execute_hebbian_update_on_gpu",
+    "execute_threshold_spike_on_gpu",
+    "execute_dynamic_token_assignment_gpu",
+    "execute_pairwise_similarity_gpu",
+    "execute_proto_segmented_sum_gpu",
+    "execute_proto_update_step_gpu",
+    "execute_shape_loss_with_reward_penalty_gpu",
+    "execute_fused_diffusion_on_gpu",
+    "execute_izhikevich_step_on_gpu",
+    "execute_stdp_update_on_gpu",
+    "execute_stdp_trace_update_on_gpu",
+    "execute_lbm_collide_and_stream_on_gpu",
+    "execute_nbody_calculate_forces_on_gpu",
+    "execute_nbody_integrate_on_gpu",
+    "execute_ising_metropolis_step_on_gpu",
+    "execute_shape_loss_with_reward_penalty_list_gpu",
+    "sqse_load_kernels",
+    "execute_sqse_encrypt_float",
+    "execute_sqse_decrypt_float",
+    "set_noise_level",
+    "get_noise_level",
+    "register_kernel_measurement_buffers",
+    "reset_kernel_measurement_buffers",
+    "get_last_kernel_metrics",
+    "simulated_kernel_allocate",
+    "simulated_kernel_free",
+    "simulated_kernel_write",
+    "simulated_get_compute_unit_count"
+  ]
+}

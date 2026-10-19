@@ -1131,6 +1131,10 @@ final class CompilerEngine {
     private File linkKrUnified(File cppSource, List<File> cppSources, File rustArchive, File goArchive, boolean gui, Set<String> vcpkgDependencies) throws Exception {
         File finalizer = new File(project.getParentFile(), "kr-unified-finalizer");
         if (!finalizer.isDirectory() && !finalizer.mkdirs()) throw new IOException("KR-Linkordner kann nicht erstellt werden.");
+        File ccRoot = new File(project, "components/cc-opencl");
+        File ccDriver = new File(ccRoot, "src/CC_OpenCL.c");
+        File ccNoise = new File(ccRoot, "src/CipherCore_NoiseCtrl.c");
+        boolean hasCcOpenCl = ccDriver.isFile() && ccNoise.isFile();
 
         if (target == Target.ANDROID) {
             File library = new File(output, "libuser.so");
@@ -1139,6 +1143,17 @@ final class CompilerEngine {
             command.add("-O2"); command.add("-fPIC"); command.add("-shared");
             command.add("-L" + new File(toolchain, "usr/lib").getPath());
             command.add("-Wl,--export-dynamic");
+            command.add("-Wl,--no-undefined");
+            if (hasCcOpenCl) {
+                command.add("-DCL_TARGET_OPENCL_VERSION=300");
+                command.add("-DCL_USE_DEPRECATED_OPENCL_1_2_APIS");
+                command.add("-I" + ccRoot.getPath());
+                command.add("-I" + new File(ccRoot, "include").getPath());
+                command.add("-I" + new File(ccRoot, "CL").getPath());
+                command.add("-x"); command.add("c++");
+                command.add(ccDriver.getPath()); command.add(ccNoise.getPath());
+                command.add("-x"); command.add("none");
+            }
             command.add("-Wl,--allow-multiple-definition");
             File sdl = null;
             if (gui) {
@@ -1182,9 +1197,11 @@ final class CompilerEngine {
                 command.add(sdl.getPath());
                 command.add("-lOpenSLES"); command.add("-lGLESv1_CM"); command.add("-lGLESv2");
             }
+            if (hasCcOpenCl) command.add("-lOpenCL");
             command.add("-lc++_shared"); command.add("-llog"); command.add("-landroid"); command.add("-ldl"); command.add("-lm");
             command.add("-o"); command.add(library.getPath());
             run(command, "KR Unified Android-Bibliothek wird gelinkt", finalizer);
+            verifyAndroidRunnerEntrypoint(library);
 
             File apk = new File(output, "programm-android-arm64.apk");
             RunnerPackager.create(context, library, new File(toolchain, "usr/lib/libc++_shared.so"), extraLibs, project, gui, apk, log);
@@ -1219,9 +1236,21 @@ final class CompilerEngine {
         for (File s : compileSources) {
             cmake.append(" \"").append(cmakeEscape(s.getPath())).append("\"");
         }
+        if (hasCcOpenCl) {
+            cmake.append(" \"").append(cmakeEscape(ccDriver.getPath())).append("\" \"")
+                    .append(cmakeEscape(ccNoise.getPath())).append("\"");
+        }
         cmake.append(")\n");
         for (File s : compileSources) {
             cmake.append("target_include_directories(kr_program PRIVATE \"").append(cmakeEscape(s.getParentFile().getPath())).append("\")\n");
+        }
+        if (hasCcOpenCl) {
+            cmake.append("set_source_files_properties(\"").append(cmakeEscape(ccDriver.getPath()))
+                    .append("\" \"").append(cmakeEscape(ccNoise.getPath())).append("\" PROPERTIES LANGUAGE CXX)\n");
+            cmake.append("target_include_directories(kr_program PRIVATE \"").append(cmakeEscape(ccRoot.getPath()))
+                    .append("\" \"").append(cmakeEscape(new File(ccRoot, "include").getPath()))
+                    .append("\" \"").append(cmakeEscape(new File(ccRoot, "CL").getPath())).append("\")\n");
+            cmake.append("target_compile_definitions(kr_program PRIVATE CL_TARGET_OPENCL_VERSION=300 CL_USE_DEPRECATED_OPENCL_1_2_APIS)\n");
         }
         cmake.append("set_target_properties(kr_program PROPERTIES LINKER_LANGUAGE CXX)\n");
         cmake.append("target_link_options(kr_program PRIVATE \"LINKER:--allow-multiple-definition\")\n");
@@ -1233,6 +1262,7 @@ final class CompilerEngine {
             if (goArchive != null && goArchive.isFile()) cmake.append(" kr_go");
         }
         if (gui) cmake.append(" SDL3::SDL3");
+        if (hasCcOpenCl) cmake.append(" OpenCL");
         if (target == Target.WINDOWS) cmake.append(" ws2_32 winmm advapi32 userenv shell32 ole32 bcrypt ntdll");
         else cmake.append(" pthread dl rt m");
         cmake.append(")\n");
@@ -1498,9 +1528,11 @@ final class CompilerEngine {
         command.add("-O2"); command.add("-fPIC"); command.add("-shared");
         command.add("-L" + new File(toolchain, "usr/lib").getPath());
         command.add("-Wl,--export-dynamic");
+        command.add("-Wl,--no-undefined");
         addSources(command, sources);
         command.add("-o"); command.add(library.getPath());
         run(command, "Android-Bibliothek wird kompiliert", project);
+        if (!isShared) verifyAndroidRunnerEntrypoint(library);
         if (isShared) {
             String baseLibName = resolveDirectLibraryName(sources);
             File namedSo = new File(output, "lib" + baseLibName + ".so");
@@ -1524,6 +1556,29 @@ final class CompilerEngine {
             return localProjectDir.getName().replaceAll("-[0-9]+$", "");
         }
         return "kr_library";
+    }
+
+    private void verifyAndroidRunnerEntrypoint(File library) throws Exception {
+        File nm = new File(toolchain, "usr/bin/llvm-nm");
+        if (!nm.canExecute()) throw new IOException("Symbolprüfung nicht möglich: llvm-nm fehlt in der Compilerlaufzeit.");
+        ProcessBuilder builder = new ProcessBuilder(nm.getPath(), "-D", "--defined-only", library.getPath());
+        builder.redirectErrorStream(true);
+        Process process = builder.start();
+        boolean found = false;
+        StringBuilder outputText = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                outputText.append(line).append('\n');
+                String trimmed = line.trim();
+                if (trimmed.endsWith(" main") || trimmed.endsWith(" SDL_main") || trimmed.endsWith(" KrLanguageMain")) found = true;
+            }
+        }
+        int exit = process.waitFor();
+        if (exit != 0) throw new IOException("Symbolprüfung der Android-Bibliothek fehlgeschlagen: " + outputText.toString().trim());
+        if (!found) throw new IOException("Android-Build enthält keinen exportierten Programmeinstieg "
+                + "(main, SDL_main oder KrLanguageMain). Die Runner-APK wurde nicht erzeugt.");
+        log.line("Android-Programmeinstieg wurde vor dem Packaging verifiziert.");
     }
 
     private List<String> compiler() {

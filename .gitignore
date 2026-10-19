@@ -44,3 +44,15 @@ setup.log
 windows/bin/
 windows/toolchain/
 windows/toolchain.zip
+windows/runtime/
+linux/toolchain/
+linux/bin/
+linux/.verification/
+.linux-toolchain-cache/
+.windows-runtime-cache/
+.release-stage/
+*.tar.xz
+*.tar.gz
+*.part-aa
+*.part-ab
+*.part-ac

@@ -1,0 +1,1 @@
+40 GPU numerical cases for 33 distinct core kernels. Added patch_permute_reshape and patch_permute_reshape_backward with independent BCHW/BWHC CPU references (B=2,C=3,H=2,W=4). Linux build verification pending; Android Mali and Adreno tests pending for this revision. 17 distinct core kernels remain unvalidated.

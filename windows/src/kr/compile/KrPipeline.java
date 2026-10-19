@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,11 +21,14 @@ public final class KrPipeline {
         public final Set<KrLanguage> languagesUsed = new HashSet<>();
         public final KrSymbolTable symbolTable;
         public final KrCodeGenerator.Result codeResult;
+        public final KrComputePlan computePlan;
 
-        PipelineResult(boolean success, KrSymbolTable symbolTable, KrCodeGenerator.Result codeResult) {
+        PipelineResult(boolean success, KrSymbolTable symbolTable, KrCodeGenerator.Result codeResult,
+                       KrComputePlan computePlan) {
             this.success = success;
             this.symbolTable = symbolTable;
             this.codeResult = codeResult;
+            this.computePlan = computePlan;
         }
     }
 
@@ -85,6 +89,8 @@ public final class KrPipeline {
         symbolTable.resolveCalls(allSegments);
         allDiagnostics.addAll(symbolTable.getDiagnostics());
 
+        KrComputePlan computePlan = KrAdaptiveComputeAnalyzer.analyze(allSegments, config.computeMode);
+
         // Check if there are any fatal diagnostics
         boolean hasErrors = false;
         for (KrDiagnostic d : allDiagnostics) {
@@ -95,7 +101,7 @@ public final class KrPipeline {
         }
 
         if (hasErrors) {
-            PipelineResult res = new PipelineResult(false, symbolTable, null);
+            PipelineResult res = new PipelineResult(false, symbolTable, null, computePlan);
             res.diagnostics.addAll(allDiagnostics);
             return res;
         }
@@ -104,7 +110,12 @@ public final class KrPipeline {
         KrCodeGenerator generator = new KrCodeGenerator(symbolTable, allSegments, buildDir, actualGui);
         KrCodeGenerator.Result codeResult = generator.generate(config.vcpkgDependencies);
 
-        PipelineResult result = new PipelineResult(true, symbolTable, codeResult);
+        File computePlanFile = new File(buildDir, "adaptive_compute_plan.json");
+        try (FileOutputStream stream = new FileOutputStream(computePlanFile)) {
+            stream.write(computePlan.toJson().getBytes(StandardCharsets.UTF_8));
+        }
+
+        PipelineResult result = new PipelineResult(true, symbolTable, codeResult, computePlan);
         result.diagnostics.addAll(allDiagnostics);
         result.segments.addAll(allSegments);
 

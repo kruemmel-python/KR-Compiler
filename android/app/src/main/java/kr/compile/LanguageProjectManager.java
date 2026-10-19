@@ -7,6 +7,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.io.InputStream;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 
 /** Creates dependency-free Rust, Go, and KR Unified Language starter projects for all KR targets. */
 final class LanguageProjectManager {
@@ -43,7 +46,7 @@ final class LanguageProjectManager {
         if (!project.mkdirs()) throw new IOException("Projektstruktur kann nicht erstellt werden.");
         if (language == Language.RUST) createRust(project, name, gui);
         else if (language == Language.GO) createGo(project, name, gui);
-        else createKr(project, name, gui ? KrTemplate.KR_FUSION_GUI : KrTemplate.KR_FUSION_CONSOLE);
+        else createKr(context, project, name, gui ? KrTemplate.KR_FUSION_GUI : KrTemplate.KR_FUSION_CONSOLE);
         if (gui) write(new File(project, "kr-gui-target.txt"), "sdl3\n");
         write(new File(project, "README.md"), readme(language, gui));
         return project;
@@ -61,7 +64,7 @@ final class LanguageProjectManager {
         if (project.exists()) throw new IOException("Projekt existiert bereits: " + name);
         if (!project.mkdirs()) throw new IOException("Projektstruktur kann nicht erstellt werden.");
 
-        createKr(project, name, template);
+        createKr(context, project, name, template);
         if (template.isGui) {
             write(new File(project, "kr-gui-target.txt"), "sdl3\n");
         }
@@ -69,9 +72,9 @@ final class LanguageProjectManager {
         return project;
     }
 
-    private static void createKr(File project, String name, KrTemplate template) throws IOException {
+    private static void createKr(Context context, File project, String name, KrTemplate template) throws IOException {
         if (template == KrTemplate.KR_MODULAR) {
-            createModularKrProject(project, name);
+            createModularKrProject(context, project, name);
             return;
         }
         String code;
@@ -94,6 +97,10 @@ final class LanguageProjectManager {
     }
 
     public static void createModularKrProject(File project, String name) throws IOException {
+        createModularKrProject(null, project, name);
+    }
+
+    private static void createModularKrProject(Context context, File project, String name) throws IOException {
         String safeName = sanitize(name);
 
         // 1. Root configuration: forge.krproject
@@ -111,6 +118,8 @@ final class LanguageProjectManager {
         proj.append("cpp_standard = \"c++20\"\n");
         proj.append("rust_edition = \"2024\"\n");
         proj.append("go_version = \"1.24\"\n");
+        proj.append("\n[compute]\n");
+        proj.append("mode = \"AUTO\"\n");
         write(new File(project, safeName + ".krproject"), proj.toString());
 
         // 2. Root main.kr
@@ -204,7 +213,15 @@ final class LanguageProjectManager {
                 + "    a * b\n"
                 + "}\n");
         write(new File(compDir, "opencl_executor.kr"),
-                "// compute/opencl_executor.kr\n#include <iostream>\n\nextern \"C\" bool compute_opencl_available() {\n    std::cout << \"[Compute::OpenCL] Initialisiere GPU-Device.\" << std::endl;\n    return true;\n}\n");
+                "// compute/opencl_executor.kr - echte CC_OpenCL-Laufzeitprüfung\n#include <iostream>\n\n"
+                + "extern \"C\" int initialize_gpu(int);\n"
+                + "extern \"C\" void shutdown_gpu(int);\n"
+                + "extern \"C\" const char* cc_get_last_error();\n\n"
+                + "extern \"C\" bool compute_opencl_available() {\n"
+                + "    const int ok = initialize_gpu(0);\n"
+                + "    if (!ok) std::cout << \"[Compute::OpenCL] \" << cc_get_last_error() << std::endl;\n"
+                + "    return ok == 1;\n}\n"
+                + "extern \"C\" void compute_opencl_shutdown() { shutdown_gpu(0); }\n");
         write(new File(compDir, "code_generator.kr"), "// compute/code_generator.kr\nextern \"C\" void compute_emit_bytecode() {}\n");
         write(new File(compDir, "benchmark_engine.kr"), "// compute/benchmark_engine.kr\nextern \"C\" double compute_bench_flops() { return 4.2e9; }\n");
         write(new File(compDir, "memory_manager.kr"), "// compute/memory_manager.kr\nextern \"C\" size_t compute_vram_free() { return 1024 * 1024 * 512; }\n");
@@ -248,9 +265,31 @@ final class LanguageProjectManager {
         // 11. docs/
         File docsDir = new File(project, "docs");
         write(new File(docsDir, "ARCHITECTURE.md"), "# Architecture\nUmfassende modulare Architektur von KR_FORGE.\n");
+
+        if (context != null) {
+            copyAssetTree(context, "cc-opencl", new File(project, "components/cc-opencl"));
+        }
         write(new File(docsDir, "RESEARCH_METHOD.md"), "# Research Method\nForschungsmethoden und mathematische Verifikation.\n");
         write(new File(docsDir, "GUI_SPECIFICATION.md"), "# GUI Specification\nSpezifikation des SDL3 / Dear ImGui Windowing-Systems.\n");
         write(new File(docsDir, "MATHEMATICAL_PROVENANCE.md"), "# Mathematical Provenance\nMathematische Herleitung und Nachweise.\n");
+    }
+
+    private static void copyAssetTree(Context context, String assetPath, File destination) throws IOException {
+        String[] children = context.getAssets().list(assetPath);
+        if (children == null) throw new IOException("APK-Asset fehlt: " + assetPath);
+        if (children.length == 0) {
+            File parent = destination.getParentFile();
+            if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new IOException("Ordnerfehler: " + parent);
+            try (InputStream in = new BufferedInputStream(context.getAssets().open(assetPath));
+                 FileOutputStream file = new FileOutputStream(destination);
+                 BufferedOutputStream out = new BufferedOutputStream(file)) {
+                byte[] buffer = new byte[64 * 1024]; int count;
+                while ((count = in.read(buffer)) >= 0) out.write(buffer, 0, count);
+            }
+            return;
+        }
+        if (!destination.isDirectory() && !destination.mkdirs()) throw new IOException("Ordnerfehler: " + destination);
+        for (String child : children) copyAssetTree(context, assetPath + "/" + child, new File(destination, child));
     }
 
     private static void createRust(File project, String name, boolean gui) throws IOException {

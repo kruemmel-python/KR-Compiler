@@ -1421,6 +1421,7 @@ public final class MainActivity extends Activity implements
                 "Neue Datei…",
                 "Neuer Ordner…",
                 "Zuletzt geöffnete Projekte…",
+                "Adaptive Compute analysieren…",
                 "Einstellungen…",
                 "Über KR IDE"
         };
@@ -1437,12 +1438,38 @@ public final class MainActivity extends Activity implements
                         case 6: showCreateFileDialog(null); break;
                         case 7: showCreateFolderDialog(null); break;
                         case 8: showRecentProjectsDialog(); break;
-                        case 9: showSettingsDialog(); break;
-                        case 10: showAboutDialog(); break;
+                        case 9: showAdaptiveComputeDialog(); break;
+                        case 10: showSettingsDialog(); break;
+                        case 11: showAboutDialog(); break;
                     }
                 })
                 .setNegativeButton("Schließen", null)
                 .show();
+    }
+
+    private void showAdaptiveComputeDialog() {
+        File project = ProjectManager.getInstance().getActiveLocalDir();
+        if (project == null || !project.isDirectory()) {
+            new AlertDialog.Builder(this).setTitle("Adaptive Compute")
+                    .setMessage("Für die Analyse muss ein lokaler KR-Projektordner geöffnet sein.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        try {
+            KrProjectConfig config = KrProjectConfig.parse(KrProjectConfig.findProjectConfigFile(project), project.getName(), false);
+            KrComputePlan plan = KrAdaptiveComputeAnalyzer.analyzeProject(project, config.computeMode);
+            TextView report = new TextView(this);
+            report.setText(KrAdaptiveComputeAnalyzer.formatReport(plan));
+            report.setTextIsSelectable(true);
+            report.setPadding(32, 24, 32, 24);
+            ScrollView scroll = new ScrollView(this);
+            scroll.addView(report);
+            new AlertDialog.Builder(this).setTitle("Adaptive Compute")
+                    .setView(scroll).setPositiveButton("Schließen", null).show();
+        } catch (Exception ex) {
+            new AlertDialog.Builder(this).setTitle("Adaptive Compute – Fehler")
+                    .setMessage(ex.getMessage()).setPositiveButton("OK", null).show();
+        }
     }
 
     private void showCreateKrProjectDialog() {
@@ -1749,7 +1776,7 @@ public final class MainActivity extends Activity implements
         try {
             return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
         } catch (Exception e) {
-            return "4.0.3";
+            return "4.1.0";
         }
     }
 

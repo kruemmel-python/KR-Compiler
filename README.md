@@ -1,22 +1,43 @@
-# KR Compiler Android IDE
+# KR Compiler IDE
 
-KR Compiler Android IDE ist eine autarke, native mobile Entwicklungsumgebung für **KR Unified Language (`.kr`)**, **C++20**, **Rust** und **Go** auf ARM64-Android-Geräten. Projekte werden direkt auf dem Smartphone erstellt, analysiert und für **Android ARM64**, **Windows x64** oder **Linux x64** gebaut. Sowohl reine Konsolenprogramme als auch hardwarebeschleunigte grafische **SDL3-Anwendungen** werden nativ unterstützt.
+KR Compiler IDE ist eine portable Entwicklungsumgebung für **KR Unified Language (`.kr`)**, **C++20**, **Rust** und **Go** auf Android ARM64, Windows x64 und Linux x64. Die Distributionen bringen ihre Compiler-, Java- und Build-Laufzeiten mit und laden beim normalen IDE-Betrieb keine SDKs nach.
 
 ---
 
-## Version 4.0.3 herunterladen
+## Version 4.1.0 herunterladen
 
-Die installierbare APK, die bebilderten Benutzerhandbücher, die technische Dokumentation und die geprüften Beispiel-Artefakte befinden sich im [GitHub-Release v4.0.3](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.0.3).
+APK, portable Desktop-Pakete, Prüfsummen und technische Dokumentation befinden sich im [GitHub-Release v4.1.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.1.0).
 
-- **Release-APK (Android)**: `KR-Compiler-Android-IDE-v4.0.3.apk`
-- **SHA-256 (APK)**: `ac7823db51e65b920d1445ea5ab6db8883d2fd692f4110412f1c61a1be35094d`
-- **Windows Desktop Edition**: `KR-Compiler-IDE.jar` (1:1 Port für Windows 10/11, Starter: `windows/Start-KR-IDE.bat`)
-- **SHA-256 (Windows JAR)**: `80e45889f39136746a798a020fa52a6e1378661931c007d1489c4b7fd263bd64` (191.346 Bytes)
-- **Windows Toolchain (Portabel)**: `KR-Compiler-Windows-toolchain-v4.0.3.zip` (Inklusive MinGW C++20, Go-Binutils, Android-APK-Runner, SDL3 & SQLite3)
+- **Android**: `KR-Compiler-Android-IDE-v4.1.0.apk`
+- **Windows**: `KR-Compiler-Windows-x64-v4.1.0.zip`
+- **Linux**: `KR-Compiler-Linux-x64-v4.1.0.tar.xz` beziehungsweise die nummerierten Teilarchive des Releases
+- **Prüfsummen**: `SHA256SUMS-v4.1.0.txt`
 
 ### Systemvoraussetzungen
 - **Android**: Android 8.0+ (API 26+), 64-Bit ARM (`arm64-v8a`), ca. 3 GiB freier Speicher
-- **Windows**: Windows 10 / 11 (64-Bit), Java Runtime 17 oder neuer
+- **Windows**: Windows 10 / 11 x64; Java und Toolchain sind eingebettet
+- **Linux**: Ubuntu 22.04+ x64; Java und Toolchain sind eingebettet
+
+---
+
+## Neu in Version 4.1.0: Adaptive Compute und portable Linux-IDE
+
+- Neue eigenständige Linux-x64-IDE mit eingebettetem LLVM/Clang, JDK, CMake,
+  Ninja, Rust, Go, Android-NDK sowie Windows- und Linux-Zielsystemen.
+- Strukturierte Adaptive-Compute-Analyse mit explizitem Compute-Plan und den
+  Modi `AUTO`, `CPU_ONLY`, `GPU_ONLY` und `VERIFY`.
+- Konservative Ablehnung unsicherer Schleifen bei Abhängigkeiten,
+  Seiteneffekten, unbekanntem Aliasing oder nicht nachweisbaren Grenzen.
+- Tatsächliche CC_OpenCL-Enterprise-Quellen sind in Android, Windows und Linux
+  eingebunden; 50 Kernels und 60 numerische Windows-GPU-Validierungen wurden
+  auf dem vorhandenen AMD-OpenCL-System erfolgreich geprüft.
+- Android erkennt fehlende native Programmeinstiegspunkte bereits beim Build.
+- Windows und Linux enthalten eigene Java-Laufzeiten und starten ohne
+  System-JDK oder automatischen SDK-Download.
+
+Der vollständige Enterprise-Pflichtenheftstatus bleibt **INCOMPLETE**; Details
+und noch nicht physisch geprüfte Hardwarepfade stehen in
+[`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
 
 ---
 

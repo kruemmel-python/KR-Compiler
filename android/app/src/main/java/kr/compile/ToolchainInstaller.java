@@ -12,6 +12,7 @@ import java.util.zip.ZipInputStream;
 final class ToolchainInstaller {
     private static final String STAMP = "kr-toolchain-rust-1.99-go-1.27-v3";
     private static final String GRAPHICS_STAMP = "kr-android-graphics-headers-v6";
+    private static final String COMPUTE_STAMP = "kr-cc-opencl-enterprise-v1";
     private ToolchainInstaller() {}
 
     static File ensure(Context context, CompilerEngine.Logger log) throws IOException {
@@ -26,6 +27,7 @@ final class ToolchainInstaller {
         if (stamp.isFile() && clang.isFile()) {
             makeExecutables(root);
             installGraphicsHeaders(context, root, log);
+            installComputeRuntime(context, root, log);
             verify(root);
             return root;
         }
@@ -58,6 +60,7 @@ final class ToolchainInstaller {
         }
         makeExecutables(root);
         installGraphicsHeaders(context, root, log);
+        installComputeRuntime(context, root, log);
         verify(root);
         if (!stamp.createNewFile()) throw new IOException("Compilerstatus kann nicht gespeichert werden.");
         return root;
@@ -134,6 +137,39 @@ final class ToolchainInstaller {
         }
         if (!header.isFile()) throw new IOException("Android-GUI-Header konnten nicht installiert werden.");
         if (!stamp.isFile() && !stamp.createNewFile()) throw new IOException("Grafik-Header-Status kann nicht gespeichert werden.");
+    }
+
+    private static void installComputeRuntime(Context context, File root, CompilerEngine.Logger log) throws IOException {
+        File destination = new File(root, "components/cc-opencl");
+        File source = new File(destination, "src/CC_OpenCL.c");
+        File stamp = new File(root, COMPUTE_STAMP);
+        if (stamp.isFile() && source.isFile()) return;
+        log.line("CC_OpenCL Enterprise Runtime wird offline eingerichtet …");
+        if (destination.exists()) delete(destination);
+        copyAssetTree(context, "cc-opencl", destination);
+        if (!source.isFile() || !new File(destination, "CL/cl.h").isFile()
+                || !new File(destination, "include/SymBio_Interface.h").isFile()) {
+            throw new IOException("CC_OpenCL-Quellpaket in der APK ist unvollständig.");
+        }
+        if (stamp.exists()) Files.delete(stamp.toPath());
+        if (!stamp.createNewFile()) throw new IOException("Compute-Runtime-Status kann nicht gespeichert werden.");
+    }
+
+    private static void copyAssetTree(Context context, String assetPath, File destination) throws IOException {
+        String[] children = context.getAssets().list(assetPath);
+        if (children == null) throw new IOException("APK-Asset fehlt: " + assetPath);
+        if (children.length == 0) {
+            File parent = destination.getParentFile();
+            if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new IOException("Ordnerfehler: " + parent);
+            try (InputStream in = new BufferedInputStream(context.getAssets().open(assetPath));
+                 OutputStream out = new BufferedOutputStream(new FileOutputStream(destination))) {
+                byte[] buffer = new byte[64 * 1024]; int count;
+                while ((count = in.read(buffer)) >= 0) out.write(buffer, 0, count);
+            }
+            return;
+        }
+        if (!destination.isDirectory() && !destination.mkdirs()) throw new IOException("Ordnerfehler: " + destination);
+        for (String child : children) copyAssetTree(context, assetPath + "/" + child, new File(destination, child));
     }
 
     private static void copy(File source, File destination) throws IOException {
