@@ -1008,9 +1008,10 @@ final class CompilerEngine {
         if (pipeline.languagesUsed.size() == 1 && !gui) {
             if (pipeline.languagesUsed.contains(KrLanguage.CPP)) {
                 log.line("Reines C++ in .kr; direkter Compilerpfad wird verwendet.");
-                List<File> cppSrcs = (pipeline.codeResult.cppSources != null && !pipeline.codeResult.cppSources.isEmpty())
+                List<File> cppSrcs = new ArrayList<>((pipeline.codeResult.cppSources != null && !pipeline.codeResult.cppSources.isEmpty())
                         ? pipeline.codeResult.cppSources
-                        : Collections.singletonList(pipeline.codeResult.cppSource);
+                        : Collections.singletonList(pipeline.codeResult.cppSource));
+                appendAdaptiveComputeRuntime(cppSrcs, pipeline.computePlan);
                 return target == Target.ANDROID ? buildAndroid(cppSrcs) : buildDesktop(cppSrcs);
             } else if (pipeline.languagesUsed.contains(KrLanguage.RUST)) {
                 log.line("Reines Rust in .kr; Cargo und rustc werden verwendet.");
@@ -1131,7 +1132,7 @@ final class CompilerEngine {
     private File linkKrUnified(File cppSource, List<File> cppSources, File rustArchive, File goArchive, boolean gui, Set<String> vcpkgDependencies) throws Exception {
         File finalizer = new File(project.getParentFile(), "kr-unified-finalizer");
         if (!finalizer.isDirectory() && !finalizer.mkdirs()) throw new IOException("KR-Linkordner kann nicht erstellt werden.");
-        File ccRoot = new File(project, "components/cc-opencl");
+        File ccRoot = adaptiveComputeRoot();
         File ccDriver = new File(ccRoot, "src/CC_OpenCL.c");
         File ccNoise = new File(ccRoot, "src/CipherCore_NoiseCtrl.c");
         boolean hasCcOpenCl = ccDriver.isFile() && ccNoise.isFile();
@@ -1592,8 +1593,18 @@ final class CompilerEngine {
         Set<String> includeDirs = new LinkedHashSet<>();
         includeDirs.add(project.getPath());
         collectHeaderDirectories(project, includeDirs);
+        File ccRoot = null;
         for (File s : sources) {
             if (s.getParentFile() != null) includeDirs.add(s.getParentFile().getPath());
+            if (s.getName().equalsIgnoreCase("CC_OpenCL.c") && s.getParentFile() != null) {
+                ccRoot = s.getParentFile().getParentFile();
+            }
+        }
+        if (ccRoot != null) {
+            includeDirs.add(ccRoot.getPath());
+            includeDirs.add(new File(ccRoot, "include").getPath());
+            includeDirs.add(new File(ccRoot, "CL").getPath());
+            command.add("-DKR_HAS_CC_OPENCL=1");
         }
         for (String inc : includeDirs) {
             command.add("-I");
@@ -1676,6 +1687,26 @@ final class CompilerEngine {
         } else if (target == Target.ANDROID) {
             Collections.addAll(command, "-lc++_shared", "-llog", "-landroid", "-ldl", "-lm");
         }
+    }
+
+    private void appendAdaptiveComputeRuntime(List<File> sources, KrComputePlan plan) {
+        if (plan == null || !plan.hasGpuEligibleOperations() || plan.getMode() == KrComputePlan.Mode.CPU_ONLY) return;
+        File root = adaptiveComputeRoot();
+        File driver = new File(root, "src/CC_OpenCL.c");
+        File noise = new File(root, "src/CipherCore_NoiseCtrl.c");
+        if (driver.isFile() && noise.isFile()) {
+            sources.add(driver);
+            sources.add(noise);
+            log.line("Adaptive Compute bindet die portable CC_OpenCL-Runtime der KR IDE ein.");
+        }
+    }
+
+    private File adaptiveComputeRoot() {
+        File projectRuntime = new File(project, "components/cc-opencl");
+        if (new File(projectRuntime, "src/CC_OpenCL.c").isFile()) return projectRuntime;
+        File installed = new File(toolchain, "components/cc-opencl");
+        if (new File(installed, "src/CC_OpenCL.c").isFile()) return installed;
+        return projectRuntime;
     }
 
     private static boolean isCppInCFile(File file, String content) {

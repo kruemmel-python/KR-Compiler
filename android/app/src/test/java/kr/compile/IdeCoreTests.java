@@ -19,6 +19,8 @@ public class IdeCoreTests {
         assertTrue(header.contains("kr_compute_tensor_add_f32"));
         assertTrue(header.contains("kr_compute_matmul_f32"));
         assertTrue(header.contains("kr_compute_image_rgba_scale_f32"));
+        assertTrue(header.contains("kr_compute_require"));
+        assertTrue(cpp.contains("GPU_REQUIRED_FAILED"));
     }
 
     private static KrSegment cppSegment(String source) {
@@ -90,6 +92,41 @@ public class IdeCoreTests {
         assertTrue(new File(output, "kr_adaptive_compute.h").isFile());
         assertTrue(new File(output, "kr_adaptive_compute.cpp").isFile());
         assertTrue(result.codeResult.cppSources.contains(new File(output, "kr_adaptive_compute.cpp")));
+    }
+
+    @Test
+    public void testAutomaticFp32LoopLoweringUsesGeneratedRuntime() throws Exception {
+        File workingDirectory = new File(System.getProperty("user.dir"));
+        File project = new File(workingDirectory, "KR_AUTO_COMPUTE_TEST");
+        if (!project.isDirectory()) project = new File(workingDirectory, "../KR_AUTO_COMPUTE_TEST");
+        File output = new File("build/test-auto-compute-lowering");
+        assertTrue(output.isDirectory() || output.mkdirs());
+
+        KrPipeline.PipelineResult result = KrPipeline.process(project, output, false);
+        assertTrue(result.success);
+        String generated = new String(java.nio.file.Files.readAllBytes(
+                new File(output, "kr_cpp.cpp").toPath()), java.nio.charset.StandardCharsets.UTF_8);
+        String original = new String(java.nio.file.Files.readAllBytes(
+                new File(project, "main.kr").toPath()), java.nio.charset.StandardCharsets.UTF_8);
+
+        assertFalse(original.contains("kr_compute_"));
+        assertTrue(generated.contains("kr_compute_add_f32(left, right, output"));
+        assertTrue(generated.contains("kr_compute_mul_f32(left, right, output"));
+        assertTrue(generated.contains("kr_compute_require("));
+        assertFalse(generated.contains("output[index] = left[index] + right[index]"));
+        assertFalse(generated.contains("output[index] = left[index] * right[index]"));
+    }
+
+    @Test
+    public void testAutomaticLoweringKeepsUnprovenTypesOnCpuPath() {
+        String source = "void add(double* out,const double* a,const double* b,int n){"
+                + "for(int i=0;i<n;i++){out[i]=a[i]+b[i];}}";
+        KrSegment original = cppSegment(source);
+        KrComputePlan plan = KrAdaptiveComputeAnalyzer.analyze(
+                java.util.List.of(original), KrComputePlan.Mode.AUTO);
+        java.util.List<KrSegment> lowered = KrAdaptiveComputeLowerer.lower(java.util.List.of(original), plan);
+        assertEquals(source, lowered.get(0).source);
+        assertFalse(lowered.get(0).source.contains("kr_compute_add_f32"));
     }
 
     @Test

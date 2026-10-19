@@ -1,0 +1,40 @@
+#include <cmath>
+#include <iostream>
+
+void add_vectors(float* output, const float* left, const float* right, int count) {
+    for (int index = 0; index < count; index++) {
+        output[index] = left[index] + right[index];
+    }
+}
+
+void multiply_vectors(float* output, const float* left, const float* right, int count) {
+    for (int index = 0; index < count; index++) {
+        output[index] = left[index] * right[index];
+    }
+}
+
+int main() {
+    constexpr int count = 8192;
+    static float left[count];
+    static float right[count];
+    static float sum[count];
+    static float product[count];
+
+    for (int index = 0; index < count; index++) {
+        left[index] = static_cast<float>(index) * 0.25f;
+        right[index] = 2.0f + static_cast<float>(index % 7);
+    }
+
+    // Normale KR/C++-Aufrufe: Der Compiler wandelt die beiden Schleifen oben
+    // automatisch in die portable Adaptive-Compute-Runtime um.
+    add_vectors(sum, left, right, count);
+    multiply_vectors(product, left, right, count);
+
+    for (int index = 0; index < count; index++) {
+        if (std::fabs(sum[index] - (left[index] + right[index])) > 0.0001f) return 1;
+        if (std::fabs(product[index] - (left[index] * right[index])) > 0.0001f) return 2;
+    }
+
+    std::cout << "KR AUTO COMPUTE OK: " << sum[4096] << " / " << product[4096] << std::endl;
+    return 0;
+}

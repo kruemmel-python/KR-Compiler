@@ -147,6 +147,7 @@ public final class KrCodeGenerator {
         StringBuilder sb = new StringBuilder();
         sb.append("// Automatisch generierte C++20-Quelle für KR Unified Language\n");
         sb.append("#include \"kr_bridge.h\"\n");
+        sb.append("#include \"kr_adaptive_compute.h\"\n");
         sb.append("#include <iostream>\n");
         sb.append("#include <string>\n\n");
 
@@ -214,6 +215,7 @@ public final class KrCodeGenerator {
                 StringBuilder mb = new StringBuilder();
                 mb.append("// Automatisch generiertes C++20-Modul aus ").append(entry.getKey()).append("\n");
                 mb.append("#include \"../kr_bridge.h\"\n");
+                mb.append("#include \"../kr_adaptive_compute.h\"\n");
                 mb.append("#include <iostream>\n#include <string>\n\n");
                 for (KrSegment s : entry.getValue()) {
                     int curLine = countLines(mb.toString()) + 1;

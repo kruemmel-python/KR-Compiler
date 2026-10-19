@@ -90,6 +90,7 @@ public final class KrPipeline {
         allDiagnostics.addAll(symbolTable.getDiagnostics());
 
         KrComputePlan computePlan = KrAdaptiveComputeAnalyzer.analyze(allSegments, config.computeMode);
+        List<KrSegment> loweredSegments = KrAdaptiveComputeLowerer.lower(allSegments, computePlan);
 
         // Check if there are any fatal diagnostics
         boolean hasErrors = false;
@@ -107,7 +108,7 @@ public final class KrPipeline {
         }
 
         // Generate target code
-        KrCodeGenerator generator = new KrCodeGenerator(symbolTable, allSegments, buildDir, actualGui);
+        KrCodeGenerator generator = new KrCodeGenerator(symbolTable, loweredSegments, buildDir, actualGui);
         KrCodeGenerator.Result codeResult = generator.generate(config.vcpkgDependencies);
         File computeRuntime = KrAdaptiveComputeCodeGenerator.generate(buildDir, computePlan);
         codeResult.cppSources.add(computeRuntime);

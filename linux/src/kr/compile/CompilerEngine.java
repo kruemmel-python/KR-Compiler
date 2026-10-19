@@ -204,7 +204,9 @@ public final class CompilerEngine {
         if (sourcesToCompile.isEmpty()) {
             sourcesToCompile.addAll(findCppFiles(projectDir));
         }
-        File ccRoot = new File(projectDir, "components/cc-opencl");
+        File ccRoot = (res.computePlan != null && res.computePlan.hasGpuEligibleOperations()
+                && res.computePlan.getMode() != KrComputePlan.Mode.CPU_ONLY)
+                ? adaptiveComputeRoot() : new File(projectDir, ".kr-no-compute-runtime");
         File ccDriver = new File(ccRoot, "src/CC_OpenCL.c");
         File ccNoise = new File(ccRoot, "src/CipherCore_NoiseCtrl.c");
         if (ccDriver.isFile() && ccNoise.isFile()) {
@@ -351,7 +353,7 @@ public final class CompilerEngine {
                 cmd.add("-I" + subDir.getAbsolutePath());
             }
         }
-        File bundledCcRoot = new File(projectDir, "components/cc-opencl");
+        File bundledCcRoot = adaptiveComputeRoot();
         if (bundledCcRoot.isDirectory()) {
             if (new File(bundledCcRoot, "src/CC_OpenCL.c").isFile()
                     && new File(bundledCcRoot, "src/CipherCore_NoiseCtrl.c").isFile()) {
@@ -537,6 +539,17 @@ public final class CompilerEngine {
 
         log.line("[INFO] Erzeugt: " + artifact.getName() + " (" + artifact.length() + " Bytes)");
         return artifact;
+    }
+
+    private File adaptiveComputeRoot() {
+        File projectRuntime = new File(projectDir, "components/cc-opencl");
+        if (new File(projectRuntime, "src/CC_OpenCL.c").isFile()) return projectRuntime;
+        File toolchain = ToolchainManager.getInstance().getToolchainDir();
+        if (toolchain != null && toolchain.getParentFile() != null) {
+            File portableRuntime = new File(toolchain.getParentFile(), "components/cc-opencl");
+            if (new File(portableRuntime, "src/CC_OpenCL.c").isFile()) return portableRuntime;
+        }
+        return projectRuntime;
     }
 
     private File packageAndroidApk(File outputDir, File userSo, File projectDir, boolean isGui, File buildLog) throws Exception {
