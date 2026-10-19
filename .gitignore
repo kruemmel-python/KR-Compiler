@@ -56,3 +56,12 @@ linux/.verification/
 *.part-aa
 *.part-ab
 *.part-ac
+
+# Documentation policy: current files are updated in place. Historical
+# release documents and generated office/image exports belong in Releases.
+/RELEASE_NOTES_v*.md
+/SHA256SUMS-v*.txt
+/docs/*_v*.md
+/docs/*.docx
+/docs/images/
+/KR_Live_Demo/

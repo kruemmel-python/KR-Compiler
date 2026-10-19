@@ -27,6 +27,15 @@ public class IdeCoreTests {
         return new KrSegment(KrLanguage.CPP, source, "main.kr", 1, 1, 1, 1, 0, source.length());
     }
 
+    private static File autoComputeExample() {
+        File directory = new File(System.getProperty("user.dir")).getAbsoluteFile();
+        for (int depth = 0; directory != null && depth < 6; depth++, directory = directory.getParentFile()) {
+            File candidate = new File(directory, "KR_AUTO_COMPUTE_TEST");
+            if (candidate.isDirectory()) return candidate;
+        }
+        return new File(System.getProperty("user.dir"), "KR_AUTO_COMPUTE_TEST");
+    }
+
     @Test
     public void testAdaptiveComputeAcceptsIndependentElementwiseLoop() {
         String source = "void add(float* out, const float* a, const float* b, int n) {\n"
@@ -62,9 +71,7 @@ public class IdeCoreTests {
 
     @Test
     public void testAdaptiveComputeExampleProject() throws Exception {
-        File workingDirectory = new File(System.getProperty("user.dir"));
-        File project = new File(workingDirectory, "example");
-        if (!project.isDirectory()) project = new File(workingDirectory, "../example");
+        File project = autoComputeExample();
         assertTrue("The shipped example project must exist", project.isDirectory());
 
         KrProjectConfig config = KrProjectConfig.parse(
@@ -76,15 +83,13 @@ public class IdeCoreTests {
         KrComputePlan.Entry entry = plan.getEntries().get(0);
         assertEquals(KrComputePlan.Operation.ELEMENTWISE_ADD, entry.operation);
         assertEquals(KrComputePlan.Disposition.GPU_ELIGIBLE, entry.disposition);
-        assertEquals(java.util.List.of("a", "b"), entry.reads);
-        assertEquals(java.util.List.of("out"), entry.writes);
+        assertEquals(java.util.List.of("left", "right"), entry.reads);
+        assertEquals(java.util.List.of("output"), entry.writes);
     }
 
     @Test
     public void testAdaptiveComputeExampleGeneratesNativeRuntime() throws Exception {
-        File workingDirectory = new File(System.getProperty("user.dir"));
-        File project = new File(workingDirectory, "example");
-        if (!project.isDirectory()) project = new File(workingDirectory, "../example");
+        File project = autoComputeExample();
         File output = new File("build/test-adaptive-example-pipeline");
         assertTrue(output.isDirectory() || output.mkdirs());
         KrPipeline.PipelineResult result = KrPipeline.process(project, output, false);
@@ -96,9 +101,7 @@ public class IdeCoreTests {
 
     @Test
     public void testAutomaticFp32LoopLoweringUsesGeneratedRuntime() throws Exception {
-        File workingDirectory = new File(System.getProperty("user.dir"));
-        File project = new File(workingDirectory, "KR_AUTO_COMPUTE_TEST");
-        if (!project.isDirectory()) project = new File(workingDirectory, "../KR_AUTO_COMPUTE_TEST");
+        File project = autoComputeExample();
         File output = new File("build/test-auto-compute-lowering");
         assertTrue(output.isDirectory() || output.mkdirs());
 

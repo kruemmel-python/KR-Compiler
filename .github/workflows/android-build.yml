@@ -40,6 +40,6 @@ jobs:
       - name: APK als Workflow-Artefakt bereitstellen
         uses: actions/upload-artifact@v4
         with:
-          name: KR-Compiler-Android-IDE-v3.1
-          path: KR-Compiler-Android-IDE-v3.1.apk
+          name: KR-Compiler-Android-IDE-v4.2.1
+          path: KR-Compiler-Android-IDE-v4.2.1.apk
           if-no-files-found: error
