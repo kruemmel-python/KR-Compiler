@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "workspace": "D:/android_project",
+  "rows": [
+    {"name": "Android JVM unit tests", "os": "Windows", "command": ["gradlew.bat", ":app:testDebugUnitTest", "--no-daemon"], "timeoutSeconds": 1200},
+    {"name": "Windows portable runtime smoke test", "os": "Windows", "command": ["windows/runtime/jdk/bin/java.exe", "-version"], "timeoutSeconds": 120},
+    {"name": "Ubuntu/Linux portable runtime smoke test", "os": "Linux", "command": ["linux/toolchain/jdk/bin/java", "-version"], "timeoutSeconds": 120},
+    {"name": "Physical Android device discovery", "requires": "adb", "command": ["adb", "shell", "getprop", "ro.hardware.egl"], "timeoutSeconds": 60}
+  ]
+}

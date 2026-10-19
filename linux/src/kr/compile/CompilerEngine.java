@@ -353,6 +353,10 @@ public final class CompilerEngine {
         }
         File bundledCcRoot = new File(projectDir, "components/cc-opencl");
         if (bundledCcRoot.isDirectory()) {
+            if (new File(bundledCcRoot, "src/CC_OpenCL.c").isFile()
+                    && new File(bundledCcRoot, "src/CipherCore_NoiseCtrl.c").isFile()) {
+                cmd.add("-DKR_HAS_CC_OPENCL=1");
+            }
             cmd.add("-I" + bundledCcRoot.getAbsolutePath());
             cmd.add("-I" + new File(bundledCcRoot, "include").getAbsolutePath());
             cmd.add("-I" + new File(bundledCcRoot, "CL").getAbsolutePath());

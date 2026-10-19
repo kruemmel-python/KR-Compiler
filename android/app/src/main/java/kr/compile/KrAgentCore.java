@@ -297,15 +297,22 @@ public final class KrAgentCore {
         sys.append("Du bist der autonome Programmieragent der KR Compiler Android IDE. Du entwickelst und reparierst Projekte in der KR Unified Language (.kr), C++20, Rust und Go.\n\n")
            .append("KOMMUNIKATIONSREGELN:\n")
            .append("1. Antworte AUSSCHLIESSLICH als gültiges JSON-Objekt mit genau diesen Schlüsseln: {\"action\": \"...\", \"path\": \"...\", \"search\": \"...\", \"replace\": \"...\", \"content\": \"...\", \"message\": \"...\"}\n")
-           .append("   action MUSS eines der folgenden Schlüsselwörter sein: list, read, replace, write, build, done.\n")
+           .append("   action MUSS eines der folgenden Schlüsselwörter sein: list, read, adaptive, replace, write, build, done.\n")
            .append("2. WERKZEUG-REGELN:\n")
            .append("   - 'list': Listet Verzeichnisse auf (z. B. path=\"\" für das Hauptverzeichnis, path=\"gui\" für Unterordner).\n")
            .append("   - 'read': Liest den Inhalt einer Textdatei mit Zeilennummern (z. B. path=\"nexus.krproject\", path=\"main.kr\").\n")
            .append("             TIPP: Um gezielt Zeilen zu lesen, gib den Bereich an: path=\"gui/window.kr:190-230\".\n")
+           .append("   - 'adaptive': Analysiert Compute-Kandidaten und die letzte Laufzeit-Telemetrie. Diese Aktion ist immer schreibgeschützt.\n")
            .append("   - 'replace': Ersetzt einen fehlerhaften Codeabschnitt zielgenau in einer Datei (benötigt 'path', 'search' und 'replace').\n")
            .append("   - 'write': Schreibt eine Datei komplett neu oder legt eine neue Datei an (benötigt 'path' und 'content').\n")
            .append("   - 'build': Kompiliert das Projekt. Baue erst nach einer gezielten Reparatur oder um einen gemeldeten Compilerfehler zu reproduzieren.\n")
            .append("   - 'done': Beendet den Auftrag erfolgreich (benötigt 'message' mit deiner Zusammenfassung auf Deutsch).\n\n");
+
+        sys.append("ADAPTIVE-COMPUTE-REGELN:\n")
+           .append("- Verwende 'adaptive', bevor du CPU/GPU-Optimierungen empfiehlst.\n")
+           .append("- Behaupte niemals einen Geschwindigkeits- oder Energiegewinn ohne gemessene Telemetrie.\n")
+           .append("- Erhalte immer eine CPU-Referenz und empfehle VERIFY für numerisch sensible Reduktionen.\n")
+           .append("- Unbekannte Seiteneffekte, Aliasing oder unklare Grenzen bleiben auf der CPU.\n\n");
 
         if (isReadOnly) {
             sys.append("⚠️ WICHTIGER HINWEIS ZUM AKTUELLEN AUFTRAG:\n")
@@ -356,6 +363,7 @@ public final class KrAgentCore {
                 switch (kind) {
                     case "list" -> output = listFiles(workspace, path);
                     case "read" -> output = read(workspace, path, action);
+                    case "adaptive" -> output = adaptive(workspace);
                     case "replace" -> {
                         if (isReadOnly) {
                             output = "Hinweis: Der Benutzer hat keine Codeänderung angefordert (Auftrag: '" + task + "'). Bitte ändere keine Dateien, sondern analysiere die vorhandenen Dateien und beende mit 'done'.";
@@ -1012,6 +1020,23 @@ public final class KrAgentCore {
             }
         }
         return target;
+    }
+
+    private String adaptive(File root) throws IOException {
+        KrProjectConfig config = KrProjectConfig.parse(
+                KrProjectConfig.findProjectConfigFile(root), root.getName(), false);
+        KrComputePlan plan = KrAdaptiveComputeAnalyzer.analyzeProject(root, config.computeMode);
+        StringBuilder result = new StringBuilder(KrAdaptiveComputeAnalyzer.formatReport(plan));
+        File telemetryFile = new File(new File(root, "KR_BUILD"), "adaptive_compute_telemetry.jsonl");
+        KrComputeTelemetry telemetry = KrComputeTelemetry.readLast(telemetryFile);
+        if (telemetry == null) {
+            File active = CompilerEngine.getActiveWorkspaceOutput(context);
+            telemetry = KrComputeTelemetry.readLast(new File(active, "adaptive_compute_telemetry.jsonl"));
+        }
+        if (telemetry != null) result.append(telemetry.formatReport());
+        else result.append("\nKeine Laufzeitmessung vorhanden. Keine Leistungs- oder Energieaussage zulässig.\n");
+        result.append("\nSicherheitsregel: Nur GPU_ELIGIBLE-Kandidaten optimieren; CPU_REQUIRED unverändert lassen.\n");
+        return result.toString();
     }
 
     private String listFiles(File root, String relative) throws IOException {

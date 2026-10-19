@@ -4,20 +4,35 @@ KR Compiler IDE ist eine portable Entwicklungsumgebung für **KR Unified Languag
 
 ---
 
-## Version 4.1.1 herunterladen
+## Version 4.2.0 herunterladen
 
-APK, portable Desktop-Pakete, Beispielprojekt, Prüfsummen und technische Dokumentation befinden sich im [GitHub-Release v4.1.1](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.1.1).
+APK, portable Desktop-Pakete, Beispielprojekt, Prüfberichte, Prüfsummen und technische Dokumentation befinden sich im [GitHub-Release v4.2.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.2.0).
 
-- **Android**: `KR-Compiler-Android-IDE-v4.1.1.apk`
-- **Windows**: `KR-Compiler-Windows-x64-v4.1.1.zip`
-- **Linux**: `KR-Compiler-Linux-x64-v4.1.1.tar.xz`
-- **Adaptive-Compute-Beispiel**: `KR-Compiler-Adaptive-Compute-example-v4.1.1.zip`
-- **Prüfsummen**: `SHA256SUMS-v4.1.1.txt`
+- **Android**: `KR-Compiler-Android-IDE-v4.2.0.apk`
+- **Windows**: `KR-Compiler-Windows-x64-v4.2.0.zip`
+- **Linux**: `KR-Compiler-Linux-x64-v4.2.0.tar.xz`
+- **Adaptive-Compute-Beispiel**: `KR-Compiler-Adaptive-Compute-example-v4.2.0.zip`
+- **Adaptive-Compute-Validierung**: `KR-Compiler-Adaptive-Compute-validation-v4.2.0.zip`
+- **Prüfsummen**: `SHA256SUMS-v4.2.0.txt`
 
 ### Systemvoraussetzungen
 - **Android**: Android 8.0+ (API 26+), 64-Bit ARM (`arm64-v8a`), ca. 3 GiB freier Speicher
 - **Windows**: Windows 10 / 11 x64; Java und Toolchain sind eingebettet
 - **Linux**: Ubuntu 22.04+ x64; Java und Toolchain sind eingebettet
+
+---
+
+## Neu in Version 4.2.0: Portable native Adaptive-Compute-Laufzeit
+
+- Automatisch generierte C++20-CPU/GPU-Laufzeit für Vektoren/Tensoren,
+  Matrixmultiplikation, Reduktionen, RGBA-Bilder und Conv2D.
+- Echte CC_OpenCL-Ausführung mit CPU-Fallback und VERIFY-Vergleich.
+- Telemetrie für Gerät, Version, Fähigkeiten, Entscheidung, Zeiten,
+  Datentransfer, Speicher, Fallback und Validierung.
+- Android exportiert Laufzeit-Telemetrie nach `Download/`.
+- Der KI-Agent besitzt die schreibgeschützte Aktion `adaptive`.
+- Benchmark- und Regressionswerkzeuge melden fehlende Hardware ausdrücklich
+  als `SKIPPED`; Energie wird ohne Messquelle nicht geschätzt.
 
 ---
 

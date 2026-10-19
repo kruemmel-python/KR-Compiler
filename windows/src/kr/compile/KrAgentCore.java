@@ -242,16 +242,18 @@ public final class KrAgentCore {
         sys.append("Du bist der autonome Programmieragent der KR Compiler Windows IDE. Du entwickelst und reparierst Projekte in der KR Unified Language (.kr), C++20, Rust und Go.\n\n")
            .append("KOMMUNIKATIONSREGELN:\n")
            .append("1. Antworte AUSSCHLIESSLICH als gültiges JSON-Objekt mit genau diesen Schlüsseln: {\"action\": \"...\", \"path\": \"...\", \"search\": \"...\", \"replace\": \"...\", \"content\": \"...\", \"message\": \"...\"}\n")
-           .append("   action MUSS eines der folgenden Schlüsselwörter sein: list, read, replace, write, build, done.\n")
+           .append("   action MUSS eines der folgenden Schlüsselwörter sein: list, read, adaptive, replace, write, build, done.\n")
            .append("2. WERKZEUG-REGELN:\n")
            .append("   - 'list': Listet Verzeichnisse auf (z. B. path=\"\" für das Hauptverzeichnis, path=\"gui\" für Unterordner).\n")
            .append("   - 'read': Liest den Inhalt einer Textdatei mit Zeilennummern (z. B. path=\"nexus.krproject\", path=\"main.kr\").\n")
            .append("             TIPP: Um gezielt Zeilen zu lesen, gib den Bereich an: path=\"gui/window.kr:190-230\".\n")
+           .append("   - 'adaptive': Analysiert Compute-Kandidaten und Laufzeit-Telemetrie (schreibgeschützt).\n")
            .append("   - 'replace': Ersetzt einen fehlerhaften Codeabschnitt zielgenau in einer Datei (benötigt 'path', 'search' und 'replace').\n")
            .append("                HAUPTWERKZEUG ZUR FEHLERBEHEBUNG: Nutze immer 'replace' statt 'write', um Tippfehler oder Datenverlust bei großen Dateien zu verhindern!\n")
            .append("   - 'write': Erstellt eine neue Datei oder ersetzt eine gesamte Datei (benötigt 'path' und 'content').\n")
            .append("   - 'build': Führt den Compilerlauf für die aktive Zielplattform aus.\n")
-           .append("   - 'done': Beendet den Auftrag erfolgreich (Abschlussbericht im Feld 'message').\n\n");
+           .append("   - 'done': Beendet den Auftrag erfolgreich (Abschlussbericht im Feld 'message').\n\n")
+           .append("ADAPTIVE-COMPUTE: Erst 'adaptive' verwenden. Keine Leistungs-/Energiebehauptung ohne Messwerte; CPU-Referenz und VERIFY für Reduktionen erhalten; Aliasing und unbekannte Seiteneffekte bleiben CPU.\n\n");
 
         if (isReadOnly) {
             sys.append("WICHTIGE REGEL FÜR DIESEN AUFTRAG (REINE ANALYSE):\n")
@@ -303,6 +305,7 @@ public final class KrAgentCore {
                 switch (kind) {
                     case "list" -> output = listFiles(workspace, path);
                     case "read" -> output = read(workspace, path, action);
+                    case "adaptive" -> output = adaptive(workspace);
                     case "replace" -> {
                         if (isReadOnly) {
                             output = "Hinweis: Der Benutzer hat keine Codeänderung angefordert (Auftrag: '" + task + "'). Bitte ändere keine Dateien, sondern analysiere die vorhandenen Dateien und beende mit 'done'.";
@@ -937,6 +940,15 @@ public final class KrAgentCore {
             }
         }
         return target;
+    }
+
+    private String adaptive(File root) throws IOException {
+        KrProjectConfig config = KrProjectConfig.parse(KrProjectConfig.findProjectConfigFile(root), root.getName(), false);
+        KrComputePlan plan = KrAdaptiveComputeAnalyzer.analyzeProject(root, config.computeMode);
+        StringBuilder result = new StringBuilder(KrAdaptiveComputeAnalyzer.formatReport(plan));
+        KrComputeTelemetry telemetry = KrComputeTelemetry.readLast(new File(new File(root, "KR_BUILD"), "adaptive_compute_telemetry.jsonl"));
+        result.append(telemetry != null ? telemetry.formatReport() : "\nKeine Laufzeitmessung vorhanden. Keine Leistungs- oder Energieaussage zulässig.\n");
+        return result.toString();
     }
 
     private String listFiles(File root, String relative) throws IOException {

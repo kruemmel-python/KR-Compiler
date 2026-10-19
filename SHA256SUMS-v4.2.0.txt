@@ -1,0 +1,6 @@
+4185f4b42e5e8bfcea6e90c7a3a10e7560a6e69cc7d5c75e130a2faebfb83f68  KR-Compiler-Android-IDE-v4.2.0.apk
+4b22357d3889f22d2ae910fb10a64b0a73723db6ecd6585695fd749059054fce  KR-Compiler-Windows-x64-v4.2.0.zip
+0c91b023e8179984d71c1ccbd7ea9ff430b1ae1d5682afdc1f02a7444cfd15e3  KR-Compiler-Linux-x64-v4.2.0.tar.xz
+38d32d05ae4956457b50a17e7ab38e0b67adc7e54ae5292a5342a649552bc23e  KR-Compiler-Windows-toolchain-v4.2.0.zip
+ac39c040914aad68eda83f51325eeac46b58a4e1f57d13772f78e1a8049a51c5  KR-Compiler-Adaptive-Compute-example-v4.2.0.zip
+5f8e90de80116068d70f17f835407167a561a02158f2278b99d0292350243644  KR-Compiler-Adaptive-Compute-validation-v4.2.0.zip

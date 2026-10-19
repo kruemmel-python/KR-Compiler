@@ -1496,11 +1496,18 @@ public final class MainActivity extends Activity implements
                         KrProjectConfig.findProjectConfigFile(analysisProject), projectName, false);
                 KrComputePlan plan = KrAdaptiveComputeAnalyzer.analyzeProject(analysisProject, config.computeMode);
                 String formattedReport = KrAdaptiveComputeAnalyzer.formatReport(plan);
+                File telemetryFile = new File(CompilerEngine.getActiveWorkspaceOutput(applicationContext),
+                        "adaptive_compute_telemetry.jsonl");
+                KrComputeTelemetry telemetry = KrComputeTelemetry.readLast(telemetryFile);
+                formattedReport += telemetry != null ? telemetry.formatReport()
+                        : "\nLaufzeit-Telemetrie\nNoch keine Messung vorhanden. Nach einem Programmlauf wird hier "
+                        + "Gerätestatus, Zeit, Transfer, Speicher und Validierung angezeigt.\n";
+                final String completeReport = formattedReport;
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
                     progress.dismiss();
                     TextView report = new TextView(this);
-                    report.setText(formattedReport);
+                    report.setText(completeReport);
                     report.setTextIsSelectable(true);
                     report.setPadding(32, 24, 32, 24);
                     ScrollView scroll = new ScrollView(this);
@@ -1842,7 +1849,7 @@ public final class MainActivity extends Activity implements
         try {
             return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
         } catch (Exception e) {
-            return "4.1.1";
+            return "4.2.0";
         }
     }
 

@@ -5,6 +5,21 @@ import java.io.File;
 import static org.junit.Assert.*;
 
 public class IdeCoreTests {
+    @Test
+    public void testAdaptiveComputeRuntimeGenerationCoversPortableOperations() throws Exception {
+        File out = new File("build/test-adaptive-runtime");
+        assertTrue(out.isDirectory() || out.mkdirs());
+        File source = KrAdaptiveComputeCodeGenerator.generate(out,
+                new KrComputePlan(KrComputePlan.Mode.VERIFY, java.util.Collections.emptyList()));
+        String cpp = new String(java.nio.file.Files.readAllBytes(source.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+        String header = new String(java.nio.file.Files.readAllBytes(new File(out, "kr_adaptive_compute.h").toPath()), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(cpp.contains("KR_COMPUTE_VERIFY"));
+        assertTrue(cpp.contains("execute_conv2d_forward_on_gpu"));
+        assertTrue(cpp.contains("CPU_VALIDATION_FALLBACK"));
+        assertTrue(header.contains("kr_compute_tensor_add_f32"));
+        assertTrue(header.contains("kr_compute_matmul_f32"));
+        assertTrue(header.contains("kr_compute_image_rgba_scale_f32"));
+    }
 
     private static KrSegment cppSegment(String source) {
         return new KrSegment(KrLanguage.CPP, source, "main.kr", 1, 1, 1, 1, 0, source.length());
@@ -26,6 +41,24 @@ public class IdeCoreTests {
     }
 
     @Test
+    public void testAdaptiveComputeRecognizesReductionAndMatrixMultiply() {
+        KrComputePlan reduction = KrAdaptiveComputeAnalyzer.analyze(java.util.List.of(cppSegment(
+                "float sum(float* a,int n){float total=0;for(int i=0;i<n;i++){total += a[i];}return total;}")),
+                KrComputePlan.Mode.VERIFY);
+        assertEquals(KrComputePlan.Operation.REDUCE_SUM, reduction.getEntries().get(0).operation);
+        assertEquals(KrComputePlan.Disposition.GPU_ELIGIBLE, reduction.getEntries().get(0).disposition);
+
+        String mm = "void mm(float* o,float* a,float* b,int M,int N,int K){"
+                + "for(int i=0;i<M;i++){for(int j=0;j<N;j++){o[i*N+j]=0;"
+                + "for(int k=0;k<K;k++){o[i*N+j] += a[i*K+k]*b[k*N+j];}}}}";
+        KrComputePlan matrix = KrAdaptiveComputeAnalyzer.analyze(java.util.List.of(cppSegment(mm)), KrComputePlan.Mode.AUTO);
+        assertEquals(KrComputePlan.Operation.MATRIX_MULTIPLY, matrix.getEntries().get(0).operation);
+        assertEquals(KrComputePlan.Disposition.GPU_ELIGIBLE, matrix.getEntries().get(0).disposition);
+        assertEquals(java.util.List.of("a", "b"), matrix.getEntries().get(0).reads);
+        assertEquals(java.util.List.of("o"), matrix.getEntries().get(0).writes);
+    }
+
+    @Test
     public void testAdaptiveComputeExampleProject() throws Exception {
         File workingDirectory = new File(System.getProperty("user.dir"));
         File project = new File(workingDirectory, "example");
@@ -43,6 +76,20 @@ public class IdeCoreTests {
         assertEquals(KrComputePlan.Disposition.GPU_ELIGIBLE, entry.disposition);
         assertEquals(java.util.List.of("a", "b"), entry.reads);
         assertEquals(java.util.List.of("out"), entry.writes);
+    }
+
+    @Test
+    public void testAdaptiveComputeExampleGeneratesNativeRuntime() throws Exception {
+        File workingDirectory = new File(System.getProperty("user.dir"));
+        File project = new File(workingDirectory, "example");
+        if (!project.isDirectory()) project = new File(workingDirectory, "../example");
+        File output = new File("build/test-adaptive-example-pipeline");
+        assertTrue(output.isDirectory() || output.mkdirs());
+        KrPipeline.PipelineResult result = KrPipeline.process(project, output, false);
+        assertTrue(result.success);
+        assertTrue(new File(output, "kr_adaptive_compute.h").isFile());
+        assertTrue(new File(output, "kr_adaptive_compute.cpp").isFile());
+        assertTrue(result.codeResult.cppSources.contains(new File(output, "kr_adaptive_compute.cpp")));
     }
 
     @Test

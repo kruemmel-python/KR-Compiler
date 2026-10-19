@@ -1145,6 +1145,7 @@ final class CompilerEngine {
             command.add("-Wl,--export-dynamic");
             command.add("-Wl,--no-undefined");
             if (hasCcOpenCl) {
+                command.add("-DKR_HAS_CC_OPENCL=1");
                 command.add("-DCL_TARGET_OPENCL_VERSION=300");
                 command.add("-DCL_USE_DEPRECATED_OPENCL_1_2_APIS");
                 command.add("-I" + ccRoot.getPath());
@@ -1245,6 +1246,7 @@ final class CompilerEngine {
             cmake.append("target_include_directories(kr_program PRIVATE \"").append(cmakeEscape(s.getParentFile().getPath())).append("\")\n");
         }
         if (hasCcOpenCl) {
+            cmake.append("target_compile_definitions(kr_program PRIVATE KR_HAS_CC_OPENCL=1)\n");
             cmake.append("set_source_files_properties(\"").append(cmakeEscape(ccDriver.getPath()))
                     .append("\" \"").append(cmakeEscape(ccNoise.getPath())).append("\" PROPERTIES LANGUAGE CXX)\n");
             cmake.append("target_include_directories(kr_program PRIVATE \"").append(cmakeEscape(ccRoot.getPath()))

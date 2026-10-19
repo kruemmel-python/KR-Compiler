@@ -11,6 +11,13 @@ Java_kr_compile_runner_GuiRunnerActivity_setWorkingDirectory(JNIEnv* env, jclass
     const char* chars = env->GetStringUTFChars(directory, nullptr);
     if (!chars) return JNI_FALSE;
     const int result = chdir(chars);
+    if (result == 0) {
+        const std::string root(chars);
+        const std::string telemetry_path = root + "/adaptive_compute_telemetry.jsonl";
+        const std::string log_path = root + "/cc_opencl_execution.log";
+        setenv("KR_COMPUTE_TELEMETRY_PATH", telemetry_path.c_str(), 1);
+        setenv("CC_OPENCL_LOG_PATH", log_path.c_str(), 1);
+    }
     env->ReleaseStringUTFChars(directory, chars);
     return result == 0 ? JNI_TRUE : JNI_FALSE;
 }
@@ -44,6 +51,8 @@ Java_kr_compile_runner_RunnerActivity_execute(JNIEnv* env, jclass, jstring outpu
     // Route native diagnostics to an app-private writable file. Java exports via MediaStore.
     const std::string log_path = working_path + "/cc_opencl_execution.log";
     setenv("CC_OPENCL_LOG_PATH", log_path.c_str(), 1);
+    const std::string telemetry_path = working_path + "/adaptive_compute_telemetry.jsonl";
+    setenv("KR_COMPUTE_TELEMETRY_PATH", telemetry_path.c_str(), 1);
     using Main = int (*)(int, char**);
     void* user_library = dlopen(library_path.c_str(), RTLD_NOW | RTLD_LOCAL);
     auto main_function = user_library ? reinterpret_cast<Main>(dlsym(user_library, "main")) : nullptr;

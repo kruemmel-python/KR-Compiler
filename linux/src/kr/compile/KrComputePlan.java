@@ -9,7 +9,9 @@ public final class KrComputePlan {
     public enum Mode { AUTO, CPU_ONLY, GPU_ONLY, VERIFY }
     public enum Operation {
         ELEMENTWISE_ADD, ELEMENTWISE_SUBTRACT, ELEMENTWISE_MULTIPLY,
-        ELEMENTWISE_DIVIDE, REDUCE_SUM, MATRIX_MULTIPLY, EXPLICIT_COMPUTE_API
+        ELEMENTWISE_DIVIDE, REDUCE_SUM, MATRIX_MULTIPLY, BATCHED_MATRIX_MULTIPLY,
+        TENSOR_ADD, TENSOR_MULTIPLY, IMAGE_RGBA_SCALE, CONVOLUTION_2D,
+        EXPLICIT_COMPUTE_API
     }
     public enum Disposition { GPU_ELIGIBLE, CPU_REQUIRED }
 
@@ -66,7 +68,7 @@ public final class KrComputePlan {
     }
 
     public String toJson() {
-        StringBuilder out = new StringBuilder(512).append("{\n  \"schema\": 1,\n  \"mode\": \"")
+        StringBuilder out = new StringBuilder(512).append("{\n  \"schema\": 2,\n  \"mode\": \"")
                 .append(mode).append("\",\n  \"operations\": [");
         for (int i = 0; i < entries.size(); i++) {
             Entry e = entries.get(i);

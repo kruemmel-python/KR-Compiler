@@ -74,7 +74,8 @@ public final class RunnerActivity extends Activity {
                 int code = execute(output.getPath(), library.getPath(), project.getPath());
                 String content = output.isFile() ? new String(Files.readAllBytes(output.toPath()), StandardCharsets.UTF_8) : "";
                 String exportResult = exportExecutionLog(new File(project, "cc_opencl_execution.log"));
-                shown = content + "\n[Programm beendet: " + code + "]\n" + exportResult + "\n";
+                String telemetryResult = exportTelemetry(new File(project, "adaptive_compute_telemetry.jsonl"));
+                shown = content + "\n[Programm beendet: " + code + "]\n" + exportResult + "\n" + telemetryResult + "\n";
             } catch (Throwable error) { shown = "Programmfehler: " + error + "\n"; }
             running.set(false);
             String result = shown; runOnUiThread(() -> text.setText(result));
@@ -83,12 +84,20 @@ public final class RunnerActivity extends Activity {
 
     /** Publishes a native execution log in public Downloads without broad storage permissions. */
     private String exportExecutionLog(File source) {
-        if (!source.isFile() || source.length() == 0) return "[LOG] Kein natives Ausführungslog gefunden.";
+        return exportDownload(source, "cc_opencl_", ".log", "[LOG]");
+    }
+
+    private String exportTelemetry(File source) {
+        return exportDownload(source, "adaptive_compute_", ".jsonl", "[TELEMETRIE]");
+    }
+
+    private String exportDownload(File source, String prefix, String suffix, String label) {
+        if (!source.isFile() || source.length() == 0) return label + " Keine Daten erzeugt.";
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            return "[LOG] Automatischer MediaStore-Export benötigt Android 10 oder neuer.";
+            return label + " Automatischer MediaStore-Export benötigt Android 10 oder neuer.";
         }
-        String name = "cc_opencl_" + new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.ROOT)
-                .format(new Date()) + ".log";
+        String name = prefix + new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.ROOT)
+                .format(new Date()) + suffix;
         Uri uri = null;
         try {
             ContentValues values = new ContentValues();
@@ -110,10 +119,10 @@ public final class RunnerActivity extends Activity {
             complete.put(MediaStore.MediaColumns.IS_PENDING, 0);
             if (getContentResolver().update(uri, complete, null, null) < 1)
                 throw new IOException("MediaStore-Datei konnte nicht freigegeben werden");
-            return "[LOG EXPORT OK] Download/" + name + " (" + source.length() + " Bytes)";
+            return label + " EXPORT OK: Download/" + name + " (" + source.length() + " Bytes)";
         } catch (Exception error) {
             if (uri != null) try { getContentResolver().delete(uri, null, null); } catch (Exception ignored) { }
-            return "[LOG EXPORT ERROR] " + error + " (internes Log bleibt erhalten: " + source.getPath() + ")";
+            return label + " EXPORT ERROR: " + error + " (interne Datei bleibt erhalten: " + source.getPath() + ")";
         }
     }
 

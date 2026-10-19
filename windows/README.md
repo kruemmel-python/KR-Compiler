@@ -1,7 +1,7 @@
-# KR Compiler IDE – Windows Desktop Edition (v4.1.1)
+# KR Compiler IDE – Windows Desktop Edition (v4.2.0)
 
 **Entwickler:** Ralf Krümmel  
-**Version:** 4.1.1
+**Version:** 4.2.0
 **Plattform:** Windows x64 (10 / 11)  
 **Technologie:** Java 17+ (Swing Native Dark UI), Clang/LLVM, Rust (cargo/rustc), Go, CMake, Ninja, vcpkg  
 

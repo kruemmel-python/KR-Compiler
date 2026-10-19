@@ -109,6 +109,8 @@ public final class KrPipeline {
         // Generate target code
         KrCodeGenerator generator = new KrCodeGenerator(symbolTable, allSegments, buildDir, actualGui);
         KrCodeGenerator.Result codeResult = generator.generate(config.vcpkgDependencies);
+        File computeRuntime = KrAdaptiveComputeCodeGenerator.generate(buildDir, computePlan);
+        codeResult.cppSources.add(computeRuntime);
 
         File computePlanFile = new File(buildDir, "adaptive_compute_plan.json");
         try (FileOutputStream stream = new FileOutputStream(computePlanFile)) {

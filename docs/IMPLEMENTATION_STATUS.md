@@ -23,23 +23,41 @@ regression matrix. Those criteria have not all been implemented or verified.
 - Windows now includes its own Temurin JDK and does not download tools at IDE
   startup.
 - Adaptive analysis emits an audited compute plan and conservatively accepts
-  canonical independent element-wise loops while rejecting detected
-  dependencies, alias uncertainty, side effects and unsafe control flow.
+  canonical independent element-wise loops, reductions and matrix
+  multiplication while rejecting detected dependencies, alias uncertainty,
+  side effects and unsafe control flow.
 - AUTO, CPU_ONLY, GPU_ONLY and VERIFY dispatcher policies and entry-point
   symbol verification are present.
+- Every KR build now generates a portable C++20 Adaptive Compute ABI with CPU
+  reference implementations and CC_OpenCL GPU paths for element-wise tensor
+  operations, matrix multiplication, reductions over tensor axes 0/1, RGBA
+  image scaling and Conv2D. Allocation, transfers, synchronization, checked
+  dimensions, cleanup, fallback and VERIFY comparison are implemented.
+- Native JSONL telemetry records device/runtime/capabilities, dispatcher
+  decision, initialization/H2D/kernel/D2H/total time, transfer sizes, peak
+  device memory, fallback, errors and validation. Android exports telemetry to
+  Downloads; the IDE analysis dialog formats available telemetry.
+- The AI agent has a read-only `adaptive` action and explicit safeguards
+  against unmeasured performance/energy claims and unsafe loop conversion.
+- Reproducible cold/warm benchmark and Windows/Linux/Android regression-matrix
+  runners are included. Missing hardware is reported as `SKIPPED`.
+- A physical Windows AMD OpenCL VERIFY run passed element-wise, tensor,
+  matrix-multiply, reduction, image and Conv2D CPU/GPU comparisons.
 
 ## Not yet sufficient for COMPLETE
 
-- Automatic native CPU/GPU code generation is not complete for matrix
-  multiplication, reductions, tensor, image and convolution families.
-- The current UI provides project analysis, but not the full live device,
-  timing, transfer, memory and validation telemetry required by the order.
-- Adaptive-compute-specific AI-agent reasoning is not complete.
+- Arbitrary safe source loops are not yet rewritten automatically into runtime
+  calls for every operation family; the compiler generates the complete native
+  ABI automatically, while non-elementwise execution currently uses its
+  explicit `kr_compute_*` calls.
+- Telemetry is per operation and file-based. A continuously updating live
+  multi-run dashboard is not yet present for every runner type.
 - No physical Android Adreno/Mali end-to-end GPU validation was performed.
 - Linux was verified in Ubuntu 24.04/WSL2, not across physical Ubuntu release
   and GPU combinations.
-- The mandatory complete benchmark/energy suite and all-platform regression
-  matrix are not complete.
+- Benchmark/regression tooling is implemented, but a complete physical-device
+  result matrix is impossible without the missing devices. Energy remains
+  `NOT_MEASURED` until a real Joule source is attached; it is never estimated.
 
 No GPU result in the project should be interpreted as proof for untested
 hardware. The CPU path remains the required safe route whenever eligibility or

@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -17,9 +19,25 @@ import java.util.Set;
  */
 public final class KrAdaptiveComputeAnalyzer {
     private static final Set<String> PURE_CALLS = Set.of("abs", "fabs", "sqrt", "sqrtf", "min", "max");
-    private static final Set<String> EXPLICIT_API = Set.of(
-            "execute_add_on_gpu", "execute_mul_on_gpu", "execute_matmul_on_gpu",
-            "execute_reduce_sum_gpu", "execute_conv2d_forward_on_gpu");
+    private static final Map<String, KrComputePlan.Operation> EXPLICIT_API = explicitApis();
+
+    private static Map<String, KrComputePlan.Operation> explicitApis() {
+        Map<String, KrComputePlan.Operation> api = new LinkedHashMap<>();
+        api.put("execute_add_on_gpu", KrComputePlan.Operation.ELEMENTWISE_ADD);
+        api.put("kr_compute_add_f32", KrComputePlan.Operation.ELEMENTWISE_ADD);
+        api.put("execute_mul_on_gpu", KrComputePlan.Operation.ELEMENTWISE_MULTIPLY);
+        api.put("kr_compute_mul_f32", KrComputePlan.Operation.ELEMENTWISE_MULTIPLY);
+        api.put("kr_compute_tensor_add_f32", KrComputePlan.Operation.TENSOR_ADD);
+        api.put("kr_compute_tensor_mul_f32", KrComputePlan.Operation.TENSOR_MULTIPLY);
+        api.put("execute_matmul_on_gpu", KrComputePlan.Operation.MATRIX_MULTIPLY);
+        api.put("kr_compute_matmul_f32", KrComputePlan.Operation.MATRIX_MULTIPLY);
+        api.put("execute_reduce_sum_gpu", KrComputePlan.Operation.REDUCE_SUM);
+        api.put("kr_compute_reduce_sum_f32", KrComputePlan.Operation.REDUCE_SUM);
+        api.put("execute_conv2d_forward_on_gpu", KrComputePlan.Operation.CONVOLUTION_2D);
+        api.put("kr_compute_conv2d_f32", KrComputePlan.Operation.CONVOLUTION_2D);
+        api.put("kr_compute_image_rgba_scale_f32", KrComputePlan.Operation.IMAGE_RGBA_SCALE);
+        return api;
+    }
 
     private KrAdaptiveComputeAnalyzer() {}
 
@@ -64,10 +82,11 @@ public final class KrAdaptiveComputeAnalyzer {
 
         for (int i = 0; i < tokens.size(); i++) {
             KrToken token = tokens.get(i);
-            if (EXPLICIT_API.contains(token.text) && i + 1 < tokens.size() && tokens.get(i + 1).type == KrTokenType.LPAREN) {
+            if (EXPLICIT_API.containsKey(token.text) && i + 1 < tokens.size() && tokens.get(i + 1).type == KrTokenType.LPAREN) {
                 out.add(new KrComputePlan.Entry(segment.file, absoluteLine(segment, token.line), token.column,
-                        KrComputePlan.Operation.EXPLICIT_COMPUTE_API, KrComputePlan.Disposition.GPU_ELIGIBLE,
-                        "", "explicit", List.of(), List.of(), List.of("Explizite, geprüfte CC_OpenCL-API."), false, false));
+                        EXPLICIT_API.get(token.text), KrComputePlan.Disposition.GPU_ELIGIBLE,
+                        "", "runtime-dispatch", List.of(), List.of(),
+                        List.of("Portable Adaptive-Compute-API mit CPU-Referenz, GPU-Dispatcher und Telemetrie."), true, false));
             }
             if ("for".equals(token.text)) {
                 Loop loop = parseLoop(tokens, i);
@@ -86,6 +105,32 @@ public final class KrAdaptiveComputeAnalyzer {
         KrComputePlan.Operation operation = KrComputePlan.Operation.ELEMENTWISE_ADD;
         boolean eligible = true;
         boolean fp64 = false;
+
+        if (loop.matmul) {
+            reads.addAll(loop.specialSources);
+            writes.add(loop.specialTarget);
+            if (loop.hasControlFlow || loop.hasUnknownCall || loop.hasPointerWrite || !loop.unitStride) eligible = false;
+            if (eligible) reasons.add("Kanonische dreifach geschachtelte Matrixmultiplikation erkannt; CPU-Referenz bleibt erhalten.");
+            else reasons.add("Matrixmuster erkannt, aber Seiteneffekte oder Schleifenform verhindern eine sichere Auslagerung.");
+            KrToken at = loop.at;
+            return new KrComputePlan.Entry(segment.file, absoluteLine(segment, at.line), at.column,
+                    KrComputePlan.Operation.MATRIX_MULTIPLY,
+                    eligible ? KrComputePlan.Disposition.GPU_ELIGIBLE : KrComputePlan.Disposition.CPU_REQUIRED,
+                    loop.induction, loop.bound, new ArrayList<>(reads), new ArrayList<>(writes), reasons, eligible, false);
+        }
+
+        if (!loop.reductionTarget.isEmpty()) {
+            writes.add(loop.reductionTarget);
+            reads.addAll(loop.specialSources);
+            if (loop.hasControlFlow || loop.hasUnknownCall || loop.hasPointerWrite || !loop.unitStride || loop.assignments != 1) eligible = false;
+            if (eligible) reasons.add("Kanonische Summenreduktion erkannt; VERIFY prüft die numerische Abweichung gegen die CPU-Referenz.");
+            else reasons.add("Reduktionsmuster erkannt, aber Seiteneffekte oder Schleifenform verhindern eine sichere Auslagerung.");
+            KrToken at = loop.at;
+            return new KrComputePlan.Entry(segment.file, absoluteLine(segment, at.line), at.column,
+                    KrComputePlan.Operation.REDUCE_SUM,
+                    eligible ? KrComputePlan.Disposition.GPU_ELIGIBLE : KrComputePlan.Disposition.CPU_REQUIRED,
+                    loop.induction, loop.bound, new ArrayList<>(reads), new ArrayList<>(writes), reasons, eligible, fp64);
+        }
 
         if (loop.induction.isEmpty() || loop.bound.isEmpty()) {
             eligible = false; reasons.add("Schleifenraum oder Induktionsvariable ist nicht statisch bestimmbar.");
@@ -141,6 +186,7 @@ public final class KrAdaptiveComputeAnalyzer {
         if (bodyClose < 0) return loop;
         loop.end = bodyClose;
         List<KrToken> body = tokens.subList(bodyOpen + 1, bodyClose);
+        detectStructuredPatterns(body, loop);
         for (int i = 0; i < body.size(); i++) {
             KrToken t = body.get(i);
             if ("if".equals(t.text) || "while".equals(t.text) || "break".equals(t.text) || "continue".equals(t.text)) loop.hasControlFlow = true;
@@ -155,6 +201,39 @@ public final class KrAdaptiveComputeAnalyzer {
             }
         }
         return loop;
+    }
+
+    private static void detectStructuredPatterns(List<KrToken> body, Loop loop) {
+        int nestedFors = 0;
+        for (KrToken token : body) if ("for".equals(token.text)) nestedFors++;
+        for (int i = 2; i + 3 < body.size(); i++) {
+            if (body.get(i).type != KrTokenType.ASSIGN || body.get(i - 1).type != KrTokenType.PLUS) continue;
+            int end = i + 1;
+            while (end < body.size() && body.get(end).type != KrTokenType.SEMICOLON) end++;
+            LinkedHashSet<String> arrays = new LinkedHashSet<>();
+            boolean multiply = false;
+            for (int j = i + 1; j < end; j++) {
+                if (body.get(j).type == KrTokenType.STAR) multiply = true;
+                if (body.get(j).type == KrTokenType.IDENTIFIER && j + 1 < end
+                        && body.get(j + 1).type == KrTokenType.LBRACKET) arrays.add(body.get(j).text);
+            }
+            if (body.get(i - 2).type == KrTokenType.IDENTIFIER && arrays.size() == 1 && nestedFors == 0) {
+                loop.reductionTarget = body.get(i - 2).text;
+                loop.specialSources.addAll(arrays);
+            } else if (nestedFors == 2 && multiply && arrays.size() == 2) {
+                int statementStart = i - 1;
+                while (statementStart > 0 && body.get(statementStart - 1).type != KrTokenType.SEMICOLON
+                        && body.get(statementStart - 1).type != KrTokenType.LBRACE) statementStart--;
+                int left = statementStart;
+                while (left + 1 < i && !(body.get(left).type == KrTokenType.IDENTIFIER
+                        && body.get(left + 1).type == KrTokenType.LBRACKET)) left++;
+                if (left + 1 < i) {
+                    loop.matmul = true;
+                    loop.specialTarget = body.get(left).text;
+                    loop.specialSources.addAll(arrays);
+                }
+            }
+        }
     }
 
     private static Assignment parseAssignment(List<KrToken> body, int eq, String induction) {
@@ -236,6 +315,8 @@ public final class KrAdaptiveComputeAnalyzer {
     private static final class Loop {
         final KrToken at; int end; String induction = ""; String bound = ""; boolean unitStride;
         boolean hasControlFlow, hasUnknownCall, hasPointerWrite; int assignments; Assignment assignment;
+        boolean matmul; String reductionTarget = "", specialTarget = "";
+        final LinkedHashSet<String> specialSources = new LinkedHashSet<>();
         Loop(KrToken at) { this.at = at; }
     }
     private static final class Assignment {
