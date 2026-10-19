@@ -4,19 +4,35 @@ KR Compiler IDE ist eine portable Entwicklungsumgebung für **KR Unified Languag
 
 ---
 
-## Version 4.1.0 herunterladen
+## Version 4.1.1 herunterladen
 
-APK, portable Desktop-Pakete, Prüfsummen und technische Dokumentation befinden sich im [GitHub-Release v4.1.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.1.0).
+APK, portable Desktop-Pakete, Beispielprojekt, Prüfsummen und technische Dokumentation befinden sich im [GitHub-Release v4.1.1](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.1.1).
 
-- **Android**: `KR-Compiler-Android-IDE-v4.1.0.apk`
-- **Windows**: `KR-Compiler-Windows-x64-v4.1.0.zip`
-- **Linux**: `KR-Compiler-Linux-x64-v4.1.0.tar.xz` beziehungsweise die nummerierten Teilarchive des Releases
-- **Prüfsummen**: `SHA256SUMS-v4.1.0.txt`
+- **Android**: `KR-Compiler-Android-IDE-v4.1.1.apk`
+- **Windows**: `KR-Compiler-Windows-x64-v4.1.1.zip`
+- **Linux**: `KR-Compiler-Linux-x64-v4.1.1.tar.xz`
+- **Adaptive-Compute-Beispiel**: `KR-Compiler-Adaptive-Compute-example-v4.1.1.zip`
+- **Prüfsummen**: `SHA256SUMS-v4.1.1.txt`
 
 ### Systemvoraussetzungen
 - **Android**: Android 8.0+ (API 26+), 64-Bit ARM (`arm64-v8a`), ca. 3 GiB freier Speicher
 - **Windows**: Windows 10 / 11 x64; Java und Toolchain sind eingebettet
 - **Linux**: Ubuntu 22.04+ x64; Java und Toolchain sind eingebettet
+
+---
+
+## Neu in Version 4.1.1: Android-Ordnerfix und Beispielprojekt
+
+- **Adaptive Compute analysieren** unterstützt nun auch Projektordner, die in
+  Android über die System-Ordnerauswahl geöffnet wurden. Die Analyse verwendet
+  einen app-internen temporären Spiegel und verlangt keinen klassischen
+  Dateisystempfad mehr.
+- Ungespeicherte Änderungen der aktiven Datei werden vor der Analyse gesichert.
+- Das neue Verzeichnis [`example`](example) enthält ein kompilierbares
+  KR-Unified-Projekt, dessen elementweise Vektoraddition als
+  `ELEMENTWISE_ADD / GPU_ELIGIBLE` erkannt wird.
+- Das separate Windows-Toolchain-Paket enthält nun ebenfalls den vollständigen
+  Go- und Rust-Bestand.
 
 ---
 

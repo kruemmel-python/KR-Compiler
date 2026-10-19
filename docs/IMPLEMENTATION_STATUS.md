@@ -16,7 +16,9 @@ regression matrix. Those criteria have not all been implemented or verified.
   the bundled ICD loader; absence of a platform is handled without a crash.
 - Windows CC_OpenCL validation on the available AMD OpenCL device passed all
   50 core-kernel compilations and all 60 numerical validations.
-- Android unit tests and the complete debug APK build succeed.
+- Android unit tests and the complete signed release APK build succeed.
+- Adaptive analysis supports both local projects and Android Storage Access
+  Framework project folders through an app-internal temporary workspace.
 - Windows and Linux IDE JARs build successfully.
 - Windows now includes its own Temurin JDK and does not download tools at IDE
   startup.
@@ -42,4 +44,3 @@ regression matrix. Those criteria have not all been implemented or verified.
 No GPU result in the project should be interpreted as proof for untested
 hardware. The CPU path remains the required safe route whenever eligibility or
 capability cannot be established.
-

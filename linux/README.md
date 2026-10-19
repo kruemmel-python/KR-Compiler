@@ -1,4 +1,4 @@
-# KR Compiler IDE v4.1.0 – Linux x64
+# KR Compiler IDE v4.1.1 – Linux x64
 
 Dieser Quellbaum verwendet dieselbe KR-Unified-Frontendpipeline und dieselbe
 Adaptive-Compute-Analyse wie Android und Windows. Die portable Distribution

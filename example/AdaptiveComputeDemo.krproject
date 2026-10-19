@@ -1,0 +1,11 @@
+[project]
+name = "AdaptiveComputeDemo"
+version = "1.0.0"
+entry = "main.kr"
+target_type = "console"
+
+[build]
+cpp_standard = "c++20"
+
+[compute]
+mode = "AUTO"

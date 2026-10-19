@@ -1,0 +1,26 @@
+#include <iostream>
+#include <vector>
+
+// Dieser Loop ist absichtlich so geschrieben, dass Adaptive Compute seine
+// Unabhängigkeit beweisen und ihn als GPU_ELIGIBLE einstufen kann.
+void vector_add(float* out, const float* a, const float* b, int n) {
+    for (int i = 0; i < n; i++) {
+        out[i] = a[i] + b[i];
+    }
+}
+
+int main() {
+    const int count = 8;
+    std::vector<float> a(count, 2.0f);
+    std::vector<float> b(count, 3.0f);
+    std::vector<float> out(count, 0.0f);
+
+    vector_add(out.data(), a.data(), b.data(), count);
+
+    std::cout << "Adaptive Compute Ergebnis:";
+    for (int i = 0; i < count; i++) {
+        std::cout << ' ' << out[i];
+    }
+    std::cout << std::endl;
+    return 0;
+}

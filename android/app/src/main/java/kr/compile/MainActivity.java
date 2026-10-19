@@ -1448,28 +1448,94 @@ public final class MainActivity extends Activity implements
     }
 
     private void showAdaptiveComputeDialog() {
-        File project = ProjectManager.getInstance().getActiveLocalDir();
-        if (project == null || !project.isDirectory()) {
+        ProjectManager projects = ProjectManager.getInstance();
+        File localProject = projects.getActiveLocalDir();
+        Uri safProject = projects.getActiveSafTreeUri();
+        if ((localProject == null || !localProject.isDirectory()) && safProject == null) {
             new AlertDialog.Builder(this).setTitle("Adaptive Compute")
-                    .setMessage("Für die Analyse muss ein lokaler KR-Projektordner geöffnet sein.")
+                    .setMessage("Für die Analyse muss zuerst ein KR-Projektordner geöffnet werden.")
                     .setPositiveButton("OK", null).show();
             return;
         }
-        try {
-            KrProjectConfig config = KrProjectConfig.parse(KrProjectConfig.findProjectConfigFile(project), project.getName(), false);
-            KrComputePlan plan = KrAdaptiveComputeAnalyzer.analyzeProject(project, config.computeMode);
-            TextView report = new TextView(this);
-            report.setText(KrAdaptiveComputeAnalyzer.formatReport(plan));
-            report.setTextIsSelectable(true);
-            report.setPadding(32, 24, 32, 24);
-            ScrollView scroll = new ScrollView(this);
-            scroll.addView(report);
-            new AlertDialog.Builder(this).setTitle("Adaptive Compute")
-                    .setView(scroll).setPositiveButton("Schließen", null).show();
-        } catch (Exception ex) {
+
+        DocumentModel activeDocument = DocumentManager.getInstance().getActiveDocument();
+        if (activeDocument != null && activeDocument.isModified()
+                && !DocumentManager.getInstance().saveDocument(this, activeDocument)) {
             new AlertDialog.Builder(this).setTitle("Adaptive Compute – Fehler")
-                    .setMessage(ex.getMessage()).setPositiveButton("OK", null).show();
+                    .setMessage("Die geöffnete Datei konnte vor der Analyse nicht gespeichert werden.")
+                    .setPositiveButton("OK", null).show();
+            return;
         }
+
+        AlertDialog progress = new AlertDialog.Builder(this)
+                .setTitle("Adaptive Compute")
+                .setMessage(safProject != null
+                        ? "Android-Projektordner wird für die Analyse eingelesen …"
+                        : "KR-Projekt wird analysiert …")
+                .setCancelable(false)
+                .create();
+        progress.show();
+
+        Context applicationContext = getApplicationContext();
+        String projectName = projects.getActiveProjectName();
+        new Thread(() -> {
+            File temporaryProject = null;
+            try {
+                File analysisProject = localProject;
+                if (safProject != null) {
+                    temporaryProject = new File(getCacheDir(), "adaptive-compute-project");
+                    resetAnalysisDirectory(temporaryProject);
+                    DocumentTree.importProject(applicationContext, safProject, temporaryProject);
+                    analysisProject = temporaryProject;
+                }
+                if (analysisProject == null || !analysisProject.isDirectory()) {
+                    throw new IOException("Der geöffnete Projektordner ist nicht lesbar.");
+                }
+
+                KrProjectConfig config = KrProjectConfig.parse(
+                        KrProjectConfig.findProjectConfigFile(analysisProject), projectName, false);
+                KrComputePlan plan = KrAdaptiveComputeAnalyzer.analyzeProject(analysisProject, config.computeMode);
+                String formattedReport = KrAdaptiveComputeAnalyzer.formatReport(plan);
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    progress.dismiss();
+                    TextView report = new TextView(this);
+                    report.setText(formattedReport);
+                    report.setTextIsSelectable(true);
+                    report.setPadding(32, 24, 32, 24);
+                    ScrollView scroll = new ScrollView(this);
+                    scroll.addView(report);
+                    new AlertDialog.Builder(this).setTitle("Adaptive Compute")
+                            .setView(scroll).setPositiveButton("Schließen", null).show();
+                });
+            } catch (Exception ex) {
+                String message = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    progress.dismiss();
+                    new AlertDialog.Builder(this).setTitle("Adaptive Compute – Fehler")
+                            .setMessage(message).setPositiveButton("OK", null).show();
+                });
+            } finally {
+                if (temporaryProject != null) deleteAnalysisDirectory(temporaryProject);
+            }
+        }, "kr-adaptive-compute").start();
+    }
+
+    private static void resetAnalysisDirectory(File directory) throws IOException {
+        deleteAnalysisDirectory(directory);
+        if (!directory.mkdirs() && !directory.isDirectory()) {
+            throw new IOException("Temporärer Analyseordner kann nicht angelegt werden.");
+        }
+    }
+
+    private static void deleteAnalysisDirectory(File file) {
+        if (file == null || !file.exists()) return;
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) for (File child : children) deleteAnalysisDirectory(child);
+        }
+        file.delete();
     }
 
     private void showCreateKrProjectDialog() {
@@ -1776,7 +1842,7 @@ public final class MainActivity extends Activity implements
         try {
             return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
         } catch (Exception e) {
-            return "4.1.0";
+            return "4.1.1";
         }
     }
 

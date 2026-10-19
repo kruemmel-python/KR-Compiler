@@ -1,28 +1,31 @@
 # Verified release artifacts
 
-Release: `v4.1.0`  
+Release: `v4.1.1`
 Build date: 2026-10-19 (Europe/Berlin)
 
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|
-| `KR-Compiler-Android-IDE-v4.1.0.apk` | 744276650 | `00ff9985894bbdb7a7b430ec6fb39c1f43a048b0736f37c5929c97e80bac8ee1` |
-| `KR-Compiler-Linux-x64-v4.1.0.tar.xz` | 1103125140 | `5bdad61df7575465c5dd4e04cd0e6d88f3a5dc6e6a7a4820bae776ee8d92ae40` |
-| `KR-Compiler-Windows-toolchain-v4.1.0.zip` | 82781805 | `a15331365cf68b01b5bfaaa837718596c0bd3b7944fcab330dc7f17b4511d428` |
-| `KR-Compiler-Windows-x64-v4.1.0.zip` | 875185481 | `92bedadd88542e4be9fa49fd39708000a1fd06c376cdf832631278126c21cc98` |
+| `KR-Compiler-Adaptive-Compute-example-v4.1.1.zip` | 1729 | `71a6b18e144319c62cabc7616ba4f330a93ece65e82e68d8dc00fd26224f9bc8` |
+| `KR-Compiler-Android-IDE-v4.1.1.apk` | 744277750 | `474db531526b30fcb06c0eb8029aaeba818ed4483c2cd61d1c4e4543e6ff6e78` |
+| `KR-Compiler-Linux-x64-v4.1.1.tar.xz` | 1103060828 | `b1adafe60fffea96cc237ef2c7bc672574c000b178d3a5d859b102c7fa24d370` |
+| `KR-Compiler-Windows-toolchain-v4.1.1.zip` | 665432516 | `38d32d05ae4956457b50a17e7ab38e0b67adc7e54ae5292a5342a649552bc23e` |
+| `KR-Compiler-Windows-x64-v4.1.1.zip` | 875185581 | `2e770390f5a0c4907486c3810436eeb066938fb493a3ae26b2c293854188dfb1` |
 
 The Android APK is a signed release build containing its compiler payload.
 The Linux and Windows archives contain their Java runtime and compiler
 toolchains and do not download SDKs when the IDE starts. The separate Windows
-toolchain ZIP is provided for the repository bootstrap script and recovery of
-an incomplete local checkout.
+toolchain ZIP now contains the complete GCC, Android, Go and Rust payload.
 
 ## Verification performed
 
-- Android `clean testDebugUnitTest assembleRelease`: passed (146 tasks).
+- Android clean `testDebugUnitTest assembleRelease`: passed (146 tasks).
+- Android release metadata: version code 411, version name 4.1.1.
+- Adaptive Compute example: compiled and ran; analyzer reports the first loop
+  as `ELEMENTWISE_ADD` and `GPU_ELIGIBLE`.
 - Linux portable smoke suite: native C++20, Rust and Go passed; Windows x64
   PE32+ and Android ARM64 ELF cross-builds passed; CC_OpenCL no-device handling
   passed.
 - Windows portable package: bundled Temurin 21, GCC 16.1.0, Go 1.27.0 and
-  Rust 1.88.0 started successfully; the IDE JAR rebuilt successfully.
-- The final Windows ZIP and Linux `tar.xz` were reopened and checked for the
-  launchers, Java runtime, compilers and IDE JAR.
+  Rust 1.88.0 started successfully.
+- Final ZIP and `tar.xz` files were reopened and checked for launchers,
+  runtimes, compilers and IDE JARs.

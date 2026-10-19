@@ -95,7 +95,7 @@ foreach ($lf in $libFiles) {
 
 # Markiere Bereitschafts-Stempel
 $stamp = Join-Path $TargetDir "kr-toolchain.stamp"
-Set-Content -Path $stamp -Value "KR-Toolchain-Windows-x64-v4.1.0"
+Set-Content -Path $stamp -Value "KR-Toolchain-Windows-x64-v4.1.1"
 
 $totalMb = (Get-ChildItem -Path $TargetDir -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB
 Write-Host "=========================================================="

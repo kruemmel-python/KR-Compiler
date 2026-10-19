@@ -1,6 +1,6 @@
 param(
     [string]$TargetDir = "$PSScriptRoot\toolchain",
-    [string]$Url = "https://github.com/kruemmel-python/KR-Compiler/releases/download/v4.1.0/KR-Compiler-Windows-toolchain-v4.1.0.zip"
+    [string]$Url = "https://github.com/kruemmel-python/KR-Compiler/releases/download/v4.1.1/KR-Compiler-Windows-toolchain-v4.1.1.zip"
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,7 +24,7 @@ try {
     Invoke-WebRequest -Uri $Url -OutFile $zipFile -UseBasicParsing
     Write-Host "Entpacke Toolchain nach $TargetDir …"
     Expand-Archive -LiteralPath $zipFile -DestinationPath $TargetDir -Force
-    Set-Content -Path $stamp -Value "KR-Toolchain-Windows-x64-v4.1.0"
+    Set-Content -Path $stamp -Value "KR-Toolchain-Windows-x64-v4.1.1"
     Write-Host "[ERFOLG] Toolchain erfolgreich eingerichtet!"
 } catch {
     Write-Warning "Automatischer Download fehlgeschlagen: $_"

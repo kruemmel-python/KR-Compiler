@@ -1,6 +1,7 @@
 package kr.compile;
 
 import org.junit.Test;
+import java.io.File;
 import static org.junit.Assert.*;
 
 public class IdeCoreTests {
@@ -20,6 +21,26 @@ public class IdeCoreTests {
         assertEquals(KrComputePlan.Disposition.GPU_ELIGIBLE, entry.disposition);
         assertEquals(KrComputePlan.Operation.ELEMENTWISE_ADD, entry.operation);
         assertTrue(entry.replaySafe);
+        assertEquals(java.util.List.of("a", "b"), entry.reads);
+        assertEquals(java.util.List.of("out"), entry.writes);
+    }
+
+    @Test
+    public void testAdaptiveComputeExampleProject() throws Exception {
+        File workingDirectory = new File(System.getProperty("user.dir"));
+        File project = new File(workingDirectory, "example");
+        if (!project.isDirectory()) project = new File(workingDirectory, "../example");
+        assertTrue("The shipped example project must exist", project.isDirectory());
+
+        KrProjectConfig config = KrProjectConfig.parse(
+                KrProjectConfig.findProjectConfigFile(project), project.getName(), false);
+        KrComputePlan plan = KrAdaptiveComputeAnalyzer.analyzeProject(project, config.computeMode);
+
+        assertEquals(KrComputePlan.Mode.AUTO, plan.getMode());
+        assertFalse("The example must contain an analyzable loop", plan.getEntries().isEmpty());
+        KrComputePlan.Entry entry = plan.getEntries().get(0);
+        assertEquals(KrComputePlan.Operation.ELEMENTWISE_ADD, entry.operation);
+        assertEquals(KrComputePlan.Disposition.GPU_ELIGIBLE, entry.disposition);
         assertEquals(java.util.List.of("a", "b"), entry.reads);
         assertEquals(java.util.List.of("out"), entry.writes);
     }
