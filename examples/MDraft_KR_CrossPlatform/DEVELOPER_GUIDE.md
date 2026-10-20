@@ -1,6 +1,6 @@
 # Modulare KR-GUI-Projekte mit der aktuellen IDE
 
-Diese Anleitung beschreibt den Stand der KR Compiler IDE v4.2.2 anhand des
+Diese Anleitung beschreibt den Stand der KR Compiler IDE v4.3.0 anhand des
 laufenden MDraft-Beispiels. Das wichtigste Architekturprinzip lautet:
 
 > Ein Projekt, eine `.krproject`, ein gemeinsamer Quellbaum – die IDE erzeugt
@@ -194,15 +194,15 @@ Typische Artefakte sind `programm.exe` plus `SDL3.dll` unter Windows,
 SDL3-Laufzeit unter Linux. `KR_BUILD` ist erzeugte Ausgabe und gehört nicht in
 Git.
 
-## 9. Aktueller Linux-SDL3-Stand
+## 9. SDL3-Bestand der portablen IDEs
 
-Beim Test mit dem portablen Linux-x64-Paket v4.2.2 fehlten
-`toolchain/include/SDL3/SDL.h` und eine Linux-x64-`libSDL3`. Das ist eine
-Lücke der Toolchain-Auslieferung, nicht des modularen Projektmodells. Ein
-Entwickler soll deshalb **keinen Linux-Quellbaum und kein zweites Projekt**
-anlegen. Die IDE-Auslieferung muss SDL3 an denselben logischen Stellen
-mitbringen wie die Windows- und Android-Auslieferung. Danach wird dieselbe
-Projektdatei unverändert verwendet.
+Seit v4.3.0 liefern alle drei IDE-Pakete SDL 3.4.18 passend zu ihren
+Zielsystemen mit. Unter Windows werden `SDL3.dll` und die Linkbibliothek,
+unter Linux `libSDL3.so.0` und unter Android die SDLActivity-Laufzeit in das
+Ergebnis übernommen. Die Android-IDE enthält zusätzlich die geprüften
+SDL3-Quellen, damit sie die Bibliothek offline für das gewählte Ziel bauen
+kann. Ein Entwickler legt **keinen eigenen Plattform-Quellbaum und kein
+zweites Projekt** an.
 
 ## 10. Portabilitätsregeln
 

@@ -18,13 +18,15 @@ if (-not (Test-Path $SourceDir)) {
 $binTarget = Join-Path $TargetDir "bin"
 $libTarget = Join-Path $TargetDir "lib"
 $incTarget = Join-Path $TargetDir "include"
+$licenseTarget = Join-Path $TargetDir "licenses\sdl3"
 
-New-Item -ItemType Directory -Force $binTarget, $libTarget, $incTarget | Out-Null
+New-Item -ItemType Directory -Force $binTarget, $libTarget, $incTarget, $licenseTarget | Out-Null
 
 # 1. Binaries & Runtime DLLs
 Write-Host "[1/5] Kopiere Compiler-Binärdateien und DLLs..."
 $binFiles = @(
     "g++.exe", "gcc.exe", "as.exe", "ld.exe", "mingw32-make.exe", "strip.exe",
+    "SDL3.dll",
     "libgmp-10.dll", "libmpfr-6.dll", "libmpc-3.dll", "libisl-23.dll",
     "zlib1.dll", "libzstd.dll", "libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll"
 )
@@ -65,6 +67,19 @@ if (Test-Path $cppInc) {
     Copy-Item -LiteralPath $cppInc -Destination $incTarget -Recurse -Force
 }
 
+# SDL3 ist Teil der portablen KR-GUI-Laufzeit. GUI-Projekte dürfen auf dem
+# Zielsystem weder MSYS2 noch ein SDK nachinstallieren müssen.
+$sdlInclude = Join-Path "$SourceDir\include" "SDL3"
+if (-not (Test-Path -LiteralPath $sdlInclude)) {
+    throw "SDL3-Header fehlen in der Quell-Toolchain: $sdlInclude"
+}
+Copy-Item -LiteralPath $sdlInclude -Destination $incTarget -Recurse -Force
+$sdlLicense = Join-Path "$SourceDir\share\licenses\SDL3" "LICENSE.txt"
+if (-not (Test-Path -LiteralPath $sdlLicense)) {
+    throw "SDL3-Lizenztext fehlt in der Quell-Toolchain: $sdlLicense"
+}
+Copy-Item -LiteralPath $sdlLicense -Destination $licenseTarget -Force
+
 # 4. CRT und Windows SDK Header
 Write-Host "[4/5] Kopiere Windows- und C-Runtime-Header..."
 $headerSubdirs = @("sys", "sec_api", "psdk_inc", "GL", "KHR")
@@ -84,7 +99,8 @@ $libFiles = @(
     "crt2.o", "crt2u.o", "dllcrt2.o", "gcrt2.o",
     "libkernel32.a", "libmsvcrt.a", "libuser32.a", "libstdc++.a", "libwinpthread.a",
     "libshell32.a", "libgdi32.a", "libadvapi32.a", "libole32.a", "libuuid.a",
-    "libws2_32.a", "libmingw32.a", "libmingwex.a", "libmoldname.a"
+    "libws2_32.a", "libmingw32.a", "libmingwex.a", "libmoldname.a",
+    "libSDL3.a", "libSDL3.dll.a"
 )
 foreach ($lf in $libFiles) {
     $lsrc = Join-Path "$SourceDir\lib" $lf
@@ -93,9 +109,20 @@ foreach ($lf in $libFiles) {
     }
 }
 
+foreach ($required in @(
+    (Join-Path $binTarget 'SDL3.dll'),
+    (Join-Path $incTarget 'SDL3\SDL.h'),
+    (Join-Path $libTarget 'libSDL3.a'),
+    (Join-Path $licenseTarget 'LICENSE.txt')
+)) {
+    if (-not (Test-Path -LiteralPath $required)) {
+        throw "Portabler SDL3-Bestand unvollständig: $required"
+    }
+}
+
 # Markiere Bereitschafts-Stempel
 $stamp = Join-Path $TargetDir "kr-toolchain.stamp"
-Set-Content -Path $stamp -Value "KR-Toolchain-Windows-x64-v4.1.1"
+Set-Content -Path $stamp -Value "KR-Toolchain-Windows-x64-v4.3.0"
 
 $totalMb = (Get-ChildItem -Path $TargetDir -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB
 Write-Host "=========================================================="

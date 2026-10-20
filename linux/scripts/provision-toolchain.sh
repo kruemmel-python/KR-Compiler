@@ -71,6 +71,12 @@ RUSTUP=$(download_sha256 rustup-init-1.28.2-x86_64-unknown-linux-gnu \
 NDK=$(download_sha1 android-ndk-r30-linux.zip \
   https://dl.google.com/android/repository/android-ndk-r30-linux.zip \
   5107f898313790e449e87eee2183d9a20602dee9)
+SDL3=$(download_sha256 SDL3-3.4.18.tar.gz \
+  https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz \
+  9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3)
+SDL3_MINGW=$(download_sha256 SDL3-devel-3.4.18-mingw.tar.gz \
+  https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-devel-3.4.18-mingw.tar.gz \
+  049b9dd711e3fb3f8d84feb998dfec54a75e17cf539c4a80ff4d058d839771cf)
 
 LLVM_DIR=LLVM-21.1.8-Linux-X64
 NEW="$CACHE/work/new-toolchain"
@@ -139,12 +145,81 @@ cat >"$NEW/targets/windows/bin/x86_64-w64-mingw32-clang++" <<'EOF'
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
 exec "$ROOT/bin/clang.real" --driver-mode=g++ -fuse-ld=lld \
   --target=x86_64-w64-windows-gnu --sysroot="$ROOT/targets/windows" \
-  -resource-dir="$ROOT/targets/windows/lib/clang/23" --rtlib=compiler-rt \
+  --rtlib=compiler-rt \
   -stdlib=libc++ -isystem "$ROOT/targets/windows/include/c++/v1" \
   -isystem "$ROOT/targets/windows/include" \
   -L"$ROOT/targets/windows/x86_64-w64-mingw32/lib" "$@" -lunwind
 EOF
 chmod +x "$NEW/bin/clang" "$NEW/bin/clang++" "$NEW/targets/windows/bin/"*
+
+# Der Windows-Sysroot enthält compiler-rt aus der MinGW-Toolchain, seine
+# Clang-23-Header dürfen aber nicht als Ressourcenheader von LLVM 21 geladen
+# werden. Nur das ABI-kompatible Builtins-Archiv wird deshalb in den nativen
+# LLVM-21-Ressourcenordner übernommen.
+LLVM_RESOURCE=$("$NEW/bin/clang.real" --print-resource-dir)
+mkdir -p "$LLVM_RESOURCE/lib/x86_64-w64-windows-gnu"
+cp -a "$NEW/targets/windows/lib/clang/23/lib/windows/libclang_rt.builtins-x86_64.a" \
+  "$LLVM_RESOURCE/lib/x86_64-w64-windows-gnu/libclang_rt.builtins.a"
+
+# Offizielle MinGW-x64-Auslieferung für Windows-Crossbuilds. Der DLL-Bestand
+# wird zusammen mit dem erzeugten Programm ausgeliefert.
+SDL_MINGW_ROOT="$CACHE/work/SDL3-3.4.18/x86_64-w64-mingw32"
+rm -rf "$CACHE/work/SDL3-3.4.18"
+tar -xzf "$SDL3_MINGW" -C "$CACHE/work"
+mkdir -p "$NEW/targets/windows/include" \
+  "$NEW/targets/windows/x86_64-w64-mingw32/lib" \
+  "$NEW/targets/windows/bin" "$NEW/licenses/sdl3"
+cp -a "$SDL_MINGW_ROOT/include/SDL3" "$NEW/targets/windows/include/"
+cp -a "$SDL_MINGW_ROOT/lib/libSDL3.dll.a" "$NEW/targets/windows/x86_64-w64-mingw32/lib/"
+cp -a "$SDL_MINGW_ROOT/bin/SDL3.dll" "$NEW/targets/windows/bin/"
+cp -a "$SDL_MINGW_ROOT/share/licenses/SDL3/LICENSE.txt" "$NEW/licenses/sdl3/"
+
+# SDL3 wird einmal beim Erzeugen der IDE gebaut und in den Linux-Sysroot
+# installiert. Endanwender benötigen dadurch weder SDL-Entwicklungspakete
+# noch einen Netzwerkzugriff. Optionale Desktop-Backends werden dynamisch
+# geladen; X11 bleibt als überall verfügbarer GUI-Pfad aktiviert.
+SDL_SOURCE="$CACHE/work/SDL3-3.4.18"
+SDL_BUILD="$CACHE/work/sdl3-linux-build"
+rm -rf "$SDL_SOURCE" "$SDL_BUILD"
+tar -xzf "$SDL3" -C "$CACHE/work"
+"$NEW/bin/cmake" -S "$SDL_SOURCE" -B "$SDL_BUILD" -G Ninja \
+  -DCMAKE_MAKE_PROGRAM="$NEW/bin/ninja" \
+  -DCMAKE_C_COMPILER="$NEW/bin/clang" \
+  -DCMAKE_CXX_COMPILER="$NEW/bin/clang++" \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+  -DCMAKE_INSTALL_LIBDIR=lib/x86_64-linux-gnu \
+  -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+  -DHAVE_WL_VERSION_SCRIPT=TRUE \
+  -DX11_INCLUDE_DIR="$NEW/targets/linux/sysroot/usr/include" \
+  -DX11_INCLUDEDIR="$NEW/targets/linux/sysroot/usr/include" \
+  -DX11_LIB="$NEW/targets/linux/sysroot/usr/lib/x86_64-linux-gnu/libX11.so" \
+  -DXEXT_LIB="$NEW/targets/linux/sysroot/usr/lib/x86_64-linux-gnu/libXext.so" \
+  -DHAVE_XEXT_H="$NEW/targets/linux/sysroot/usr/include/X11/extensions/Xext.h" \
+  -DX11_X11_INCLUDE_PATH="$NEW/targets/linux/sysroot/usr/include" \
+  -DX11_X11_LIB="$NEW/targets/linux/sysroot/usr/lib/x86_64-linux-gnu/libX11.so" \
+  -DX11_Xext_INCLUDE_PATH="$NEW/targets/linux/sysroot/usr/include" \
+  -DX11_Xext_LIB="$NEW/targets/linux/sysroot/usr/lib/x86_64-linux-gnu/libXext.so" \
+  -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST_LIBRARY=OFF \
+  -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DSDL_INSTALL=ON -DSDL_WAYLAND=OFF \
+  -DSDL_ALSA=OFF -DSDL_PULSEAUDIO=OFF -DSDL_PIPEWIRE=OFF \
+  -DSDL_JACK=OFF -DSDL_KMSDRM=OFF -DSDL_INSTALL_TESTS=OFF \
+  -DSDL_X11_XCURSOR=OFF -DSDL_X11_XDBE=OFF -DSDL_X11_XINPUT=OFF \
+  -DSDL_X11_XFIXES=OFF -DSDL_X11_XRANDR=OFF -DSDL_X11_XSCRNSAVER=OFF \
+  -DSDL_X11_XSHAPE=OFF -DSDL_X11_XSYNC=OFF -DSDL_X11_XTEST=OFF
+"$NEW/bin/cmake" --build "$SDL_BUILD" --parallel "$(nproc)"
+DESTDIR="$NEW/targets/linux/sysroot" "$NEW/bin/cmake" --install "$SDL_BUILD"
+SDL_LIB="$NEW/targets/linux/sysroot/usr/lib/x86_64-linux-gnu"
+if [ ! -d "$SDL_LIB" ]; then SDL_LIB="$NEW/targets/linux/sysroot/usr/lib"; fi
+test -f "$NEW/targets/linux/sysroot/usr/include/SDL3/SDL.h"
+test -e "$SDL_LIB/libSDL3.so"
+# ZIP-Werkzeuge erhalten Unix-Symlinks nicht zuverlässig. Beide Namen werden
+# deshalb als reale Dateien materialisiert.
+cp -Lf "$SDL_LIB/libSDL3.so" "$SDL_LIB/libSDL3.so.kr-real"
+rm -f "$SDL_LIB/libSDL3.so" "$SDL_LIB/libSDL3.so.0"
+mv "$SDL_LIB/libSDL3.so.kr-real" "$SDL_LIB/libSDL3.so"
+cp -f "$SDL_LIB/libSDL3.so" "$SDL_LIB/libSDL3.so.0"
+mkdir -p "$NEW/licenses/sdl3"
+cp -a "$SDL_SOURCE/LICENSE.txt" "$NEW/licenses/sdl3/"
 
 # Ubuntu's redistributable ICD loader is bundled for link/runtime; vendor GPU
 # implementations remain the responsibility of the installed graphics driver.
@@ -172,6 +247,7 @@ Go 1.27.1 (BSD-3-Clause)
 Rust 1.99.1 / rustup 1.28.2 (MIT OR Apache-2.0)
 Android NDK r30 (Android SDK licenses)
 OpenCL ICD Loader: Ubuntu ocl-icd package (BSD-2-Clause)
+SDL 3.4.18 (Zlib)
 Target sysroots: existing KR verified cache
 EOF
 for deb in "$CACHE/work/opencl-debs"/*.deb; do

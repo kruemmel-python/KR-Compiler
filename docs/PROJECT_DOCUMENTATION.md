@@ -1,6 +1,6 @@
 # KR Compiler IDE – vollständige Projektdokumentation
 
-**Dokumentationsstand:** KR Compiler IDE 4.2.2
+**Dokumentationsstand:** KR Compiler IDE 4.3.0
 
 **Gültigkeit:** Android ARM64, Windows x64 und Linux x64
 
@@ -41,7 +41,7 @@ kann aus technischen und lizenzrechtlichen Gründen nicht Teil der IDE sein.
 
 | Komponente | Stand |
 |---|---|
-| Produktversion | 4.2.2 |
+| Produktversion | 4.3.0 |
 | Android-Anwendung | `kr.compile`, `minSdk 26`, ARM64-Ziel |
 | Android Build-SDK | API 35; NDK 27.0.12077973 für den APK-Quell-Build |
 | Windows-Distribution | Windows 10/11 x64 |
@@ -322,7 +322,7 @@ Quellcodes verwendet.
 
 ### 10.1 Vollständig automatische Schleifenformen
 
-Version 4.2.2 senkt diese kanonischen FP32-Formen automatisch ab:
+Version 4.3.0 senkt diese kanonischen FP32-Formen automatisch ab:
 
 ```cpp
 for (int i = 0; i < count; i++) {
@@ -418,7 +418,7 @@ Argumentübergabe und Enqueue, nicht die gesamte Berechnung.
 
 Die IDE zeigt den letzten Datensatz in lesbarer Form in der Compute-Analyse.
 Ein dauerhaftes grafisches Live-Dashboard und belastbare Energiemessungen sind
-noch nicht Bestandteil von 4.2.2.
+noch nicht Bestandteil von 4.3.0.
 
 ## 11. CC_OpenCL-Integration
 
@@ -499,6 +499,28 @@ Projekt muss eine vertrauenswürdige Quelle oder die benötigten Dateien selbst
 bereitstellen. Eine reproduzierbare Veröffentlichung sollte externe
 Abhängigkeiten fest versionieren und deren Prüfsummen dokumentieren.
 
+### 14.1 Integriertes SDL3
+
+SDL 3.4.18 ist eine feste, geprüfte Kernabhängigkeit der portablen IDE. Ein
+GUI-Projekt setzt `target_type = "gui"` und deklariert
+`packages = ["sdl3"]`. Die IDE übernimmt zielabhängig:
+
+| Ziel | Eingebetteter Bestand | Buildausgabe |
+|---|---|---|
+| Windows x64 | SDL3-Header, statische/Importbibliothek, `SDL3.dll` | `programm.exe` und `SDL3.dll` |
+| Linux x64 | SDL3-Header, Linkbibliothek, `libSDL3.so.0` | `programm` und `libSDL3.so.0` mit `$ORIGIN`-Suchpfad |
+| Android ARM64 | verifizierter SDL3-Quellbestand und SDLActivity-Runner | signierte APK mit `libSDL3.so` und `libuser.so` |
+
+Die Android-IDE kann aus dem eingebetteten Quellbestand auch SDL3 für ihre
+Desktop-Ziele erzeugen. Dieser Schritt ist offline: `FetchContent` erhält ein
+lokales `SOURCE_DIR` und führt keinen Netzwerkabruf aus. Das Linux-Paket baut
+SDL3 bereits bei der Distributionserzeugung gegen den eingebetteten Sysroot;
+das Windows-Paket übernimmt die geprüften MSYS2-MinGW-Binärbestände.
+
+Das Projekt selbst enthält keine kopierten SDL-Bibliotheken und keine
+Plattform-Unterprojekte. Betriebssystemspezifische Unterschiede werden über
+SDL3 oder eng begrenzte Präprozessorzweige innerhalb derselben Module gelöst.
+
 ## 15. Plattformdetails
 
 ### 15.1 Android
@@ -534,8 +556,8 @@ Abhängigkeiten fest versionieren und deren Prüfsummen dokumentieren.
 
 ## 16. Projekt aus einem Release benutzen
 
-1. Das zu 4.2.2 passende Paket aus dem
-   [GitHub-Release](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.2.2)
+1. Das zu 4.3.0 passende Paket aus dem
+   [GitHub-Release](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.3.0)
    laden.
 2. Windows-/Linux-Archiv in einen beschreibbaren Ordner entpacken oder die
    Android-APK installieren.

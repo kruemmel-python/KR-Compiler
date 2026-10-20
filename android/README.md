@@ -22,6 +22,12 @@ integrierte vcpkg-Toolchain ein. `kr-gui-target.txt` kennzeichnet ein GUI-Projek
 ohne Konsolenfenster, Linux gegen die bereitgestellten X11/Xext-Grundlagen und Android als native
 Bibliothek für einen SDLActivity-Runner mit Touch und OpenGL ES gebaut.
 
+Ab Version 4.3.0 liegen die geprüften SDL-3.4.18-Quellen direkt in der
+App-Toolchain. CMake verwendet diesen lokalen Quellbaum für Android ARM64,
+Windows x64 und Linux x64; SDL wird während eines Projektbuilds nicht aus dem
+Netz geladen. Damit kann derselbe Projektordner mit `packages = ["sdl3"]` für
+alle drei Ziele gebaut werden.
+
 Ab Version 3.2 setzt der Android-CMake-Pfad `ANDROID` und die ABI ausdrücklich. SDL3 verwendet
 damit sein mobiles Backend statt X11 oder Wayland. Ein reproduzierbares kleines Headerpaket ergänzt
 EGL, GLES, GLES2, GLES3 und KHR aus dem offiziellen Android-NDK. Der Launcher erkennt GUI-Projekte
@@ -33,8 +39,8 @@ Die Release-Laufzeit enthält CMake, Ninja, Git, `pkg-config`, CA-Zertifikate, C
 Sysroots für Android ARM64, Windows x64 und Linux x64. Das Linux-Profil enthält ab Version 3.1
 zusätzlich die X11/Xext-Bestandteile für grafische Programme. Die Laufzeit ist wegen ihrer Größe
 nicht Teil des Git-Verlaufs. `scripts/download-toolchain.ps1` lädt die unveränderte ZIP-Datei aus
-Release `v3.1.0` und verifiziert SHA-256
-`bb1b24d80d7ffbbcbe24e96ada527370f97bd9d169a97ffcd9d78b9670810b08`.
+Release `v4.3.0` und verifiziert SHA-256
+`17ca778b19cc43369dd68b48b468f6a01f4b54d1bbbec41583cfd51d66badd23`.
 
 Wenn Online-Abhängigkeiten eingeschaltet sind, dürfen normale CMake-`FetchContent`-Deklarationen
 und Git benötigte Quellen laden. Zusätzlich erkennt die App `find_package` für `fmt`,

@@ -412,6 +412,7 @@ public final class CompilerEngine {
         }
 
         File linuxOpenClRuntime = null;
+        File linuxSdlRuntime = null;
         if (needsOpenCl) {
             cmd.add("-DCL_TARGET_OPENCL_VERSION=300");
             cmd.add("-DCL_USE_DEPRECATED_OPENCL_1_2_APIS");
@@ -441,6 +442,15 @@ public final class CompilerEngine {
             cmd.add("-lsqlite3");
         }
         if (needsSdl3) {
+            if (target == Target.LINUX) {
+                File sysroot = new File(ToolchainManager.getInstance().getToolchainDir(),
+                        "targets/linux/sysroot");
+                File linuxSdlDir = new File(sysroot, "usr/lib/x86_64-linux-gnu");
+                if (!linuxSdlDir.isDirectory()) linuxSdlDir = new File(sysroot, "usr/lib");
+                linuxSdlRuntime = new File(linuxSdlDir, "libSDL3.so.0");
+                cmd.add("-L" + linuxSdlDir.getAbsolutePath());
+                cmd.add("-Wl,-rpath,$ORIGIN");
+            }
             cmd.add("-lSDL3");
             if (target == Target.WINDOWS) {
                 cmd.add("-lgdi32");
@@ -480,6 +490,10 @@ public final class CompilerEngine {
             Files.copy(linuxOpenClRuntime.toPath(), new File(outputDir, "libOpenCL.so.1").toPath(),
                     StandardCopyOption.REPLACE_EXISTING);
         }
+        if (target == Target.LINUX && needsSdl3 && linuxSdlRuntime != null && linuxSdlRuntime.isFile()) {
+            Files.copy(linuxSdlRuntime.toPath(), new File(outputDir, "libSDL3.so.0").toPath(),
+                    StandardCopyOption.REPLACE_EXISTING);
+        }
 
         if (target == Target.LINUX) {
             File linuxBin = new File(outputDir, "programm");
@@ -501,8 +515,9 @@ public final class CompilerEngine {
             }
         }
 
-        if (needsSdl3 && ToolchainManager.getInstance().getToolchainDir() != null) {
-            File sdlDll = new File(ToolchainManager.getInstance().getToolchainDir(), "bin/SDL3.dll");
+        if (target == Target.WINDOWS && needsSdl3 && ToolchainManager.getInstance().getToolchainDir() != null) {
+            File sdlDll = new File(ToolchainManager.getInstance().getToolchainDir(),
+                    "targets/windows/bin/SDL3.dll");
             if (sdlDll.isFile()) {
                 try {
                     Files.copy(sdlDll.toPath(), new File(outputDir, "SDL3.dll").toPath(), StandardCopyOption.REPLACE_EXISTING);

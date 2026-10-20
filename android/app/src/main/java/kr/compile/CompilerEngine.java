@@ -433,7 +433,7 @@ final class CompilerEngine {
             s.append("list(APPEND CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES \"").append(usrInc).append("\" \"").append(usrIncAlt).append("\")\n");
             s.append("list(APPEND CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES \"").append(usrInc).append("\" \"").append(usrIncAlt).append("\")\n");
         }
-        if (onlineDependencies) appendDownloadableDependencies(s, packages);
+        appendDownloadableDependencies(s, packages);
         s.append("set(KR_EXECUTABLE_OUTPUT \"").append(out).append("\")\n");
         s.append("set(CMAKE_COMPILE_WARNING_AS_ERROR OFF)\n");
 
@@ -559,6 +559,16 @@ final class CompilerEngine {
             String hash = null;
             String options = "";
             String patchCommand = "";
+            File bundledSource = key.equals("sdl3")
+                    ? new File(toolchain, "sources/sdl3") : null;
+            if (bundledSource != null && !new File(bundledSource, "CMakeLists.txt").isFile()) {
+                bundledSource = null;
+            }
+            if (!onlineDependencies && bundledSource == null) {
+                log.line("CMake-Paket " + packageName
+                        + " ist nicht im portablen Bestand enthalten und Online-Abhängigkeiten sind deaktiviert.");
+                continue;
+            }
             if (key.equals("sdl3")) {
                 name = "SDL3"; url = "https://github.com/libsdl-org/SDL/archive/refs/tags/release-3.4.18.tar.gz";
                 hash = "12fcb5592016b27922b08d1580d75f5f15c72e67cf04415e2bd824dc7563ac940c25bbe368b03d0a755f5832803049467e3d0ee6784ed3684792bc4d7741af50";
@@ -571,7 +581,7 @@ final class CompilerEngine {
                         + (target == Target.LINUX
                         ? "set(HAVE_WL_VERSION_SCRIPT TRUE CACHE INTERNAL \"\" FORCE)\nset(SDL_X11 ON CACHE BOOL \"\" FORCE)\nset(SDL_X11_SHARED ON CACHE BOOL \"\" FORCE)\nset(X11_INCLUDEDIR \"${CMAKE_SYSROOT}/usr/include\" CACHE PATH \"\" FORCE)\nset(X11_LIB \"${CMAKE_SYSROOT}/usr/lib/x86_64-linux-gnu/libX11.so\" CACHE FILEPATH \"\" FORCE)\nset(XEXT_LIB \"${CMAKE_SYSROOT}/usr/lib/x86_64-linux-gnu/libXext.so\" CACHE FILEPATH \"\" FORCE)\nset(HAVE_XEXT_H \"${CMAKE_SYSROOT}/usr/include/X11/extensions/Xext.h\" CACHE FILEPATH \"\" FORCE)\nset(SDL_X11_XCURSOR OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XDBE OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XINPUT OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XFIXES OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XRANDR OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XSCRNSAVER OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XSHAPE OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XSYNC OFF CACHE BOOL \"\" FORCE)\nset(SDL_X11_XTEST OFF CACHE BOOL \"\" FORCE)\nset(SDL_WAYLAND OFF CACHE BOOL \"\" FORCE)\nset(SDL_KMSDRM OFF CACHE BOOL \"\" FORCE)\nset(SDL_OPENGL OFF CACHE BOOL \"\" FORCE)\nset(SDL_OPENGLES OFF CACHE BOOL \"\" FORCE)\n"
                         : "");
-                if (target == Target.ANDROID) {
+                if (target == Target.ANDROID && bundledSource == null) {
                     // CMAKE_TRY_COMPILE_TARGET_TYPE is STATIC_LIBRARY in KR's standalone
                     // cross toolchain. SDL's linker probe therefore cannot test a linker
                     // option although Android lld supports it. Patch only this false-negative
@@ -612,16 +622,24 @@ final class CompilerEngine {
                 hash = "b337d3bc38440db190a8f1fbc4eabc0098e69fcc95bfba195fe039ffb942cae2a7f0153f3094f35fa26325750d1c62e20cccaf916a41f5c7f248ec5e5d30a942";
                 options = "set(BUILD_TESTING OFF CACHE BOOL \"\" FORCE)\nset(EIGEN_BUILD_DOC OFF CACHE BOOL \"\" FORCE)\n";
             }
-            if (url == null) {
+            if (url == null && bundledSource == null) {
                 log.line("CMake-Paket " + packageName + " erkannt; kein automatischer freier Download im KR-Katalog.");
                 continue;
             }
-            log.line("CMake-Paket " + packageName + " erkannt; geprüfter Download wird bei Bedarf vorbereitet.");
+            log.line(bundledSource != null
+                    ? "CMake-Paket " + packageName + " wird aus dem portablen Offline-Bestand verwendet."
+                    : "CMake-Paket " + packageName + " erkannt; geprüfter Download wird bei Bedarf vorbereitet.");
             s.append(options);
-            s.append("FetchContent_Declare(").append(name).append(" URL \"").append(url)
-                    .append("\" URL_HASH SHA512=").append(hash)
-                    .append(" DOWNLOAD_EXTRACT_TIMESTAMP TRUE OVERRIDE_FIND_PACKAGE")
-                    .append(patchCommand).append(")\n");
+            if (bundledSource != null) {
+                s.append("FetchContent_Declare(").append(name).append(" SOURCE_DIR \"")
+                        .append(cmakeEscape(bundledSource.getPath()))
+                        .append("\" OVERRIDE_FIND_PACKAGE)\n");
+            } else {
+                s.append("FetchContent_Declare(").append(name).append(" URL \"").append(url)
+                        .append("\" URL_HASH SHA512=").append(hash)
+                        .append(" DOWNLOAD_EXTRACT_TIMESTAMP TRUE OVERRIDE_FIND_PACKAGE")
+                        .append(patchCommand).append(")\n");
+            }
         }
     }
 

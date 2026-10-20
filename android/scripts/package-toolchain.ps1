@@ -1,6 +1,7 @@
 param(
     [string]$RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
-    [string]$Output = (Join-Path $PSScriptRoot '..\app\src\main\assets\toolchain.zip')
+    [string]$Output = (Join-Path $PSScriptRoot '..\app\src\main\assets\toolchain.zip'),
+    [string]$HostRoot
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -12,6 +13,17 @@ $extract = Join-Path $cache 'termux-extract'
 $packageRoot = Join-Path $cache 'termux-package-root'
 $stage = Join-Path $cache 'toolchain-stage'
 New-Item -ItemType Directory -Force $cache, $download | Out-Null
+
+function Get-KrSha256([string]$Path) {
+    $stream = [IO.File]::OpenRead($Path)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $algorithm.Dispose()
+        $stream.Dispose()
+    }
+}
 
 $indexUrl = 'https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages'
 if (-not (Test-Path $indexFile)) { Invoke-WebRequest $indexUrl -OutFile $indexFile -UseBasicParsing }
@@ -77,19 +89,28 @@ foreach ($name in ($selected | Sort-Object)) {
     if ($LASTEXITCODE -ne 0) { throw "Debian-Paket kann nicht geöffnet werden: $deb" }
     $data = Get-ChildItem $packageDir -File | Where-Object Name -Like 'data.tar*' | Select-Object -First 1
     if (-not $data) { throw "Datenarchiv fehlt in $deb" }
-    & bsdtar -xf $data.FullName -C $packageRoot
-    # Windows normally refuses Unix symlink creation. Materialize each link as a
-    # real file/directory after all regular archive entries have been extracted.
+    # Windows refuses Unix symlink creation. Exclude link entries from the
+    # regular extraction and materialize them after every package is present.
     $listing = & bsdtar -tvf $data.FullName
+    $excludePatterns = [Collections.Generic.List[string]]::new()
     foreach ($line in $listing) {
-        if ($line -notmatch '\s(\./\S+) -> (\S+)$') { continue }
-        $relative = $matches[1].Substring(2).Replace('/', '\')
-        $linkTarget = $matches[2]
+        if ($line -notmatch '\s(\./\S+) -> (.+)$') { continue }
+        $archivePath = $matches[1]
+        $relative = $archivePath.Substring(2).Replace('/', '\')
+        $linkTarget = $matches[2].Trim()
         $destination = Join-Path $packageRoot $relative
         if ($linkTarget.StartsWith('/')) { $source = Join-Path $packageRoot $linkTarget.TrimStart('/').Replace('/', '\') }
         else { $source = Join-Path (Split-Path -Parent $destination) $linkTarget.Replace('/', '\') }
         $symlinks.Add([pscustomobject]@{ Relative=$relative; Target=$linkTarget; Destination=$destination; Source=$source })
+        $excludePatterns.Add($archivePath)
+        # bsdtar normalizes leading "./" differently between listing and
+        # extraction, so exclude both spellings of every symbolic link.
+        $excludePatterns.Add($archivePath.Substring(2))
     }
+    $excludeFile = Join-Path $packageDir 'symlinks.exclude'
+    [IO.File]::WriteAllLines($excludeFile, $excludePatterns, [Text.Encoding]::UTF8)
+    & bsdtar -xf $data.FullName -C $packageRoot -X $excludeFile
+    if ($LASTEXITCODE -ne 0) { throw "Paketinhalt kann nicht entpackt werden: $name" }
 }
 
 $pending = [Collections.Generic.List[object]]::new()
@@ -173,11 +194,20 @@ if (Test-Path $cmakeDetermineSystem) {
 }
 
 function Resolve-HostRoot {
+    if ($HostRoot) {
+        $resolved = (Resolve-Path -LiteralPath $HostRoot).Path
+        if (Test-Path -LiteralPath (Join-Path $resolved 'windows-x64\toolchain')) { return $resolved }
+        throw "Angegebener HostRoot ist unvollständig: $resolved"
+    }
     $direct = Join-Path $RepositoryRoot 'host'
     if (Test-Path $direct) { return $direct }
-    # Release-Arbeitskopien liegen neben dem großen, nicht versionierten host-Verzeichnis.
-    $shared = Join-Path (Split-Path -Parent (Split-Path -Parent $RepositoryRoot)) 'host'
-    if (Test-Path $shared) { return $shared }
+    # Release-Arbeitskopien können eine oder zwei Ebenen unter dem gemeinsamen,
+    # nicht versionierten host-Verzeichnis liegen.
+    $parent = Split-Path -Parent $RepositoryRoot
+    foreach ($base in @($parent, (Split-Path -Parent $parent))) {
+        $shared = Join-Path $base 'host'
+        if (Test-Path $shared) { return $shared }
+    }
     throw 'Host-Zielsysteme fehlen. Erwartet wurde host/ im Repository oder im gemeinsamen Projektordner.'
 }
 $hostRoot = Resolve-HostRoot
@@ -189,6 +219,10 @@ New-Item -ItemType Directory -Force $windowsTarget | Out-Null
 Copy-Item (Join-Path $windowsSource 'include') $windowsTarget -Recurse
 Copy-Item (Join-Path $windowsSource 'lib') $windowsTarget -Recurse
 Copy-Item (Join-Path $windowsSource 'x86_64-w64-mingw32') $windowsTarget -Recurse
+$windowsRuntimeBin = Join-Path $windowsSource 'bin'
+if (Test-Path -LiteralPath $windowsRuntimeBin) {
+    Copy-Item -LiteralPath $windowsRuntimeBin -Destination $windowsTarget -Recurse
+}
 
 $resourceDir = Get-ChildItem (Join-Path $stage 'usr\lib\clang') -Directory |
     Where-Object Name -Match '^\d+(\.\d+)*$' |
@@ -216,6 +250,57 @@ $linuxGuiRoot = Join-Path $cache 'linux-gui-root'
 & (Join-Path $PSScriptRoot 'prepare-linux-gui-sysroot.ps1') -Output $linuxGuiRoot
 if ($LASTEXITCODE -ne 0) { throw 'Linux-GUI-Sysroot konnte nicht vorbereitet werden.' }
 Copy-Item (Join-Path $linuxGuiRoot '*') (Join-Path $linuxTarget 'sysroot') -Recurse -Force
+
+# Windows copies Unix symlinks from the prepared Linux release as opaque
+# reparse points. ZIP and Android cannot use those links, therefore ship the
+# corresponding ELF files under every linker/SONAME alias as real files.
+$linuxLib = Join-Path $linuxTarget 'sysroot\usr\lib\x86_64-linux-gnu'
+$linuxAliases = @{
+    'libOpenCL.so' = 'libOpenCL.so.1.0.0'
+    'libOpenCL.so.1' = 'libOpenCL.so.1.0.0'
+    'libstdc++.so.6' = 'libstdc++.so.6.0.33'
+}
+foreach ($alias in $linuxAliases.Keys) {
+    $source = Join-Path $linuxLib $linuxAliases[$alias]
+    $destination = Join-Path $linuxLib $alias
+    if (-not (Test-Path -LiteralPath $source)) { throw "Linux-Laufzeitdatei fehlt: $source" }
+    Remove-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
+    Copy-Item -LiteralPath $source -Destination $destination -Force
+}
+
+# SDL3-Quellen werden geprüft und direkt in die portable Toolchain gelegt.
+# Die Android-IDE baut daraus offline die passende statische Bibliothek für
+# Android ARM64, Windows x64 oder Linux x64; Projekt-Builds laden nichts nach.
+$sdlVersion = '3.4.18'
+$sdlArchive = Join-Path $cache "SDL3-$sdlVersion.zip"
+$sdlSha256 = '9cd42377704398796071b8597cd7e21da254a43bad98c4199739647adc13fa6f'
+if (-not (Test-Path -LiteralPath $sdlArchive) -or
+    (Get-KrSha256 $sdlArchive) -ne $sdlSha256) {
+    Write-Host "Lade verifizierte SDL3-$sdlVersion-Quellen …"
+    Invoke-WebRequest "https://github.com/libsdl-org/SDL/releases/download/release-$sdlVersion/SDL3-$sdlVersion.zip" `
+        -OutFile $sdlArchive -UseBasicParsing
+}
+if ((Get-KrSha256 $sdlArchive) -ne $sdlSha256) {
+    throw "SHA-256 stimmt nicht für SDL3-$sdlVersion.zip"
+}
+$sdlExtract = Join-Path $cache 'sdl3-source-extract'
+if (Test-Path -LiteralPath $sdlExtract) { Remove-Item -LiteralPath $sdlExtract -Recurse -Force }
+Expand-Archive -LiteralPath $sdlArchive -DestinationPath $sdlExtract -Force
+$sdlExpanded = Join-Path $sdlExtract "SDL3-$sdlVersion"
+if (-not (Test-Path -LiteralPath (Join-Path $sdlExpanded 'CMakeLists.txt'))) {
+    throw 'SDL3-Quellarchiv besitzt nicht die erwartete Struktur.'
+}
+$sdlTarget = Join-Path $stage 'sources\sdl3'
+New-Item -ItemType Directory -Force (Split-Path -Parent $sdlTarget) | Out-Null
+Copy-Item -LiteralPath $sdlExpanded -Destination $sdlTarget -Recurse
+$sdlCmake = Join-Path $sdlTarget 'CMakeLists.txt'
+$sdlCmakeText = [IO.File]::ReadAllText($sdlCmake)
+$sdlCmakeText = $sdlCmakeText.Replace(
+    'if(((LINUX AND LIBC_IS_GLIBC) OR ANDROID) AND (NOT USE_TCC))',
+    'if((LINUX AND LIBC_IS_GLIBC) AND (NOT USE_TCC) AND NOT ANDROID)')
+[IO.File]::WriteAllText($sdlCmake, $sdlCmakeText)
+Copy-Item -LiteralPath (Join-Path $sdlExpanded 'LICENSE.txt') `
+    -Destination (Join-Path $sdlTarget 'LICENSE.txt') -Force
 
 # rust-src stammt aus demselben Termux-Build wie rustc. Cargo baut daraus die
 # Desktop-Standardbibliotheken einmalig und ABI-genau mit `-Z build-std`.
@@ -246,6 +331,10 @@ public static class KrPrefixPatcher {
 }
 '@
 }
+$remainingLinks = @(Get-ChildItem $stage -Recurse -Force -Attributes ReparsePoint -ErrorAction SilentlyContinue)
+if ($remainingLinks.Count -gt 0) {
+    throw "Nicht materialisierte Verknüpfung in der Android-Toolchain: $($remainingLinks[0].FullName)"
+}
 foreach ($file in (Get-ChildItem $stage -Recurse -File)) {
     [KrPrefixPatcher]::Replace($file.FullName, $old, $new)
 }
@@ -255,7 +344,7 @@ New-Item -ItemType Directory -Force $outputDirectory | Out-Null
 if (Test-Path $Output) { Remove-Item -LiteralPath $Output -Force }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory($stage, $Output, [IO.Compression.CompressionLevel]::Optimal, $false)
-$hash = (Get-FileHash $Output -Algorithm SHA256).Hash.ToLowerInvariant()
+$hash = Get-KrSha256 $Output
 Write-Host "Erstellt: $Output"
 Write-Host "SHA-256: $hash"
 $siblingOutput = Join-Path $RepositoryRoot 'android\app\src\main\assets\toolchain.zip'

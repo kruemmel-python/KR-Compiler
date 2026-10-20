@@ -1,6 +1,27 @@
 # Aktuelle Release-Hinweise
 
-## KR Compiler IDE v4.2.2
+## KR Compiler IDE v4.3.0
+
+### SDL3 auf allen drei Zielsystemen
+
+- SDL 3.4.18 ist Bestandteil der portablen Windows-, Android- und
+  Linux-Auslieferung; Entwickler müssen SDL, ein SDK oder Entwicklungspakete
+  nicht nachinstallieren.
+- Die Android-IDE enthält die verifizierten SDL3-Quellen und baut sie offline
+  für Android ARM64, Windows x64 oder Linux x64 passend zum gewählten Ziel.
+- Die Windows-IDE liefert Header, Import-/statische Bibliothek und `SDL3.dll`.
+- Die Linux-IDE liefert Header, Linkbibliothek und `libSDL3.so.0`; die
+  erzeugte Laufzeitdatei wird neben das KR-Programm kopiert.
+- Das unveränderte modulare Beispiel `MDraft_KR_CrossPlatform` wurde für alle
+  drei Ziele gebaut. Windows und Linux wurden außerdem als GUI-Prozess
+  gestartet; die Android-APK wurde erstellt und strukturell geprüft.
+
+### Ein Projekt für drei Systeme
+
+- Eine `.krproject`-Datei und ein gemeinsamer Quellbaum reichen für Android,
+  Windows und Linux aus. Es gibt keine getrennten Plattformprojekte.
+- `packages = ["sdl3"]` aktiviert SDL3, und die IDE übernimmt Header,
+  Verlinkung, Runner sowie das Kopieren der Laufzeitdateien.
 
 ### Threadsicheres Adaptive Compute
 
@@ -29,4 +50,4 @@
   Release.
 
 Download und Prüfsummen:
-[GitHub-Release v4.2.2](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.2.2)
+[GitHub-Release v4.3.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.3.0)

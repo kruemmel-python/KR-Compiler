@@ -19,8 +19,23 @@ mkdir -p "$HOME" "$TMPDIR" "$XDG_CACHE_HOME" "$GOCACHE" "$GOMODCACHE"
 "$TC/bin/clang++" -std=c++20 "$SMOKE/hello.cpp" -o "$OUT/hello-linux"
 "$OUT/hello-linux" | grep -F KR-LINUX-PORTABLE-OK
 
+test -f "$TC/targets/linux/sysroot/usr/include/SDL3/SDL.h"
+SDL_LIB="$TC/targets/linux/sysroot/usr/lib/x86_64-linux-gnu"
+if [ ! -d "$SDL_LIB" ]; then SDL_LIB="$TC/targets/linux/sysroot/usr/lib"; fi
+test -f "$SDL_LIB/libSDL3.so"
+"$TC/bin/clang++" -std=c++20 "$SMOKE/sdl3_gui.cpp" \
+  -L"$SDL_LIB" -Wl,-rpath,'$ORIGIN' -lSDL3 -o "$OUT/sdl3-gui-linux"
+cp -f "$SDL_LIB/libSDL3.so.0" "$OUT/libSDL3.so.0"
+SDL_VIDEODRIVER=dummy LD_LIBRARY_PATH="$OUT" "$OUT/sdl3-gui-linux" | grep -F KR-SDL3-GUI-OK
+
 "$TC/targets/windows/bin/x86_64-w64-mingw32-clang++" -std=c++20 "$SMOKE/hello.cpp" -o "$OUT/hello-windows.exe"
 file "$OUT/hello-windows.exe" | grep -F 'PE32+'
+test -f "$TC/targets/windows/include/SDL3/SDL.h"
+test -f "$TC/targets/windows/x86_64-w64-mingw32/lib/libSDL3.dll.a"
+test -f "$TC/targets/windows/bin/SDL3.dll"
+"$TC/targets/windows/bin/x86_64-w64-mingw32-clang++" -std=c++20 \
+  "$SMOKE/sdl3_gui.cpp" -lSDL3 -o "$OUT/sdl3-gui-windows.exe"
+file "$OUT/sdl3-gui-windows.exe" | grep -F 'PE32+'
 
 "$TC/android/ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" \
   -std=c++20 -shared -fPIC "$SMOKE/hello.cpp" -o "$OUT/libhello-android.so"

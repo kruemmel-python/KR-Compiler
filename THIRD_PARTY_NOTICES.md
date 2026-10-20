@@ -8,8 +8,10 @@ unterliegen. Dazu gehören insbesondere:
 - Termux-Pakete für Clang/LLVM, CMake, Ninja, Git, pkg-config, Dash und CA-Zertifikate
 - MinGW-/libc++-Komponenten für das Windows-x64-Ziel
 - GNU-/glibc-Komponenten für das Linux-x64-Ziel
-- SDL3-Android-Java-Frontend im Runner-Template (zlib-Lizenz; vollständiger Text unter
-  `android/runner/SDL3-LICENSE.txt`)
+- SDL 3.4.18 als Quell-, Header- und Binärbestand für Android ARM64, Windows
+  x64 und Linux x64 sowie das Android-Java-Frontend im Runner-Template
+  (zlib-Lizenz; vollständiger Text unter `android/runner/SDL3-LICENSE.txt`
+  und in den Toolchain-Lizenzordnern)
 
 Die vollständigen Paket-Metadaten und Lizenztexte der eingebetteten Werkzeuge werden zusammen
 mit den Komponenten in der Compilerlaufzeit ausgeliefert, insbesondere unter den jeweiligen

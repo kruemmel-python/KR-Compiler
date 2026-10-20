@@ -1,6 +1,6 @@
 # Implementierungsstatus
 
-Stand: v4.2.2
+Stand: v4.3.0
 
 ## Implementiert und geprüft
 
@@ -19,7 +19,11 @@ Stand: v4.2.2
 - Android-ARM64-Ausgabe einschließlich CC_OpenCL erfolgreich gelinkt
 - Android und Ubuntu vom Projektinhaber praktisch getestet und als
   funktionsfähig bestätigt
-- signierte Android-v4.2.2-APK, verifizierte Windows- und Linux-Archive
+- SDL 3.4.18 einschließlich Headern, Link- und Laufzeitbibliotheken in allen
+  drei portablen IDE-Auslieferungen
+- dasselbe modulare SDL3-Projekt erfolgreich für Windows x64, Android ARM64
+  und Linux x64 gebaut
+- signierte Android-v4.3.0-APK, verifizierte Windows- und Linux-Archive
 
 ## Bekannte Grenzen
 

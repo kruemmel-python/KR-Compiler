@@ -8,18 +8,20 @@ müssen keine zusätzlichen SDKs heruntergeladen werden.
 
 ## Aktuelle Version
 
-Aktueller Stand: **v4.2.2**
+Aktueller Stand: **v4.3.0**
 
-[Release v4.2.2 herunterladen](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.2.2)
+[Release v4.3.0 herunterladen](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.3.0)
 
 | Plattform | Release-Datei |
 |---|---|
-| Android ARM64 | `KR-Compiler-Android-IDE-v4.2.2.apk` |
-| Windows x64 | `KR-Compiler-Windows-x64-v4.2.2.zip` |
-| Linux x64 | `KR-Compiler-Linux-x64-v4.2.2.tar.xz` |
-| Automatisches Compute-Beispiel | `KR-AUTO-COMPUTE-TEST-v4.2.2.zip` |
-| 16-Thread-GPU-Stresstest | `KR-16-PARALLEL-GPU-STRESS-v4.2.2.zip` |
-| Prüfsummen | `SHA256SUMS-v4.2.2.txt` |
+| Android ARM64 | `KR-Compiler-Android-IDE-v4.3.0.apk` |
+| Android-Buildtoolchain | `KR-Compiler-Android-toolchain-v4.3.0.zip` |
+| Windows x64 | `KR-Compiler-Windows-x64-v4.3.0.zip` |
+| Linux x64 | `KR-Compiler-Linux-x64-v4.3.0.tar.xz` |
+| Plattformübergreifendes SDL3-Beispiel | `MDraft-KR-CrossPlatform-v4.3.0.zip` |
+| Automatisches Compute-Beispiel | `KR-AUTO-COMPUTE-TEST-v4.3.0.zip` |
+| 16-Thread-GPU-Stresstest | `KR-16-PARALLEL-GPU-STRESS-v4.3.0.zip` |
+| Prüfsummen | `SHA256SUMS-v4.3.0.txt` |
 
 Ältere Binärstände und deren Hinweise bleiben in den
 [GitHub-Releases](https://github.com/kruemmel-python/KR-Compiler/releases)
@@ -31,7 +33,8 @@ abrufbar. Das Repository dokumentiert bewusst nur den aktuellen Stand.
 - Android-APK, Windows-EXE und Linux-ELF als Zielartefakte
 - CMake-, C/C++-, Cargo- und Go-Projekte
 - portable Windows-, Linux- und Android-Compilerlaufzeiten
-- SDL3-Projekte und vcpkg-Abhängigkeiten
+- SDL3-Projekte mit vollständig eingebetteten Headern, Bibliotheken und
+  Laufzeitdateien für Android, Windows und Linux
 - sichere Quellzuordnung für Diagnosen aus generierten Dateien
 - integrierten, freigabepflichtigen Programmieragenten
 - Adaptive Compute mit CPU/GPU-Dispatcher, Telemetrie und Validierung
@@ -67,6 +70,7 @@ Das vollständige, kompilierbare Beispiel liegt unter
 | `windows/` | eigenständige portable Windows-IDE |
 | `linux/` | eigenständige portable Linux-IDE |
 | `KR_AUTO_COMPUTE_TEST/` | aktuelles Ende-zu-Ende-Beispiel |
+| `examples/MDraft_KR_CrossPlatform/` | ein modulares SDL3-GUI-Projekt für alle drei Ziele |
 | `docs/` | ausschließlich aktuelle Benutzer- und Entwicklerdokumentation |
 | `tests/` | plattformübergreifende Validierungswerkzeuge |
 

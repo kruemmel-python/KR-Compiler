@@ -4,6 +4,17 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
+function Get-KrSha256([string]$Path) {
+    $stream = [IO.File]::OpenRead($Path)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $algorithm.Dispose()
+        $stream.Dispose()
+    }
+}
+
 # Ubuntu 24.04 packages matching the glibc 2.39 sysroot bundled by KR Compiler.
 $packages = @(
     @{ File='pool/main/libx/libx11/libx11-dev_1.8.7-1build1_amd64.deb'; Sha='1969e200607ffe34070b92fe1bd3ba76ac2e2bd2f3a54530800c5872076fad24' },
@@ -31,11 +42,11 @@ $links = [Collections.Generic.List[object]]::new()
 foreach ($package in $packages) {
     $name = [IO.Path]::GetFileName($package.File)
     $deb = Join-Path $cache $name
-    if (-not (Test-Path $deb) -or (Get-FileHash $deb -Algorithm SHA256).Hash.ToLowerInvariant() -ne $package.Sha) {
+    if (-not (Test-Path $deb) -or (Get-KrSha256 $deb) -ne $package.Sha) {
         Write-Host "Lade Linux-GUI-Sysroot: $name"
         Invoke-WebRequest ('https://archive.ubuntu.com/ubuntu/' + $package.File) -OutFile $deb -UseBasicParsing
     }
-    $actual = (Get-FileHash $deb -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actual = Get-KrSha256 $deb
     if ($actual -ne $package.Sha) { throw "SHA-256 stimmt nicht für $name" }
     $packageDir = Join-Path $extract ([IO.Path]::GetFileNameWithoutExtension($name))
     New-Item -ItemType Directory -Force $packageDir | Out-Null
@@ -43,23 +54,25 @@ foreach ($package in $packages) {
     if ($LASTEXITCODE -ne 0) { throw "DEB kann nicht geöffnet werden: $name" }
     $data = Get-ChildItem $packageDir -File | Where-Object Name -Like 'data.tar*' | Select-Object -First 1
     if (-not $data) { throw "Datenarchiv fehlt in $name" }
-    $excludeArgs = [Collections.Generic.List[string]]::new()
+    $excludePatterns = [Collections.Generic.List[string]]::new()
     foreach ($line in (& bsdtar -tvf $data.FullName)) {
-        if ($line -notmatch '\s(\./\S+) -> (\S+)$') { continue }
+        if ($line -notmatch '\s(\./\S+) -> (.+)$') { continue }
         $archivePath = $matches[1]
         $relative = $archivePath.Substring(2).Replace('/', '\')
         $destination = Join-Path $Output $relative
-        $target = $matches[2]
+        $target = $matches[2].Trim()
         $source = if ($target.StartsWith('/')) {
             Join-Path $Output $target.TrimStart('/').Replace('/', '\')
         } else {
             Join-Path (Split-Path -Parent $destination) $target.Replace('/', '\')
         }
         $links.Add([pscustomobject]@{ Destination=$destination; Source=$source; Relative=$relative; Target=$target })
-        $excludeArgs.Add("--exclude=$archivePath")
+        $excludePatterns.Add($archivePath)
+        $excludePatterns.Add($archivePath.Substring(2))
     }
-    $tarArgs = @('-xf', $data.FullName, '-C', $Output) + $excludeArgs.ToArray()
-    & bsdtar @tarArgs
+    $excludeFile = Join-Path $packageDir 'symlinks.exclude'
+    [IO.File]::WriteAllLines($excludeFile, $excludePatterns, [Text.Encoding]::UTF8)
+    & bsdtar -xf $data.FullName -C $Output -X $excludeFile
     if ($LASTEXITCODE -ne 0) { throw "Paketinhalt kann nicht entpackt werden: $name" }
 }
 
