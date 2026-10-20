@@ -1,0 +1,14 @@
+#include "include/mdraft/mdraft.hpp"
+
+namespace mdraft {
+
+// Die KR-Pipeline erkennt diese FP32-Vektoraddition anhand ihrer Parser- und
+// Symbolinformationen. AUTO entscheidet zur Laufzeit zwischen CPU und GPU.
+void compose_theme_channels(float* output, const float* base,
+                            const float* accent, int count) {
+    for (int index = 0; index < count; index++) {
+        output[index] = base[index] + accent[index];
+    }
+}
+
+} // namespace mdraft

@@ -1,0 +1,133 @@
+#include "include/mdraft/mdraft.hpp"
+#include <algorithm>
+#include <cstdio>
+
+namespace mdraft {
+
+namespace {
+constexpr SDL_Color kBackground{15, 19, 29, 255};
+constexpr SDL_Color kPanel{28, 37, 53, 255};
+constexpr SDL_Color kPanelActive{42, 75, 104, 255};
+constexpr SDL_Color kText{224, 232, 243, 255};
+constexpr SDL_Color kMuted{126, 147, 171, 255};
+constexpr SDL_Color kAccent{91, 192, 235, 255};
+constexpr SDL_Color kGreen{122, 214, 153, 255};
+constexpr SDL_Color kQuote{196, 156, 255, 255};
+constexpr SDL_Color kCode{246, 196, 105, 255};
+
+void fill(SDL_Renderer* renderer, const SDL_FRect& rectangle, SDL_Color color) {
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    SDL_RenderFillRect(renderer, &rectangle);
+}
+
+void button(SDL_Renderer* renderer, const SDL_FRect& rectangle,
+            std::string_view caption, bool active) {
+    fill(renderer, rectangle, active ? kPanelActive : kPanel);
+    draw_bitmap_text(renderer, caption,
+                     static_cast<int>(rectangle.x + 10),
+                     static_cast<int>(rectangle.y + 10), 2, active ? kAccent : kText);
+}
+
+std::string shorten(std::string value, std::size_t limit) {
+    if (value.size() <= limit) return value;
+    if (limit <= 3) return value.substr(0, limit);
+    return value.substr(0, limit - 3) + "...";
+}
+
+SDL_Color block_color(BlockKind kind) {
+    switch (kind) {
+        case BlockKind::Heading: return kAccent;
+        case BlockKind::Quote: return kQuote;
+        case BlockKind::ListItem:
+        case BlockKind::TaskItem: return kGreen;
+        case BlockKind::CodeFence: return kCode;
+        case BlockKind::TableRow: return SDL_Color{122, 203, 214, 255};
+        default: return kText;
+    }
+}
+}
+
+UiLayout render_editor(SDL_Renderer* renderer, SDL_Window* window,
+                       const GapBuffer& buffer, const EditorState& state,
+                       std::uint64_t ticks) {
+    int width = 0;
+    int height = 0;
+    SDL_GetRenderOutputSize(renderer, &width, &height);
+    if (width < 320 || height < 240) SDL_GetWindowSize(window, &width, &height);
+
+    SDL_SetRenderDrawColor(renderer, kBackground.r, kBackground.g, kBackground.b, kBackground.a);
+    SDL_RenderClear(renderer);
+
+    UiLayout layout;
+    layout.new_button = SDL_FRect{10, 10, 84, 38};
+    layout.save_button = SDL_FRect{102, 10, 100, 38};
+    layout.mode_button = SDL_FRect{210, 10, 146, 38};
+    layout.content = SDL_FRect{10, 58, static_cast<float>(std::max(1, width - 20)),
+                               static_cast<float>(std::max(1, height - 104))};
+
+    button(renderer, layout.new_button, "NEU", false);
+    button(renderer, layout.save_button, "SPEICHERN", state.dirty);
+    button(renderer, layout.mode_button, state.preview ? "VORSCHAU" : "EDITOR", state.preview);
+
+    const std::string title = "MDRAFT KR  |  " + state.path + (state.dirty ? " *" : "");
+    const int title_x = static_cast<int>(layout.mode_button.x + layout.mode_button.w + 14);
+    const int title_columns = std::max(0, (width - title_x - 10) / 12);
+    if (title_columns > 0) draw_bitmap_text(renderer, shorten(title, static_cast<std::size_t>(title_columns)),
+                                             title_x, 22, 2, kMuted);
+
+    fill(renderer, layout.content, SDL_Color{19, 25, 37, 255});
+    const std::string text = buffer.str();
+    const std::vector<Block> blocks = parse_blocks(text);
+    const int line_height = 20;
+    const int first_y = static_cast<int>(layout.content.y) + 8;
+    const int visible_rows = std::max(1, (static_cast<int>(layout.content.h) - 16) / line_height);
+    const int max_columns = std::max(8, (static_cast<int>(layout.content.w) - 24) / 12);
+    const int first_row = std::max(0, state.scroll_row);
+
+    for (int visible = 0; visible < visible_rows; ++visible) {
+        const std::size_t row = static_cast<std::size_t>(first_row + visible);
+        if (row >= blocks.size()) break;
+        const Block& block = blocks[row];
+        std::string line;
+        SDL_Color color = kText;
+        if (state.preview) {
+            line = preview_text(text, block);
+            color = block_color(block.kind);
+        } else {
+            char number[16];
+            std::snprintf(number, sizeof(number), "%4zu ", row + 1);
+            line = number + text.substr(block.begin, block.end - block.begin);
+            color = block.kind == BlockKind::Heading ? kAccent : kText;
+        }
+        draw_bitmap_text(renderer, shorten(line, static_cast<std::size_t>(max_columns)),
+                         static_cast<int>(layout.content.x) + 8,
+                         first_y + visible * line_height, 2, color);
+    }
+
+    if (!state.preview && ((ticks / 500u) % 2u) == 0u) {
+        const auto [cursor_line, cursor_column] = buffer.line_column();
+        if (cursor_line >= static_cast<std::size_t>(first_row)
+                && cursor_line < static_cast<std::size_t>(first_row + visible_rows)) {
+            const int screen_row = static_cast<int>(cursor_line) - first_row;
+            const int visible_column = std::min<int>(max_columns - 1, 5 + static_cast<int>(cursor_column));
+            SDL_FRect cursor_rect{layout.content.x + 8 + visible_column * 12.0f,
+                                  static_cast<float>(first_y + screen_row * line_height),
+                                  2.0f, 15.0f};
+            fill(renderer, cursor_rect, kAccent);
+        }
+    }
+
+    SDL_FRect footer{0, static_cast<float>(height - 36), static_cast<float>(width), 36};
+    fill(renderer, footer, kPanel);
+    const auto [line, column] = buffer.line_column();
+    const std::string status = state.status + "  |  Zeile " + std::to_string(line + 1)
+        + ", Spalte " + std::to_string(column + 1)
+        + "  |  Tab: Editor/Vorschau  Ctrl+S: Speichern";
+    draw_bitmap_text(renderer, shorten(status, static_cast<std::size_t>(std::max(8, (width - 20) / 12))),
+                     10, height - 27, 2, kMuted);
+
+    SDL_RenderPresent(renderer);
+    return layout;
+}
+
+} // namespace mdraft

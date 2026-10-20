@@ -1,0 +1,173 @@
+#include "include/mdraft/mdraft.hpp"
+#include <algorithm>
+
+namespace mdraft {
+
+namespace {
+bool continuation(unsigned char value) { return (value & 0xC0u) == 0x80u; }
+}
+
+GapBuffer::GapBuffer(std::size_t capacity)
+    : storage_(std::max<std::size_t>(capacity, 64)), gap_begin_(0), gap_end_(storage_.size()) {}
+
+GapBuffer::GapBuffer(const std::string& text) {
+    storage_.assign(text.size() + 4096, 0);
+    std::copy(text.begin(), text.end(), storage_.begin());
+    gap_begin_ = text.size();
+    gap_end_ = storage_.size();
+}
+
+std::size_t GapBuffer::size() const noexcept {
+    return storage_.size() - (gap_end_ - gap_begin_);
+}
+
+std::size_t GapBuffer::cursor() const noexcept { return gap_begin_; }
+bool GapBuffer::empty() const noexcept { return size() == 0; }
+
+void GapBuffer::set_text(const std::string& text) {
+    storage_.assign(text.size() + 4096, 0);
+    std::copy(text.begin(), text.end(), storage_.begin());
+    gap_begin_ = text.size();
+    gap_end_ = storage_.size();
+}
+
+std::string GapBuffer::str() const {
+    std::string result;
+    result.reserve(size());
+    result.append(storage_.data(), gap_begin_);
+    result.append(storage_.data() + gap_end_, storage_.size() - gap_end_);
+    return result;
+}
+
+void GapBuffer::ensure_gap(std::size_t need) {
+    const std::size_t available = gap_end_ - gap_begin_;
+    if (available >= need) return;
+    const std::size_t content = size();
+    const std::size_t extra = std::max<std::size_t>(need + 4096, content / 2 + need);
+    std::vector<char> replacement(content + extra);
+    std::copy(storage_.begin(), storage_.begin() + static_cast<std::ptrdiff_t>(gap_begin_), replacement.begin());
+    const std::size_t next_gap_end = gap_begin_ + extra;
+    std::copy(storage_.begin() + static_cast<std::ptrdiff_t>(gap_end_), storage_.end(),
+              replacement.begin() + static_cast<std::ptrdiff_t>(next_gap_end));
+    storage_.swap(replacement);
+    gap_end_ = next_gap_end;
+}
+
+void GapBuffer::move_gap(std::size_t position) {
+    position = std::min(position, size());
+    if (position < gap_begin_) {
+        const std::size_t count = gap_begin_ - position;
+        std::move_backward(storage_.begin() + static_cast<std::ptrdiff_t>(position),
+                           storage_.begin() + static_cast<std::ptrdiff_t>(gap_begin_),
+                           storage_.begin() + static_cast<std::ptrdiff_t>(gap_end_));
+        gap_begin_ -= count;
+        gap_end_ -= count;
+    } else if (position > gap_begin_) {
+        const std::size_t count = position - gap_begin_;
+        std::move(storage_.begin() + static_cast<std::ptrdiff_t>(gap_end_),
+                  storage_.begin() + static_cast<std::ptrdiff_t>(gap_end_ + count),
+                  storage_.begin() + static_cast<std::ptrdiff_t>(gap_begin_));
+        gap_begin_ += count;
+        gap_end_ += count;
+    }
+}
+
+void GapBuffer::move_to(std::size_t byte_index) {
+    const std::string text = str();
+    byte_index = std::min(byte_index, text.size());
+    while (byte_index > 0 && byte_index < text.size()
+           && continuation(static_cast<unsigned char>(text[byte_index]))) --byte_index;
+    move_gap(byte_index);
+}
+
+void GapBuffer::move_left() {
+    if (gap_begin_ == 0) return;
+    const std::string text = str();
+    std::size_t position = gap_begin_ - 1;
+    while (position > 0 && continuation(static_cast<unsigned char>(text[position]))) --position;
+    move_gap(position);
+}
+
+void GapBuffer::move_right() {
+    if (gap_begin_ >= size()) return;
+    const std::string text = str();
+    std::size_t position = gap_begin_ + 1;
+    while (position < text.size() && continuation(static_cast<unsigned char>(text[position]))) ++position;
+    move_gap(position);
+}
+
+std::pair<std::size_t, std::size_t> GapBuffer::line_column() const {
+    const std::string text = str();
+    std::size_t line = 0;
+    std::size_t column = 0;
+    for (std::size_t i = 0; i < gap_begin_ && i < text.size();) {
+        const unsigned char value = static_cast<unsigned char>(text[i]);
+        if (text[i] == '\n') { ++line; column = 0; ++i; }
+        else {
+            ++column;
+            ++i;
+            while (i < gap_begin_ && continuation(static_cast<unsigned char>(text[i]))) ++i;
+            (void)value;
+        }
+    }
+    return {line, column};
+}
+
+void GapBuffer::move_to_line_column(std::size_t wanted_line, std::size_t wanted_column) {
+    const std::string text = str();
+    std::size_t line = 0;
+    std::size_t position = 0;
+    while (position < text.size() && line < wanted_line) {
+        if (text[position++] == '\n') ++line;
+    }
+    std::size_t column = 0;
+    while (position < text.size() && text[position] != '\n' && column < wanted_column) {
+        ++position;
+        while (position < text.size() && continuation(static_cast<unsigned char>(text[position]))) ++position;
+        ++column;
+    }
+    move_gap(position);
+}
+
+void GapBuffer::move_home() {
+    auto [line, column] = line_column();
+    (void)column;
+    move_to_line_column(line, 0);
+}
+
+void GapBuffer::move_end() {
+    auto [line, column] = line_column();
+    (void)column;
+    move_to_line_column(line, static_cast<std::size_t>(-1));
+}
+
+void GapBuffer::move_vertical(int rows) {
+    auto [line, column] = line_column();
+    const long long target = std::max<long long>(0, static_cast<long long>(line) + rows);
+    move_to_line_column(static_cast<std::size_t>(target), column);
+}
+
+void GapBuffer::insert_text(const std::string& text) {
+    ensure_gap(text.size());
+    for (char value : text) storage_[gap_begin_++] = value;
+}
+
+bool GapBuffer::erase_before() {
+    if (gap_begin_ == 0) return false;
+    const std::size_t previous = gap_begin_;
+    move_left();
+    gap_end_ += previous - gap_begin_;
+    return true;
+}
+
+bool GapBuffer::erase_at() {
+    if (gap_end_ == storage_.size()) return false;
+    const std::string text = str();
+    std::size_t count = 1;
+    while (gap_begin_ + count < text.size()
+           && continuation(static_cast<unsigned char>(text[gap_begin_ + count]))) ++count;
+    gap_end_ = std::min(storage_.size(), gap_end_ + count);
+    return true;
+}
+
+} // namespace mdraft

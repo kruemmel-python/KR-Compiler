@@ -1,0 +1,19 @@
+[project]
+name = "MDraft_KR_CrossPlatform"
+version = "1.0.0"
+entry = "main.kr"
+target_type = "gui"
+description = "Modularer nativer Markdown-Editor fuer Android, Windows und Linux"
+
+[modules]
+scan_directories = ["src"]
+
+[dependencies]
+packages = ["sdl3"]
+
+[build]
+cpp_standard = "c++20"
+optimization = "O2"
+
+[compute]
+mode = "AUTO"

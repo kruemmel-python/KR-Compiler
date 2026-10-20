@@ -1,0 +1,58 @@
+#include "include/mdraft/mdraft.hpp"
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+
+namespace mdraft {
+
+bool load_document(GapBuffer& buffer, EditorState& state, const std::string& path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        state.status = "Nicht lesbar: " + path;
+        return false;
+    }
+    std::ostringstream content;
+    content << input.rdbuf();
+    if (!input.good() && !input.eof()) {
+        state.status = "Lesefehler: " + path;
+        return false;
+    }
+    buffer.set_text(content.str());
+    state.path = path;
+    state.dirty = false;
+    state.scroll_row = 0;
+    state.status = "Geladen: " + path;
+    return true;
+}
+
+bool save_document(const GapBuffer& buffer, EditorState& state) {
+    const std::filesystem::path target(state.path.empty() ? "mdraft_document.md" : state.path);
+    const std::filesystem::path temporary = target.string() + ".tmp";
+    {
+        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+        const std::string content = buffer.str();
+        output.write(content.data(), static_cast<std::streamsize>(content.size()));
+        if (!output) {
+            state.status = "Speichern fehlgeschlagen";
+            return false;
+        }
+    }
+    std::error_code error;
+    std::filesystem::rename(temporary, target, error);
+    if (error) {
+        std::filesystem::remove(target, error);
+        error.clear();
+        std::filesystem::rename(temporary, target, error);
+    }
+    if (error) {
+        std::filesystem::remove(temporary, error);
+        state.status = "Datei konnte nicht ersetzt werden";
+        return false;
+    }
+    state.path = target.string();
+    state.dirty = false;
+    state.status = "Gespeichert: " + state.path;
+    return true;
+}
+
+} // namespace mdraft

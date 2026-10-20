@@ -1,0 +1,88 @@
+#include "include/mdraft/mdraft.hpp"
+#include <algorithm>
+
+namespace mdraft {
+
+namespace {
+bool starts_with(const std::string& text, std::size_t position, std::string_view token) {
+    return position + token.size() <= text.size()
+        && text.compare(position, token.size(), token) == 0;
+}
+}
+
+std::vector<Block> parse_blocks(const std::string& text) {
+    std::vector<Block> blocks;
+    bool in_code = false;
+    std::size_t line_begin = 0;
+    while (line_begin <= text.size()) {
+        std::size_t line_end = text.find('\n', line_begin);
+        if (line_end == std::string::npos) line_end = text.size();
+        Block block;
+        block.begin = line_begin;
+        block.end = line_end;
+        const std::size_t length = line_end - line_begin;
+
+        if (starts_with(text, line_begin, "```")) {
+            block.kind = BlockKind::CodeFence;
+            in_code = !in_code;
+        } else if (in_code) {
+            block.kind = BlockKind::CodeFence;
+        } else if (length == 0) {
+            block.kind = BlockKind::Blank;
+        } else if (text[line_begin] == '#') {
+            std::size_t level = 0;
+            while (line_begin + level < line_end && text[line_begin + level] == '#') ++level;
+            if (level > 0 && level <= 6 && line_begin + level < line_end
+                    && text[line_begin + level] == ' ') {
+                block.kind = BlockKind::Heading;
+                block.level = static_cast<std::uint8_t>(level);
+            }
+        } else if (text[line_begin] == '>') {
+            block.kind = BlockKind::Quote;
+        } else if (starts_with(text, line_begin, "- [x] ") || starts_with(text, line_begin, "- [X] ")) {
+            block.kind = BlockKind::TaskItem;
+            block.checked = true;
+        } else if (starts_with(text, line_begin, "- [ ] ")) {
+            block.kind = BlockKind::TaskItem;
+        } else if (starts_with(text, line_begin, "- ") || starts_with(text, line_begin, "* ")) {
+            block.kind = BlockKind::ListItem;
+        } else if (text[line_begin] == '|') {
+            block.kind = BlockKind::TableRow;
+        }
+        blocks.push_back(block);
+        if (line_end == text.size()) break;
+        line_begin = line_end + 1;
+    }
+    return blocks;
+}
+
+std::string preview_text(const std::string& text, const Block& block) {
+    std::string line = text.substr(block.begin, block.end - block.begin);
+    auto trim_prefix = [&line](std::size_t count) {
+        line.erase(0, std::min(count, line.size()));
+    };
+    if (block.kind == BlockKind::Heading) {
+        std::size_t position = line.find_first_not_of("# ");
+        if (position != std::string::npos) trim_prefix(position);
+    } else if (block.kind == BlockKind::Quote) {
+        trim_prefix(line.size() > 1 && line[1] == ' ' ? 2 : 1);
+        line = "| " + line;
+    } else if (block.kind == BlockKind::TaskItem) {
+        trim_prefix(std::min<std::size_t>(6, line.size()));
+        line = block.checked ? "[X] " + line : "[ ] " + line;
+    } else if (block.kind == BlockKind::ListItem) {
+        trim_prefix(std::min<std::size_t>(2, line.size()));
+        line = "* " + line;
+    } else if (block.kind == BlockKind::CodeFence && line.rfind("```", 0) == 0) {
+        line = "--- CODE ---";
+    }
+
+    for (std::string_view marker : {std::string_view("**"), std::string_view("__"),
+                                    std::string_view("`"), std::string_view("*")}) {
+        std::size_t position = 0;
+        while ((position = line.find(marker, position)) != std::string::npos) line.erase(position, marker.size());
+    }
+    return line;
+}
+
+} // namespace mdraft
