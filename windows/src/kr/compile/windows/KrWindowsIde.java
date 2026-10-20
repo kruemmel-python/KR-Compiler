@@ -46,7 +46,7 @@ public final class KrWindowsIde extends JFrame {
     }
 
     public KrWindowsIde() {
-        super("KR Compiler IDE v4.2.1 – Windows Desktop Edition");
+        super("KR Compiler IDE v4.2.2 – Windows Desktop Edition");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1280, 800);
         setMinimumSize(new Dimension(900, 600));
@@ -113,7 +113,7 @@ public final class KrWindowsIde extends JFrame {
         statusAgent = new JLabel("Agent: Bereit");
         statusAgent.setForeground(DarkTheme.ACCENT_GREEN);
 
-        JLabel infoVersion = new JLabel("v4.2.1 Windows Edition | Entwickler: Ralf Krümmel");
+        JLabel infoVersion = new JLabel("v4.2.2 Windows Edition | Entwickler: Ralf Krümmel");
         infoVersion.setForeground(DarkTheme.FG_MUTED);
 
         statusBar.add(statusProject);
@@ -128,12 +128,12 @@ public final class KrWindowsIde extends JFrame {
         ProjectManager.getInstance().addListener(new ProjectManager.Listener() {
             @Override public void onProjectOpened(File p) {
                 statusProject.setText("Projekt: " + p.getName());
-                setTitle("KR Compiler IDE v4.2.1 – " + p.getName());
+                setTitle("KR Compiler IDE v4.2.2 – " + p.getName());
                 openDefaultProjectFile(p);
             }
             @Override public void onProjectClosed() {
                 statusProject.setText("Projekt: Kein Projekt");
-                setTitle("KR Compiler IDE v4.2.1 – Windows Desktop Edition");
+                setTitle("KR Compiler IDE v4.2.2 – Windows Desktop Edition");
             }
             @Override public void onTreeRefreshed(File p) {}
         });
@@ -429,7 +429,7 @@ public final class KrWindowsIde extends JFrame {
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel versionLabel = new JLabel("Version 4.2.1");
+        JLabel versionLabel = new JLabel("Version 4.2.2");
         versionLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
         versionLabel.setForeground(DarkTheme.ACCENT_BLUE);
         versionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);

@@ -1,11 +1,11 @@
 # Benutzerhandbuch
 
-Dieses Handbuch beschreibt den aktuellen Stand der KR Compiler IDE v4.2.1 für
+Dieses Handbuch beschreibt den aktuellen Stand der KR Compiler IDE v4.2.2 für
 Android, Windows und Linux.
 
 ## Installation
 
-- **Android:** `KR-Compiler-Android-IDE-v4.2.1.apk` installieren. Mindestens
+- **Android:** `KR-Compiler-Android-IDE-v4.2.2.apk` installieren. Mindestens
   Android 8.0/API 26 und ARM64 werden vorausgesetzt.
 - **Windows:** ZIP entpacken und `Start-KR-IDE.bat` starten.
 - **Linux:** `tar.xz` entpacken, `Start-KR-IDE.sh` ausführbar machen und starten.

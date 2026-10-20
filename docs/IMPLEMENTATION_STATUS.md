@@ -1,6 +1,6 @@
 # Implementierungsstatus
 
-Stand: v4.2.1
+Stand: v4.2.2
 
 ## Implementiert und geprüft
 
@@ -19,7 +19,7 @@ Stand: v4.2.1
 - Android-ARM64-Ausgabe einschließlich CC_OpenCL erfolgreich gelinkt
 - Android und Ubuntu vom Projektinhaber praktisch getestet und als
   funktionsfähig bestätigt
-- signierte Android-v4.2.1-APK, verifizierte Windows- und Linux-Archive
+- signierte Android-v4.2.2-APK, verifizierte Windows- und Linux-Archive
 
 ## Bekannte Grenzen
 

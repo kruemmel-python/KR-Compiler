@@ -50,7 +50,7 @@ allen Quellformen automatisch abgesenkt.
 
 ## Telemetrie
 
-Die JSONL-Telemetrie enthält Operation, Backend, Entscheidung, Gerät,
+Die threadsichere JSONL-Telemetrie enthält Worker-ID, Iteration, Operation, Backend, Entscheidung, Gerät,
 Runtime-Version, Initialisierungs-, Transfer- und Kernelzeiten, Byte-Mengen,
 Spitzenspeicher, Validierungsstatus und Fehlercode. Ohne reale Energiequelle
 werden keine Verbrauchswerte geschätzt.
@@ -60,3 +60,7 @@ werden keine Verbrauchswerte geschätzt.
 [`KR_AUTO_COMPUTE_TEST`](../KR_AUTO_COMPUTE_TEST/) ist das verbindliche
 Ende-zu-Ende-Beispiel. Sein `main.kr` enthält keine `kr_compute_*`- und keine
 OpenCL-Aufrufe.
+
+[`KR_16_PARALLEL_GPU_STRESS`](../examples/KR_16_PARALLEL_GPU_STRESS/) prüft
+zusätzlich 16 gleichzeitig gestartete Worker und 640 automatische
+GPU-Operationen mit vollständiger numerischer Referenzprüfung.

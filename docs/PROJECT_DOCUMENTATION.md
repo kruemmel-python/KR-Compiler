@@ -1,6 +1,6 @@
 # KR Compiler IDE – vollständige Projektdokumentation
 
-**Dokumentationsstand:** KR Compiler IDE 4.2.1
+**Dokumentationsstand:** KR Compiler IDE 4.2.2
 
 **Gültigkeit:** Android ARM64, Windows x64 und Linux x64
 
@@ -41,7 +41,7 @@ kann aus technischen und lizenzrechtlichen Gründen nicht Teil der IDE sein.
 
 | Komponente | Stand |
 |---|---|
-| Produktversion | 4.2.1 |
+| Produktversion | 4.2.2 |
 | Android-Anwendung | `kr.compile`, `minSdk 26`, ARM64-Ziel |
 | Android Build-SDK | API 35; NDK 27.0.12077973 für den APK-Quell-Build |
 | Windows-Distribution | Windows 10/11 x64 |
@@ -322,7 +322,7 @@ Quellcodes verwendet.
 
 ### 10.1 Vollständig automatische Schleifenformen
 
-Version 4.2.1 senkt diese kanonischen FP32-Formen automatisch ab:
+Version 4.2.2 senkt diese kanonischen FP32-Formen automatisch ab:
 
 ```cpp
 for (int i = 0; i < count; i++) {
@@ -403,7 +403,7 @@ CPU-Pfad belassen wurde.
 Die native Runtime kann pro Operation eine JSON-Zeile in
 `adaptive_compute_telemetry.jsonl` schreiben. Erfasst werden:
 
-- Operation, Backend und Dispatcherentscheidung;
+- Worker-ID, Iteration, Operation, Backend und Dispatcherentscheidung;
 - Fallback- oder Fehlergrund;
 - Gerätename, Runtime-/Treiberversion und erkannte Fähigkeiten;
 - Initialisierungs-, Host-zu-Gerät-, Kernel-, Gerät-zu-Host- und Gesamtzeit;
@@ -411,9 +411,14 @@ Die native Runtime kann pro Operation eine JSON-Zeile in
 - Status und Ergebnis der Validierung;
 - Fehlercode.
 
+Der letzte Operationszustand ist threadlokal. Das Anhängen vollständiger
+JSONL-Zeilen und die einmalige GPU-Initialisierung sind synchronisiert. Bei
+gemeinsam verwendeten CC_OpenCL-Kernelobjekten umfasst die Sperre nur
+Argumentübergabe und Enqueue, nicht die gesamte Berechnung.
+
 Die IDE zeigt den letzten Datensatz in lesbarer Form in der Compute-Analyse.
 Ein dauerhaftes grafisches Live-Dashboard und belastbare Energiemessungen sind
-noch nicht Bestandteil von 4.2.1.
+noch nicht Bestandteil von 4.2.2.
 
 ## 11. CC_OpenCL-Integration
 
@@ -529,8 +534,8 @@ Abhängigkeiten fest versionieren und deren Prüfsummen dokumentieren.
 
 ## 16. Projekt aus einem Release benutzen
 
-1. Das zu 4.2.1 passende Paket aus dem
-   [GitHub-Release](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.2.1)
+1. Das zu 4.2.2 passende Paket aus dem
+   [GitHub-Release](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.2.2)
    laden.
 2. Windows-/Linux-Archiv in einen beschreibbaren Ordner entpacken oder die
    Android-APK installieren.

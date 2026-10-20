@@ -1,14 +1,15 @@
 # Aktuelle Release-Artefakte
 
-Release: [`v4.2.1`](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.2.1)
+Release: [`v4.2.2`](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.2.2)
 
 | Artefakt | Bytes | SHA-256 |
 |---|---:|---|
-| `KR-Compiler-Android-IDE-v4.2.1.apk` | 744290470 | `07460af60ca9e7f0e0bb2baf6f21cad94de2c372dbf76e37faf613283a7a215e` |
-| `KR-Compiler-Windows-x64-v4.2.1.zip` | 854749673 | `2a6f4d921cbe51f8fedb3032f9d7051a2fffe3560b36bf38caa280f097e83bcb` |
-| `KR-Compiler-Linux-x64-v4.2.1.tar.xz` | 1103277004 | `f920946edde0dc35742a0aaebddfb1b128e3835df8ad9e85072b0899551417aa` |
-| `KR-AUTO-COMPUTE-TEST-v4.2.1.zip` | 1359218 | `62cb93fe4b288eb8480a633b51b20b4ef4bea95c9a02eded241688f9844d2c18` |
+| `KR-Compiler-Android-IDE-v4.2.2.apk` | 744299634 | `4ce4a4cf3117686154060cbf1c98b090e170b476f880cd16aa4fe620e3b9cc04` |
+| `KR-Compiler-Windows-x64-v4.2.2.zip` | 779299225 | `2b34888859371e53be3b0aa9f1243b445e8a9a6ceb1500d047c5160c63286202` |
+| `KR-Compiler-Linux-x64-v4.2.2.tar.xz` | 1103298456 | `ad244747ada89c48bcc56c61180f5f362182d151aa1c6722a0f95a6969926bef` |
+| `KR-AUTO-COMPUTE-TEST-v4.2.2.zip` | 1595 | `fd9818c329b5aad7d332e0ce28658388b7ebd51e3682ac0a7b679c26e15544bc` |
+| `KR-16-PARALLEL-GPU-STRESS-v4.2.2.zip` | 8612 | `1cc49ee22fff78604e5538670092b7114761ff9dd62180c48110d464044643dc` |
 
 Die APK wurde mit Android Signature Scheme v2 geprüft. Windows-ZIP,
-Linux-`tar.xz` und Beispiel-ZIP wurden nach dem Erzeugen vollständig gelesen
+Linux-`tar.xz` und beide Beispiel-ZIPs wurden nach dem Erzeugen vollständig gelesen
 und auf Archivfehler geprüft.

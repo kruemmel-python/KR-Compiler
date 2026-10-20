@@ -8,17 +8,18 @@ müssen keine zusätzlichen SDKs heruntergeladen werden.
 
 ## Aktuelle Version
 
-Aktueller Stand: **v4.2.1**
+Aktueller Stand: **v4.2.2**
 
-[Release v4.2.1 herunterladen](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.2.1)
+[Release v4.2.2 herunterladen](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.2.2)
 
 | Plattform | Release-Datei |
 |---|---|
-| Android ARM64 | `KR-Compiler-Android-IDE-v4.2.1.apk` |
-| Windows x64 | `KR-Compiler-Windows-x64-v4.2.1.zip` |
-| Linux x64 | `KR-Compiler-Linux-x64-v4.2.1.tar.xz` |
-| Automatisches Compute-Beispiel | `KR-AUTO-COMPUTE-TEST-v4.2.1.zip` |
-| Prüfsummen | `SHA256SUMS-v4.2.1.txt` |
+| Android ARM64 | `KR-Compiler-Android-IDE-v4.2.2.apk` |
+| Windows x64 | `KR-Compiler-Windows-x64-v4.2.2.zip` |
+| Linux x64 | `KR-Compiler-Linux-x64-v4.2.2.tar.xz` |
+| Automatisches Compute-Beispiel | `KR-AUTO-COMPUTE-TEST-v4.2.2.zip` |
+| 16-Thread-GPU-Stresstest | `KR-16-PARALLEL-GPU-STRESS-v4.2.2.zip` |
+| Prüfsummen | `SHA256SUMS-v4.2.2.txt` |
 
 Ältere Binärstände und deren Hinweise bleiben in den
 [GitHub-Releases](https://github.com/kruemmel-python/KR-Compiler/releases)
