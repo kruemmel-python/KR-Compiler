@@ -8,20 +8,20 @@ müssen keine zusätzlichen SDKs heruntergeladen werden.
 
 ## Aktuelle Version
 
-Aktueller Stand: **v4.3.0**
+Aktueller Stand: **v4.3.1**
 
-[Release v4.3.0 herunterladen](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.3.0)
+[Release v4.3.1 herunterladen](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.3.1)
 
 | Plattform | Release-Datei |
 |---|---|
-| Android ARM64 | `KR-Compiler-Android-IDE-v4.3.0.apk` |
-| Android-Buildtoolchain | `KR-Compiler-Android-toolchain-v4.3.0.zip` |
-| Windows x64 | `KR-Compiler-Windows-x64-v4.3.0.zip` |
-| Linux x64 | `KR-Compiler-Linux-x64-v4.3.0.tar.xz` |
-| Plattformübergreifendes SDL3-Beispiel | `MDraft-KR-CrossPlatform-v4.3.0.zip` |
-| Automatisches Compute-Beispiel | `KR-AUTO-COMPUTE-TEST-v4.3.0.zip` |
-| 16-Thread-GPU-Stresstest | `KR-16-PARALLEL-GPU-STRESS-v4.3.0.zip` |
-| Prüfsummen | `SHA256SUMS-v4.3.0.txt` |
+| Android ARM64 | `KR-Compiler-Android-IDE-v4.3.1.apk` |
+| Android-Buildtoolchain | `KR-Compiler-Android-toolchain-v4.3.1.zip` |
+| Windows x64 | `KR-Compiler-Windows-x64-v4.3.1.zip` |
+| Linux x64 | `KR-Compiler-Linux-x64-v4.3.1.tar.xz` |
+| Plattformübergreifendes SDL3-Beispiel | `MDraft-KR-CrossPlatform-v4.3.1.zip` |
+| Automatisches Compute-Beispiel | `KR-AUTO-COMPUTE-TEST-v4.3.1.zip` |
+| 16-Thread-GPU-Stresstest | `KR-16-PARALLEL-GPU-STRESS-v4.3.1.zip` |
+| Prüfsummen | `SHA256SUMS-v4.3.1.txt` |
 
 Ältere Binärstände und deren Hinweise bleiben in den
 [GitHub-Releases](https://github.com/kruemmel-python/KR-Compiler/releases)

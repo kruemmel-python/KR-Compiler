@@ -22,13 +22,17 @@ public final class KrPipeline {
         public final KrSymbolTable symbolTable;
         public final KrCodeGenerator.Result codeResult;
         public final KrComputePlan computePlan;
+        public final KrProjectConfig projectConfig;
+        public final boolean isGui;
 
         PipelineResult(boolean success, KrSymbolTable symbolTable, KrCodeGenerator.Result codeResult,
-                       KrComputePlan computePlan) {
+                       KrComputePlan computePlan, KrProjectConfig projectConfig, boolean isGui) {
             this.success = success;
             this.symbolTable = symbolTable;
             this.codeResult = codeResult;
             this.computePlan = computePlan;
+            this.projectConfig = projectConfig;
+            this.isGui = isGui;
         }
     }
 
@@ -102,7 +106,7 @@ public final class KrPipeline {
         }
 
         if (hasErrors) {
-            PipelineResult res = new PipelineResult(false, symbolTable, null, computePlan);
+            PipelineResult res = new PipelineResult(false, symbolTable, null, computePlan, config, actualGui);
             res.diagnostics.addAll(allDiagnostics);
             return res;
         }
@@ -118,7 +122,7 @@ public final class KrPipeline {
             stream.write(computePlan.toJson().getBytes(StandardCharsets.UTF_8));
         }
 
-        PipelineResult result = new PipelineResult(true, symbolTable, codeResult, computePlan);
+        PipelineResult result = new PipelineResult(true, symbolTable, codeResult, computePlan, config, actualGui);
         result.diagnostics.addAll(allDiagnostics);
         result.segments.addAll(allSegments);
 

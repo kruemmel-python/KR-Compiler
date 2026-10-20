@@ -1,6 +1,6 @@
 # Implementierungsstatus
 
-Stand: v4.3.0
+Stand: v4.3.1
 
 ## Implementiert und geprüft
 
@@ -23,7 +23,7 @@ Stand: v4.3.0
   drei portablen IDE-Auslieferungen
 - dasselbe modulare SDL3-Projekt erfolgreich für Windows x64, Android ARM64
   und Linux x64 gebaut
-- signierte Android-v4.3.0-APK, verifizierte Windows- und Linux-Archive
+- signierte Android-v4.3.1-APK, verifizierte Windows- und Linux-Archive
 
 ## Bekannte Grenzen
 

@@ -1,6 +1,6 @@
 # KR Compiler IDE – vollständige Projektdokumentation
 
-**Dokumentationsstand:** KR Compiler IDE 4.3.0
+**Dokumentationsstand:** KR Compiler IDE 4.3.1
 
 **Gültigkeit:** Android ARM64, Windows x64 und Linux x64
 
@@ -41,7 +41,7 @@ kann aus technischen und lizenzrechtlichen Gründen nicht Teil der IDE sein.
 
 | Komponente | Stand |
 |---|---|
-| Produktversion | 4.3.0 |
+| Produktversion | 4.3.1 |
 | Android-Anwendung | `kr.compile`, `minSdk 26`, ARM64-Ziel |
 | Android Build-SDK | API 35; NDK 27.0.12077973 für den APK-Quell-Build |
 | Windows-Distribution | Windows 10/11 x64 |
@@ -322,7 +322,7 @@ Quellcodes verwendet.
 
 ### 10.1 Vollständig automatische Schleifenformen
 
-Version 4.3.0 senkt diese kanonischen FP32-Formen automatisch ab:
+Version 4.3.1 senkt diese kanonischen FP32-Formen automatisch ab:
 
 ```cpp
 for (int i = 0; i < count; i++) {
@@ -418,7 +418,7 @@ Argumentübergabe und Enqueue, nicht die gesamte Berechnung.
 
 Die IDE zeigt den letzten Datensatz in lesbarer Form in der Compute-Analyse.
 Ein dauerhaftes grafisches Live-Dashboard und belastbare Energiemessungen sind
-noch nicht Bestandteil von 4.3.0.
+noch nicht Bestandteil von 4.3.1.
 
 ## 11. CC_OpenCL-Integration
 
@@ -556,8 +556,8 @@ SDL3 oder eng begrenzte Präprozessorzweige innerhalb derselben Module gelöst.
 
 ## 16. Projekt aus einem Release benutzen
 
-1. Das zu 4.3.0 passende Paket aus dem
-   [GitHub-Release](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.3.0)
+1. Das zu 4.3.1 passende Paket aus dem
+   [GitHub-Release](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.3.1)
    laden.
 2. Windows-/Linux-Archiv in einen beschreibbaren Ordner entpacken oder die
    Android-APK installieren.

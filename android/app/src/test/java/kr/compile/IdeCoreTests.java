@@ -105,6 +105,37 @@ public class IdeCoreTests {
     }
 
     @Test
+    public void testModularGuiProjectPropagatesSdlConfigurationThroughPipeline() throws Exception {
+        File project = new File(autoComputeExample().getParentFile(), "examples/MDraft_KR_CrossPlatform");
+        assertTrue("The shipped modular GUI example must exist", project.isDirectory());
+        File output = new File("build/test-mdraft-gui-pipeline");
+        assertTrue(output.isDirectory() || output.mkdirs());
+
+        KrPipeline.PipelineResult result = KrPipeline.process(project, output, false);
+
+        assertTrue(result.success);
+        assertTrue("target_type=gui must survive the KR pipeline", result.isGui);
+        assertNotNull(result.projectConfig);
+        assertTrue(result.projectConfig.vcpkgDependencies.contains("sdl3"));
+        assertTrue(result.codeResult.vcpkgDependencies.contains("sdl3"));
+    }
+
+    @Test
+    public void testAndroidSdlIncludesUseBundledPortableSourceTree() throws Exception {
+        File root = new File("build/test-android-sdl-includes");
+        File toolchain = new File(root, "toolchain");
+        File cache = new File(root, "cache");
+        File header = new File(toolchain, "sources/sdl3/include/SDL3/SDL.h");
+        assertTrue(header.getParentFile().isDirectory() || header.getParentFile().mkdirs());
+        java.nio.file.Files.write(header.toPath(), "#pragma once\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        assertTrue(cache.isDirectory() || cache.mkdirs());
+
+        java.util.List<File> includes = CompilerEngine.findAndroidSdlIncludeDirs(toolchain, cache);
+
+        assertTrue(includes.contains(new File(toolchain, "sources/sdl3/include")));
+    }
+
+    @Test
     public void testAutomaticFp32LoopLoweringUsesGeneratedRuntime() throws Exception {
         File project = autoComputeExample();
         File output = new File("build/test-auto-compute-lowering");

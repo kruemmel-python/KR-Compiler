@@ -1849,7 +1849,7 @@ public final class MainActivity extends Activity implements
         try {
             return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
         } catch (Exception e) {
-            return "4.3.0";
+            return "4.3.1";
         }
     }
 

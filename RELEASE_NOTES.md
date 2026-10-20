@@ -1,6 +1,18 @@
 # Aktuelle Release-Hinweise
 
-## KR Compiler IDE v4.3.0
+## KR Compiler IDE v4.3.1
+
+### Android-SDL3-Hotfix
+
+- `target_type = "gui"` aus einer `.krproject`-Datei wird jetzt bis zum
+  Android-Compiler- und Packaging-Schritt weitergegeben.
+- Der direkte modulare KR-C++-Pfad bindet die SDL3-Header aus dem portablen
+  Offline-Bestand `toolchain/sources/sdl3/include` ein.
+- SDL3 wird vor dem Linken als Android-ARM64-Archiv gebaut und zusammen mit
+  dem GUI-Runner paketiert.
+- Zwei Regressionstests sichern GUI-Konfiguration und eingebetteten
+  SDL3-Headerpfad ab.
+- Unnötige Clang-Warnungen des gemischten C/C++-Compilerpfads wurden entfernt.
 
 ### SDL3 auf allen drei Zielsystemen
 
@@ -50,4 +62,4 @@
   Release.
 
 Download und Prüfsummen:
-[GitHub-Release v4.3.0](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.3.0)
+[GitHub-Release v4.3.1](https://github.com/kruemmel-python/KR-Compiler/releases/tag/v4.3.1)

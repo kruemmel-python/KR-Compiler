@@ -1,11 +1,11 @@
 # Benutzerhandbuch
 
-Dieses Handbuch beschreibt den aktuellen Stand der KR Compiler IDE v4.3.0 für
+Dieses Handbuch beschreibt den aktuellen Stand der KR Compiler IDE v4.3.1 für
 Android, Windows und Linux.
 
 ## Installation
 
-- **Android:** `KR-Compiler-Android-IDE-v4.3.0.apk` installieren. Mindestens
+- **Android:** `KR-Compiler-Android-IDE-v4.3.1.apk` installieren. Mindestens
   Android 8.0/API 26 und ARM64 werden vorausgesetzt.
 - **Windows:** ZIP entpacken und `Start-KR-IDE.bat` starten.
 - **Linux:** `tar.xz` entpacken, `Start-KR-IDE.sh` ausführbar machen und starten.
@@ -62,7 +62,7 @@ packages = ["sdl3"]
 
 Quellmodule binden SDL mit `#include <SDL3/SDL.h>` ein. Für einen portablen
 Programmeinstieg wird zusätzlich `#include <SDL3/SDL_main.h>` empfohlen. Die
-Zielplattform wird ausschließlich in der IDE ausgewählt. Version 4.3.0 enthält
+Zielplattform wird ausschließlich in der IDE ausgewählt. Version 4.3.1 enthält
 SDL 3.4.18 samt benötigten Headern, Bibliotheken und Runnern; ein separater
 SDL-, Android- oder Linux-Entwicklungsdownload ist nicht nötig.
 
@@ -111,5 +111,5 @@ werden nicht in Projektdokumente geschrieben. Vor dem Übernehmen größerer
 - **GPU nicht verfügbar:** `AUTO` nutzt CPU; `GPU_ONLY` meldet einen Fehler.
 - **Linux startet nicht:** Ausführungsrecht für `Start-KR-IDE.sh` setzen.
 - **Android hat zu wenig Platz:** mehrere GiB internen Speicher freihalten.
-- **SDL3-Header fehlt:** prüfen, ob wirklich das vollständige v4.3.0-Paket
+- **SDL3-Header fehlt:** prüfen, ob wirklich das vollständige v4.3.1-Paket
   verwendet und `packages = ["sdl3"]` eingetragen wurde.

@@ -1010,6 +1010,7 @@ final class CompilerEngine {
         if (!krGeneratedDir.mkdirs()) throw new IOException("KR-Ausgabeordner kann nicht erstellt werden.");
 
         KrPipeline.PipelineResult pipeline = KrPipeline.process(project, krGeneratedDir, gui);
+        gui = pipeline.isGui;
         if (!pipeline.success) {
             for (KrDiagnostic diag : pipeline.diagnostics) {
                 log.line(diag.toString());
@@ -1405,7 +1406,16 @@ final class CompilerEngine {
     }
 
     private List<File> getAndroidSdlIncludeDirs(File dependencyCache) {
+        return findAndroidSdlIncludeDirs(toolchain, dependencyCache);
+    }
+
+    static List<File> findAndroidSdlIncludeDirs(File toolchainRoot, File dependencyCache) {
         List<File> list = new ArrayList<>();
+        // The portable APK supplies SDL through FetchContent SOURCE_DIR. In
+        // that mode CMake does not create sdl3-src, so the public headers must
+        // be taken directly from the embedded, verified source tree.
+        File bundledInclude = new File(toolchainRoot, "sources/sdl3/include");
+        if (new File(bundledInclude, "SDL3/SDL.h").isFile()) list.add(bundledInclude);
         File srcInclude = new File(dependencyCache, "sdl3-src/include");
         if (srcInclude.isDirectory()) list.add(srcInclude);
         File build = new File(dependencyCache, "sdl3-build");
@@ -1437,7 +1447,14 @@ final class CompilerEngine {
     }
 
     private boolean isLanguageGuiProject() {
-        return new File(project, "kr-gui-target.txt").isFile();
+        if (new File(project, "kr-gui-target.txt").isFile()) return true;
+        KrProjectConfig config = KrProjectConfig.parse(
+                KrProjectConfig.findProjectConfigFile(project), project.getName(), false);
+        if (config.isGui) return true;
+        for (String dependency : config.vcpkgDependencies) {
+            if (dependency.equalsIgnoreCase("sdl3") || dependency.equalsIgnoreCase("sdl")) return true;
+        }
+        return false;
     }
 
     private String languageCrossCompiler() {
@@ -1659,12 +1676,10 @@ final class CompilerEngine {
             command.add("-std=gnu17");
             command.add("-x"); command.add("c");
             for (File f : cFiles) command.add(f.getPath());
-            command.add("-x"); command.add("none");
         } else if (cFiles.isEmpty()) {
             command.add("-std=c++20");
             command.add("-x"); command.add("c++");
             for (File f : cppFiles) command.add(f.getPath());
-            command.add("-x"); command.add("none");
         } else {
             // Mixed C and C++ in direct build: compile C files to .o objects with -std=gnu17 first
             File objDir = new File(project.getParentFile(), "direct-c-objs");
@@ -1679,7 +1694,8 @@ final class CompilerEngine {
                     String arg = command.get(i);
                     if (arg.equals("-shared") || arg.startsWith("-Wl,") || arg.startsWith("-stdlib=")
                             || arg.startsWith("-rtlib=") || arg.startsWith("-unwindlib=")
-                            || arg.equals("-static-libstdc++") || arg.equals("-static-libgcc") || arg.equals("-static")) {
+                            || arg.startsWith("-L") || arg.equals("-static-libstdc++")
+                            || arg.equals("-static-libgcc") || arg.equals("-static")) {
                         continue;
                     }
                     cCmd.add(arg);
@@ -1691,7 +1707,6 @@ final class CompilerEngine {
             command.add("-std=c++20");
             command.add("-x"); command.add("c++");
             for (File f : cppFiles) command.add(f.getPath());
-            command.add("-x"); command.add("none");
         }
 
         if (needsOpenCl) {

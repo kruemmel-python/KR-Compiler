@@ -1,6 +1,6 @@
 param(
     [string]$Output = (Join-Path $PSScriptRoot '..\app\src\main\assets\toolchain.zip'),
-    [string]$Url = 'https://github.com/kruemmel-python/KR-Compiler/releases/download/v4.3.0/KR-Compiler-Android-toolchain-v4.3.0.zip',
+    [string]$Url = 'https://github.com/kruemmel-python/KR-Compiler/releases/download/v4.3.1/KR-Compiler-Android-toolchain-v4.3.1.zip',
     [string]$Sha256 = '17ca778b19cc43369dd68b48b468f6a01f4b54d1bbbec41583cfd51d66badd23'
 )
 $ErrorActionPreference = 'Stop'

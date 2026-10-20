@@ -22,7 +22,7 @@ integrierte vcpkg-Toolchain ein. `kr-gui-target.txt` kennzeichnet ein GUI-Projek
 ohne Konsolenfenster, Linux gegen die bereitgestellten X11/Xext-Grundlagen und Android als native
 Bibliothek für einen SDLActivity-Runner mit Touch und OpenGL ES gebaut.
 
-Ab Version 4.3.0 liegen die geprüften SDL-3.4.18-Quellen direkt in der
+Ab Version 4.3.1 liegen die geprüften SDL-3.4.18-Quellen direkt in der
 App-Toolchain. CMake verwendet diesen lokalen Quellbaum für Android ARM64,
 Windows x64 und Linux x64; SDL wird während eines Projektbuilds nicht aus dem
 Netz geladen. Damit kann derselbe Projektordner mit `packages = ["sdl3"]` für
@@ -39,7 +39,7 @@ Die Release-Laufzeit enthält CMake, Ninja, Git, `pkg-config`, CA-Zertifikate, C
 Sysroots für Android ARM64, Windows x64 und Linux x64. Das Linux-Profil enthält ab Version 3.1
 zusätzlich die X11/Xext-Bestandteile für grafische Programme. Die Laufzeit ist wegen ihrer Größe
 nicht Teil des Git-Verlaufs. `scripts/download-toolchain.ps1` lädt die unveränderte ZIP-Datei aus
-Release `v4.3.0` und verifiziert SHA-256
+Release `v4.3.1` und verifiziert SHA-256
 `17ca778b19cc43369dd68b48b468f6a01f4b54d1bbbec41583cfd51d66badd23`.
 
 Wenn Online-Abhängigkeiten eingeschaltet sind, dürfen normale CMake-`FetchContent`-Deklarationen
